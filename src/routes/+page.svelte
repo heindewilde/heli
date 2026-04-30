@@ -1,9 +1,17 @@
 <script lang="ts">
-  import { APP_NAME, APP_TAGLINE } from '$lib/branding';
+  import Landing from '$lib/components/Landing.svelte';
+  let { data } = $props();
 </script>
 
-<main class="mx-auto flex min-h-screen max-w-2xl flex-col items-start justify-center gap-3 px-6">
-  <span class="text-sm text-[var(--color-muted)]">Hello,</span>
-  <h1 class="text-4xl font-semibold tracking-tight">{APP_NAME}</h1>
-  <p class="text-[var(--color-muted)]">{APP_TAGLINE}</p>
-</main>
+{#if data.user}
+  <section class="flex flex-col gap-2">
+    <h1 class="text-2xl font-semibold tracking-tight">
+      Welcome{data.user.username ? `, ${data.user.username}` : ''}.
+    </h1>
+    <p class="text-sm text-[var(--color-muted)]">
+      Your dashboard will live here. People, Companies, and Interactions arrive in Phase 2 and 3.
+    </p>
+  </section>
+{:else}
+  <Landing />
+{/if}
