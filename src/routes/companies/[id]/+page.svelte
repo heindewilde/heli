@@ -1,0 +1,195 @@
+<script lang="ts">
+  import { goto, invalidateAll } from '$app/navigation';
+  import { Star, Archive, Trash2, ExternalLink, Loader2, MapPin, Building2 } from 'lucide-svelte';
+  import NotesEditor from '$lib/components/NotesEditor.svelte';
+  import FieldRow from '$lib/components/FieldRow.svelte';
+  import { toast } from '$lib/toasts.svelte';
+
+  let { data } = $props();
+  const company = $derived(data.company);
+  const linkedPeople = $derived(data.linkedPeople);
+
+  let editingName = $state(false);
+  // svelte-ignore state_referenced_locally
+  let nameDraft = $state(company.name);
+  let nameInput = $state<HTMLInputElement | undefined>(undefined);
+
+  async function patch(patch: Record<string, unknown>) {
+    const res = await fetch(`/api/companies/${company.id}`, {
+      method: 'PATCH',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(patch)
+    });
+    if (!res.ok) {
+      toast.danger('Update failed');
+      return;
+    }
+    await invalidateAll();
+  }
+
+  async function commitName() {
+    const next = nameDraft.trim();
+    if (!next || next === company.name) {
+      editingName = false;
+      return;
+    }
+    await patch({ name: next });
+    editingName = false;
+  }
+
+  function startEditingName() {
+    nameDraft = company.name;
+    editingName = true;
+    setTimeout(() => nameInput?.focus(), 0);
+  }
+
+  async function del() {
+    if (!confirm(`Delete ${company.name}? Linked people will keep their records but lose the link.`)) return;
+    const res = await fetch(`/api/companies/${company.id}`, { method: 'DELETE' });
+    if (!res.ok) {
+      toast.danger('Delete failed');
+      return;
+    }
+    toast.success(`Deleted ${company.name}`);
+    goto('/companies');
+  }
+
+  const initials = $derived(
+    company.name
+      .split(/\s+/)
+      .map((s) => s[0])
+      .filter(Boolean)
+      .slice(0, 2)
+      .join('')
+      .toUpperCase()
+  );
+</script>
+
+<article class="flex flex-col gap-6">
+  <header class="flex items-start gap-4">
+    <span class="flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)] text-base font-medium text-[var(--color-muted)]">
+      {#if company.logoUrl || company.faviconUrl}
+        <img src={company.logoUrl ?? company.faviconUrl ?? ''} alt="" class="h-full w-full object-cover" />
+      {:else}
+        {initials || '·'}
+      {/if}
+    </span>
+    <div class="min-w-0 flex-1">
+      <div class="flex items-center gap-2">
+        {#if editingName}
+          <input
+            bind:this={nameInput}
+            bind:value={nameDraft}
+            onblur={commitName}
+            onkeydown={(e) => {
+              if (e.key === 'Enter') { e.preventDefault(); commitName(); }
+              if (e.key === 'Escape') { editingName = false; nameDraft = company.name; }
+            }}
+            class="rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-surface)] px-2 py-1 text-2xl font-semibold tracking-tight"
+          />
+        {:else}
+          <button
+            type="button"
+            onclick={startEditingName}
+            class="rounded-[var(--radius-sm)] px-1 -mx-1 text-2xl font-semibold tracking-tight hover:bg-[var(--color-surface)]"
+          >{company.name}</button>
+        {/if}
+        {#if company.source === 'parsing'}
+          <span class="inline-flex items-center gap-1 text-xs text-[var(--color-muted)]">
+            <Loader2 size={12} strokeWidth={2} class="animate-spin" />
+            Enriching…
+          </span>
+        {/if}
+      </div>
+      {#if company.industry || company.location}
+        <p class="text-sm text-[var(--color-muted)]">
+          {company.industry ?? ''}{company.industry && company.location ? ' · ' : ''}{company.location ?? ''}
+        </p>
+      {/if}
+      {#if company.url}
+        <a
+          href={company.url}
+          target="_blank"
+          rel="nofollow noopener noreferrer"
+          class="mt-1 inline-flex items-center gap-1 text-xs text-[var(--color-muted)] hover:underline"
+        >
+          <ExternalLink size={12} strokeWidth={2} />
+          {company.domain ?? company.url}
+        </a>
+      {/if}
+    </div>
+    <div class="flex items-center gap-1">
+      <button
+        type="button"
+        title={company.isFavorite ? 'Unfavorite' : 'Favorite'}
+        onclick={() => patch({ isFavorite: !company.isFavorite })}
+        class="rounded-[var(--radius-sm)] p-2 hover:bg-[var(--color-surface)] {company.isFavorite ? 'text-[var(--color-warning)]' : 'text-[var(--color-subtle)]'}"
+      >
+        <Star size={16} strokeWidth={2} fill={company.isFavorite ? 'currentColor' : 'none'} />
+      </button>
+      <button
+        type="button"
+        title={company.isArchived ? 'Unarchive' : 'Archive'}
+        onclick={() => patch({ isArchived: !company.isArchived })}
+        class="rounded-[var(--radius-sm)] p-2 text-[var(--color-subtle)] hover:bg-[var(--color-surface)]"
+      >
+        <Archive size={16} strokeWidth={2} />
+      </button>
+      <button
+        type="button"
+        title="Delete"
+        onclick={del}
+        class="rounded-[var(--radius-sm)] p-2 text-[var(--color-subtle)] hover:bg-[var(--color-danger-bg)] hover:text-[var(--color-danger)]"
+      >
+        <Trash2 size={16} strokeWidth={2} />
+      </button>
+    </div>
+  </header>
+
+  {#if company.description}
+    <p class="text-sm leading-relaxed text-[var(--color-muted)]">{company.description}</p>
+  {/if}
+
+  <div class="grid gap-6 md:grid-cols-[1fr_260px]">
+    <section class="flex flex-col gap-3">
+      <h2 class="text-sm font-medium text-[var(--color-muted)]">Notes</h2>
+      <NotesEditor
+        value={company.notes}
+        onSave={(next) => patch({ notes: next })}
+      />
+
+      {#if linkedPeople.length > 0}
+        <h2 class="mt-4 text-sm font-medium text-[var(--color-muted)]">People at this company</h2>
+        <ul class="flex flex-col gap-1">
+          {#each linkedPeople as p (p.id)}
+            <li>
+              <a
+                href={`/people/${p.id}`}
+                class="flex items-center gap-3 rounded-[var(--radius-sm)] px-2 py-1.5 hover:bg-[var(--color-surface)]"
+              >
+                <span class="flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-full border border-[var(--color-border)] bg-[var(--color-surface)] text-xs text-[var(--color-muted)]">
+                  {#if p.avatarUrl}
+                    <img src={p.avatarUrl} alt="" class="h-full w-full object-cover" />
+                  {:else}
+                    {(p.name[0] ?? '·').toUpperCase()}
+                  {/if}
+                </span>
+                <span class="min-w-0 flex-1">
+                  <span class="block truncate text-sm font-medium">{p.name}</span>
+                  {#if p.role}
+                    <span class="block truncate text-xs text-[var(--color-muted)]">{p.role}</span>
+                  {/if}
+                </span>
+              </a>
+            </li>
+          {/each}
+        </ul>
+      {/if}
+    </section>
+
+    <aside class="flex flex-col gap-1 rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)] p-2 text-sm">
+      <FieldRow label="Industry" icon={Building2} value={company.industry} field="industry" id={company.id} endpoint="companies" />
+      <FieldRow label="Location" icon={MapPin} value={company.location} field="location" id={company.id} endpoint="companies" />
+    </aside>
+  </div>
+</article>
