@@ -3,11 +3,27 @@
   import { Star, Archive, Trash2, ExternalLink, Loader2, Mail, Phone, MapPin, Building2 } from 'lucide-svelte';
   import NotesEditor from '$lib/components/NotesEditor.svelte';
   import FieldRow from '$lib/components/FieldRow.svelte';
+  import InteractionRow from '$lib/components/InteractionRow.svelte';
+  import { Plus } from 'lucide-svelte';
+  import { dayBucket } from '$lib/interactions';
   import { toast } from '$lib/toasts.svelte';
 
   let { data } = $props();
   const person = $derived(data.person);
   const company = $derived(data.company);
+  const interactions = $derived(data.interactions);
+
+  const interactionGroups = $derived.by(() => {
+    const today = new Date();
+    const map = new Map<string, { label: string; items: typeof interactions }>();
+    for (const item of interactions) {
+      const b = dayBucket(item.occurredAt, today);
+      const g = map.get(b.key);
+      if (g) g.items.push(item);
+      else map.set(b.key, { label: b.label, items: [item] });
+    }
+    return [...map.entries()].sort((a, b) => (a[0] < b[0] ? 1 : -1));
+  });
 
   let editingName = $state(false);
   // svelte-ignore state_referenced_locally
@@ -147,12 +163,47 @@
   </header>
 
   <div class="grid gap-6 md:grid-cols-[1fr_260px]">
-    <section class="flex flex-col gap-3">
-      <h2 class="text-sm font-medium text-[var(--color-muted)]">Notes</h2>
-      <NotesEditor
-        value={person.notes}
-        onSave={(next) => patch({ notes: next })}
-      />
+    <section class="flex flex-col gap-6">
+      <div class="flex flex-col gap-3">
+        <h2 class="text-sm font-medium text-[var(--color-muted)]">Notes</h2>
+        <NotesEditor
+          value={person.notes}
+          onSave={(next) => patch({ notes: next })}
+        />
+      </div>
+
+      <div class="flex flex-col gap-2">
+        <div class="flex items-center justify-between">
+          <h2 class="text-sm font-medium text-[var(--color-muted)]">Interactions</h2>
+          <a
+            href={`/interactions/new?person=${person.id}`}
+            class="inline-flex items-center gap-1 rounded-[var(--radius-sm)] border border-[var(--color-border)] px-2.5 py-1 text-xs hover:bg-[var(--color-surface)]"
+          >
+            <Plus size={12} strokeWidth={2} />
+            Log interaction
+          </a>
+        </div>
+        {#if interactions.length === 0}
+          <p class="rounded-[var(--radius-sm)] border border-dashed border-[var(--color-border)] bg-[var(--color-surface)] p-4 text-center text-xs text-[var(--color-muted)]">
+            No interactions logged with {person.name} yet.
+          </p>
+        {:else}
+          <div class="flex flex-col gap-4">
+            {#each interactionGroups as [key, g] (key)}
+              <section class="flex flex-col gap-1">
+                <h3 class="text-xs font-medium uppercase tracking-wide text-[var(--color-subtle)]">{g.label}</h3>
+                <ul class="flex flex-col gap-0.5">
+                  {#each g.items as i (i.id)}
+                    <li>
+                      <InteractionRow {...i} />
+                    </li>
+                  {/each}
+                </ul>
+              </section>
+            {/each}
+          </div>
+        {/if}
+      </div>
     </section>
 
     <aside class="flex flex-col gap-1 rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)] p-2 text-sm">

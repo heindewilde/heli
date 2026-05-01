@@ -1,13 +1,18 @@
-import { and, desc, eq, sql } from 'drizzle-orm';
+import { and, desc, eq, gte, sql } from 'drizzle-orm';
 import type { PageServerLoad } from './$types';
 import { db } from '$lib/server/db';
-import { people, companies } from '$lib/server/schema';
+import { people, companies, interactions as interactionsTable } from '$lib/server/schema';
+import { listInteractions } from '$lib/server/interactions-query';
 
 export const load: PageServerLoad = async ({ locals }) => {
   if (!locals.user) return { user: null };
   const d = db(locals.user.region);
+  const fourteenDaysAgo = Date.now() - 14 * 86_400_000;
+  const monthStart = new Date();
+  monthStart.setDate(1);
+  monthStart.setHours(0, 0, 0, 0);
 
-  const [peopleCount, companiesCount, recentPeople, recentCompanies] = await Promise.all([
+  const [peopleCount, companiesCount, interactionsThisMonth, recentInteractions, recentPeople, recentCompanies] = await Promise.all([
     d
       .select({ n: sql<number>`COUNT(*)` })
       .from(people)
@@ -18,6 +23,12 @@ export const load: PageServerLoad = async ({ locals }) => {
       .from(companies)
       .where(and(eq(companies.userId, locals.user.id), eq(companies.isArchived, 0)))
       .get(),
+    d
+      .select({ n: sql<number>`COUNT(*)` })
+      .from(interactionsTable)
+      .where(and(eq(interactionsTable.userId, locals.user.id), gte(interactionsTable.occurredAt, monthStart.getTime())))
+      .get(),
+    listInteractions(locals.user.id, locals.user.region, { from: fourteenDaysAgo, limit: 10 }),
     d
       .select({
         id: people.id,
@@ -68,8 +79,10 @@ export const load: PageServerLoad = async ({ locals }) => {
     user: locals.user,
     counts: {
       people: Number(peopleCount?.n ?? 0),
-      companies: Number(companiesCount?.n ?? 0)
+      companies: Number(companiesCount?.n ?? 0),
+      interactionsThisMonth: Number(interactionsThisMonth?.n ?? 0)
     },
-    recent
+    recent,
+    recentInteractions
   };
 };

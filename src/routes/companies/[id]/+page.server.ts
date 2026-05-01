@@ -3,6 +3,7 @@ import { and, desc, eq } from 'drizzle-orm';
 import type { PageServerLoad } from './$types';
 import { db } from '$lib/server/db';
 import { companies, people } from '$lib/server/schema';
+import { listInteractions } from '$lib/server/interactions-query';
 
 export const load: PageServerLoad = async ({ locals, params }) => {
   if (!locals.user) throw redirect(303, '/auth');
@@ -28,5 +29,10 @@ export const load: PageServerLoad = async ({ locals, params }) => {
     .orderBy(desc(people.updatedAt))
     .limit(50);
 
-  return { company, linkedPeople };
+  const interactions = await listInteractions(locals.user.id, locals.user.region, {
+    companyId: company.id,
+    limit: 50
+  });
+
+  return { company, linkedPeople, interactions };
 };

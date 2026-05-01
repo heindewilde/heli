@@ -1,6 +1,7 @@
 <script lang="ts">
   import Landing from '$lib/components/Landing.svelte';
-  import { Users, Building2, Loader2 } from 'lucide-svelte';
+  import InteractionRow from '$lib/components/InteractionRow.svelte';
+  import { Users, Building2, MessagesSquare, Loader2 } from 'lucide-svelte';
 
   let { data } = $props();
 </script>
@@ -37,7 +38,30 @@
           <div class="text-xs text-[var(--color-muted)]">Companies</div>
         </div>
       </a>
+      <a
+        href="/interactions"
+        class="flex items-center gap-3 rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)] p-4 hover:border-[var(--color-border-strong)]"
+      >
+        <MessagesSquare size={20} strokeWidth={2} class="text-[var(--color-muted)]" />
+        <div>
+          <div class="text-2xl font-semibold tracking-tight">{data.counts?.interactionsThisMonth ?? 0}</div>
+          <div class="text-xs text-[var(--color-muted)]">Interactions this month</div>
+        </div>
+      </a>
     </div>
+
+    {#if data.recentInteractions && data.recentInteractions.length > 0}
+      <section class="flex flex-col gap-2">
+        <h2 class="text-sm font-medium text-[var(--color-muted)]">Recent interactions</h2>
+        <ul class="flex flex-col gap-0.5">
+          {#each data.recentInteractions as i (i.id)}
+            <li>
+              <InteractionRow {...i} />
+            </li>
+          {/each}
+        </ul>
+      </section>
+    {/if}
 
     {#if data.recent && data.recent.length > 0}
       <section class="flex flex-col gap-2">
