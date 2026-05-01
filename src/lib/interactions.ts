@@ -7,7 +7,22 @@ import {
   StickyNote,
   Sparkle
 } from 'lucide-svelte';
-import type { InteractionType } from '$lib/server/saveInteraction';
+
+export const INTERACTION_TYPES = [
+  'call',
+  'email',
+  'meeting',
+  'dm',
+  'event',
+  'note',
+  'other'
+] as const;
+
+export type InteractionType = (typeof INTERACTION_TYPES)[number];
+
+export function isInteractionType(v: unknown): v is InteractionType {
+  return typeof v === 'string' && (INTERACTION_TYPES as readonly string[]).includes(v);
+}
 
 export const TYPE_META: Record<
   InteractionType,

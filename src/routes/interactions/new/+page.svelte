@@ -2,8 +2,13 @@
   import { goto } from '$app/navigation';
   import PersonPicker from '$lib/components/PersonPicker.svelte';
   import CompanyPicker from '$lib/components/CompanyPicker.svelte';
-  import { INTERACTION_TYPES, type InteractionType } from '$lib/server/saveInteraction';
-  import { TYPE_META, toLocalDatetimeInput, fromLocalDatetimeInput } from '$lib/interactions';
+  import {
+    INTERACTION_TYPES,
+    TYPE_META,
+    toLocalDatetimeInput,
+    fromLocalDatetimeInput,
+    type InteractionType
+  } from '$lib/interactions';
   import { toast } from '$lib/toasts.svelte';
 
   let { data } = $props();

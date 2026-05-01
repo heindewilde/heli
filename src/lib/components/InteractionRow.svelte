@@ -1,6 +1,5 @@
 <script lang="ts">
-  import { TYPE_META, formatTime } from '$lib/interactions';
-  import type { InteractionType } from '$lib/server/saveInteraction';
+  import { TYPE_META, formatTime, type InteractionType } from '$lib/interactions';
 
   type Person = { id: string; name: string; avatarUrl: string | null };
 

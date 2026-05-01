@@ -3,8 +3,7 @@
   import { page } from '$app/state';
   import { Plus, Search } from 'lucide-svelte';
   import InteractionRow from '$lib/components/InteractionRow.svelte';
-  import { INTERACTION_TYPES } from '$lib/server/saveInteraction';
-  import { TYPE_META, dayBucket } from '$lib/interactions';
+  import { INTERACTION_TYPES, TYPE_META, dayBucket } from '$lib/interactions';
 
   let { data } = $props();
 

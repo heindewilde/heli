@@ -3,18 +3,10 @@ import { createId } from '@paralleldrive/cuid2';
 import { db } from './db';
 import { interactions, interactionPeople, people, companies } from './schema';
 import { sanitize, sanitizePlainText } from './sanitize';
+import { INTERACTION_TYPES, isInteractionType, type InteractionType } from '$lib/interactions';
 
-export const INTERACTION_TYPES = [
-  'call',
-  'email',
-  'meeting',
-  'dm',
-  'event',
-  'note',
-  'other'
-] as const;
-
-export type InteractionType = (typeof INTERACTION_TYPES)[number];
+export { INTERACTION_TYPES, isInteractionType };
+export type { InteractionType };
 
 export type InteractionInput = {
   occurredAt: number;
@@ -24,10 +16,6 @@ export type InteractionInput = {
   companyId?: string | null;
   personIds?: string[];
 };
-
-export function isInteractionType(v: unknown): v is InteractionType {
-  return typeof v === 'string' && (INTERACTION_TYPES as readonly string[]).includes(v);
-}
 
 async function validatePeopleIds(userId: string, region: string, ids: string[]): Promise<string[]> {
   if (ids.length === 0) return [];

@@ -3,8 +3,15 @@
   import { Trash2, Pencil, Save, X, Building2 } from 'lucide-svelte';
   import PersonPicker from '$lib/components/PersonPicker.svelte';
   import CompanyPicker from '$lib/components/CompanyPicker.svelte';
-  import { INTERACTION_TYPES, type InteractionType } from '$lib/server/saveInteraction';
-  import { TYPE_META, toLocalDatetimeInput, fromLocalDatetimeInput, formatTime, dayBucket } from '$lib/interactions';
+  import {
+    INTERACTION_TYPES,
+    TYPE_META,
+    toLocalDatetimeInput,
+    fromLocalDatetimeInput,
+    formatTime,
+    dayBucket,
+    type InteractionType
+  } from '$lib/interactions';
   import { toast } from '$lib/toasts.svelte';
 
   let { data } = $props();
