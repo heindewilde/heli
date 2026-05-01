@@ -30,10 +30,6 @@
           return true;
         }
       }
-      if (e.key === 'p' && saveBar) {
-        saveBar.focus();
-        return true;
-      }
     });
   });
 </script>

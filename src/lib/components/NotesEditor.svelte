@@ -66,7 +66,7 @@
       class="group rounded-[var(--radius-md)] border border-dashed border-transparent px-3 py-2 text-left text-sm leading-relaxed hover:border-[var(--color-border)]"
     >
       {#if value}
-        <div class="prose prose-sm max-w-none text-[var(--color-text)] [&_a]:text-[var(--color-product)]">
+        <div class="prose prose-sm max-w-none whitespace-pre-wrap text-[var(--color-text)] [&_a]:text-[var(--color-product)]">
           {@html value}
         </div>
       {:else}

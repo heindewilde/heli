@@ -73,7 +73,7 @@
                 href={r.kind === 'person' ? `/people/${r.id}` : `/companies/${r.id}`}
                 class="flex items-center gap-3 rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 hover:border-[var(--color-border-strong)]"
               >
-                <span class="flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-{r.kind === 'person' ? 'full' : 'sm'} border border-[var(--color-border)] bg-[var(--color-bg)] text-xs text-[var(--color-muted)]">
+                <span class="flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden border border-[var(--color-border)] bg-[var(--color-bg)] text-xs text-[var(--color-muted)] {r.kind === 'person' ? 'rounded-full' : 'rounded-[var(--radius-sm)]'}">
                   {#if r.avatarUrl}
                     <img src={r.avatarUrl} alt="" class="h-full w-full object-cover" />
                   {:else}

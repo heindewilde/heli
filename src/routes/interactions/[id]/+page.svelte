@@ -165,7 +165,7 @@
           class="rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 text-sm leading-relaxed"
         ></textarea>
       {:else if interaction.body}
-        <div class="prose prose-sm max-w-none text-sm leading-relaxed text-[var(--color-text)] [&_a]:text-[var(--color-product)]">
+        <div class="prose prose-sm max-w-none whitespace-pre-wrap text-sm leading-relaxed text-[var(--color-text)] [&_a]:text-[var(--color-product)]">
           {@html interaction.body}
         </div>
       {:else}
