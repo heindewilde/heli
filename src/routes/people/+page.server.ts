@@ -1,9 +1,15 @@
 import { redirect, type Actions } from '@sveltejs/kit';
-import { and, desc, eq, sql } from 'drizzle-orm';
+import { and, desc, eq, inArray, sql } from 'drizzle-orm';
 import type { PageServerLoad } from './$types';
 import { db } from '$lib/server/db';
 import { people } from '$lib/server/schema';
 import { ftsQuery } from '$lib/server/search';
+import {
+  entityIdsForTag,
+  findTagBySlug,
+  getTagsForEntities,
+  listTagsWithCounts
+} from '$lib/server/tags';
 
 export const load: PageServerLoad = async ({ locals, url }) => {
   if (!locals.user) throw redirect(303, '/auth');
@@ -11,9 +17,35 @@ export const load: PageServerLoad = async ({ locals, url }) => {
   const archived = url.searchParams.get('archived') === '1';
   const favorite = url.searchParams.get('favorite') === '1';
   const sort = url.searchParams.get('sort') ?? 'recent';
+  const tagSlug = url.searchParams.get('tag');
 
   const d = db(locals.user.region);
   const fts = ftsQuery(q);
+
+  let activeTag: { id: string; name: string; slug: string } | null = null;
+  let tagFilterIds: string[] | null = null;
+  if (tagSlug) {
+    const t = await findTagBySlug(locals.user.id, locals.user.region, 'person', tagSlug);
+    if (t) {
+      activeTag = { id: t.id, name: t.name, slug: t.slug };
+      tagFilterIds = await entityIdsForTag(locals.user.id, locals.user.region, 'person', t.id);
+      if (tagFilterIds.length === 0) {
+        // Short-circuit: no rows can match.
+        const allTags = await listTagsWithCounts(locals.user.id, locals.user.region, 'person');
+        return {
+          q,
+          archived,
+          favorite,
+          sort,
+          tag: activeTag,
+          allTags,
+          items: [],
+          itemTags: {} as Record<string, { id: string; name: string; slug: string }[]>,
+          total: 0
+        };
+      }
+    }
+  }
 
   let items;
   if (fts) {
@@ -36,10 +68,15 @@ export const load: PageServerLoad = async ({ locals, url }) => {
       ORDER BY rank
       LIMIT 200
     `);
+    if (tagFilterIds) {
+      const set = new Set(tagFilterIds);
+      items = items.filter((i) => set.has(i.id));
+    }
   } else {
     const filters = [eq(people.userId, locals.user.id)];
     if (!archived) filters.push(eq(people.isArchived, 0));
     if (favorite) filters.push(eq(people.isFavorite, 1));
+    if (tagFilterIds) filters.push(inArray(people.id, tagFilterIds));
     const order =
       sort === 'name' ? people.name : sort === 'updated' ? desc(people.updatedAt) : desc(people.createdAt);
     items = await d
@@ -64,19 +101,32 @@ export const load: PageServerLoad = async ({ locals, url }) => {
       .limit(200);
   }
 
-  // Total counts (irrespective of filters) for the header.
   const totalRow = await d
     .select({ n: sql<number>`COUNT(*)` })
     .from(people)
     .where(and(eq(people.userId, locals.user.id), eq(people.isArchived, 0)))
     .get();
 
+  const tagMap = await getTagsForEntities(
+    locals.user.id,
+    locals.user.region,
+    'person',
+    items.map((i) => i.id)
+  );
+  const itemTags: Record<string, { id: string; name: string; slug: string }[]> = {};
+  for (const [k, v] of tagMap) itemTags[k] = v;
+
+  const allTags = await listTagsWithCounts(locals.user.id, locals.user.region, 'person');
+
   return {
     q,
     archived,
     favorite,
     sort,
+    tag: activeTag,
+    allTags,
     items,
+    itemTags,
     total: Number(totalRow?.n ?? 0)
   };
 };

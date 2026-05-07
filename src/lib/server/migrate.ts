@@ -204,6 +204,23 @@ async function execMany(c: Client, sql: string) {
   await c.executeMultiple(sql);
 }
 
+const ALTERS: string[] = [
+  `ALTER TABLE people ADD COLUMN suggested_company_name TEXT`,
+  `ALTER TABLE people ADD COLUMN suggested_company_url TEXT`
+];
+
+async function applyAlters(c: Client) {
+  for (const stmt of ALTERS) {
+    try {
+      await c.execute(stmt);
+    } catch (err) {
+      // SQLite throws "duplicate column name" if the column already exists.
+      const msg = (err as Error).message ?? '';
+      if (!/duplicate column/i.test(msg)) throw err;
+    }
+  }
+}
+
 async function rebuildFts(c: Client) {
   // Cheap and idempotent: only rebuild if FTS tables look out of sync with the source table.
   for (const name of ['people', 'companies', 'interactions']) {
@@ -231,6 +248,7 @@ async function janitor(c: Client) {
 
 async function migrateOne(c: Client) {
   await execMany(c, DDL);
+  await applyAlters(c);
   await execMany(c, FTS);
   await rebuildFts(c);
   await janitor(c);

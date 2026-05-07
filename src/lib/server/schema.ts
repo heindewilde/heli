@@ -83,6 +83,8 @@ export const people = sqliteTable(
     avatarUrl: text('avatar_url'),
     faviconUrl: text('favicon_url'),
     notes: text('notes'),
+    suggestedCompanyName: text('suggested_company_name'),
+    suggestedCompanyUrl: text('suggested_company_url'),
     isFavorite: integer('is_favorite').notNull().default(0),
     isArchived: integer('is_archived').notNull().default(0),
     source: text('source'),
@@ -208,3 +210,10 @@ export type Session = typeof sessions.$inferSelect;
 export type Person = typeof people.$inferSelect;
 export type Company = typeof companies.$inferSelect;
 export type Interaction = typeof interactions.$inferSelect;
+export type Tag = typeof tags.$inferSelect;
+export type Reminder = typeof reminders.$inferSelect;
+
+export const TAG_SCOPES = ['person', 'company', 'interaction'] as const;
+export type TagScope = (typeof TAG_SCOPES)[number];
+export const REMINDER_KINDS = ['person', 'company', 'interaction'] as const;
+export type ReminderKind = (typeof REMINDER_KINDS)[number];

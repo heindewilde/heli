@@ -4,6 +4,7 @@ import type { PageServerLoad } from './$types';
 import { db } from '$lib/server/db';
 import { companies, people } from '$lib/server/schema';
 import { listInteractions } from '$lib/server/interactions-query';
+import { getTagsForEntity } from '$lib/server/tags';
 
 export const load: PageServerLoad = async ({ locals, params }) => {
   if (!locals.user) throw redirect(303, '/auth');
@@ -34,5 +35,7 @@ export const load: PageServerLoad = async ({ locals, params }) => {
     limit: 50
   });
 
-  return { company, linkedPeople, interactions };
+  const tags = await getTagsForEntity(locals.user.id, locals.user.region, 'company', company.id);
+
+  return { company, linkedPeople, interactions, tags };
 };

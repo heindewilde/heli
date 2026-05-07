@@ -13,9 +13,10 @@
     companyName?: string | null;
     people: Person[];
     showCompany?: boolean;
+    selected?: boolean;
   };
 
-  let { id, occurredAt, type, title, body, companyId, companyName, people, showCompany = true }: Props = $props();
+  let { id, occurredAt, type, title, body, companyId, companyName, people, showCompany = true, selected = false }: Props = $props();
 
   const meta = $derived(TYPE_META[type as InteractionType] ?? TYPE_META.other);
   const Icon = $derived(meta.icon);
@@ -24,7 +25,10 @@
 
 <a
   href={`/interactions/${id}`}
-  class="flex items-start gap-3 rounded-[var(--radius-md)] border border-transparent px-3 py-2 hover:bg-[var(--color-surface)]"
+  data-interaction-row
+  class="flex items-start gap-3 rounded-[var(--radius-md)] border px-3 py-2 transition-colors {selected
+    ? 'border-[var(--color-product-border)] bg-[var(--color-product-bg)]'
+    : 'border-transparent hover:bg-[var(--color-surface)]'}"
 >
   <span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-[var(--color-border)] bg-[var(--color-surface)]">
     <Icon size={14} strokeWidth={2} class={meta.tone} />

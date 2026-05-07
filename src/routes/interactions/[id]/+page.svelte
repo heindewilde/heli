@@ -3,6 +3,8 @@
   import { Trash2, Pencil, Save, X, Building2 } from 'lucide-svelte';
   import PersonPicker from '$lib/components/PersonPicker.svelte';
   import CompanyPicker from '$lib/components/CompanyPicker.svelte';
+  import TagInput from '$lib/components/TagInput.svelte';
+  import AddReminder from '$lib/components/AddReminder.svelte';
   import {
     INTERACTION_TYPES,
     TYPE_META,
@@ -13,9 +15,20 @@
     type InteractionType
   } from '$lib/interactions';
   import { toast } from '$lib/toasts.svelte';
+  import { onMount } from 'svelte';
 
   let { data } = $props();
   const interaction = $derived(data.interaction);
+  const tags = $derived(data.tags);
+
+  let tagSuggestions = $state<{ id: string; name: string; slug: string; count: number }[]>([]);
+
+  onMount(() => {
+    fetch('/api/tags?scope=interaction')
+      .then((r) => (r.ok ? r.json() : { items: [] }))
+      .then((d) => (tagSuggestions = d.items ?? []))
+      .catch(() => {});
+  });
 
   let editing = $state(false);
   let saving = $state(false);
@@ -226,6 +239,16 @@
         {:else}
           <p class="italic text-[var(--color-subtle)]">No company.</p>
         {/if}
+      </div>
+
+      <div>
+        <h2 class="mb-1 text-xs font-medium uppercase tracking-wide text-[var(--color-subtle)]">Tags</h2>
+        <TagInput scope="interaction" entityId={interaction.id} {tags} suggestions={tagSuggestions} />
+      </div>
+
+      <div>
+        <h2 class="mb-1 text-xs font-medium uppercase tracking-wide text-[var(--color-subtle)]">Reminder</h2>
+        <AddReminder kind="interaction" refId={interaction.id} />
       </div>
     </aside>
   </div>

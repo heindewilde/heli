@@ -4,14 +4,27 @@
   import NotesEditor from '$lib/components/NotesEditor.svelte';
   import FieldRow from '$lib/components/FieldRow.svelte';
   import InteractionRow from '$lib/components/InteractionRow.svelte';
+  import TagInput from '$lib/components/TagInput.svelte';
+  import AddReminder from '$lib/components/AddReminder.svelte';
   import { Plus } from 'lucide-svelte';
   import { dayBucket } from '$lib/interactions';
   import { toast } from '$lib/toasts.svelte';
+  import { onMount } from 'svelte';
 
   let { data } = $props();
   const company = $derived(data.company);
   const linkedPeople = $derived(data.linkedPeople);
   const interactions = $derived(data.interactions);
+  const tags = $derived(data.tags);
+
+  let tagSuggestions = $state<{ id: string; name: string; slug: string; count: number }[]>([]);
+
+  onMount(() => {
+    fetch('/api/tags?scope=company')
+      .then((r) => (r.ok ? r.json() : { items: [] }))
+      .then((d) => (tagSuggestions = d.items ?? []))
+      .catch(() => {});
+  });
 
   const interactionGroups = $derived.by(() => {
     const today = new Date();
@@ -234,9 +247,19 @@
       {/if}
     </section>
 
-    <aside class="flex flex-col gap-1 rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)] p-2 text-sm">
-      <FieldRow label="Industry" icon={Building2} value={company.industry} field="industry" id={company.id} endpoint="companies" />
-      <FieldRow label="Location" icon={MapPin} value={company.location} field="location" id={company.id} endpoint="companies" />
+    <aside class="flex flex-col gap-3">
+      <div class="flex flex-col gap-1 rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)] p-2 text-sm">
+        <FieldRow label="Industry" icon={Building2} value={company.industry} field="industry" id={company.id} endpoint="companies" />
+        <FieldRow label="Location" icon={MapPin} value={company.location} field="location" id={company.id} endpoint="companies" />
+      </div>
+      <div class="flex flex-col gap-2 rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)] p-3">
+        <h3 class="text-xs font-medium uppercase tracking-wide text-[var(--color-subtle)]">Tags</h3>
+        <TagInput scope="company" entityId={company.id} {tags} suggestions={tagSuggestions} />
+      </div>
+      <div class="flex flex-col gap-2 rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)] p-3">
+        <h3 class="text-xs font-medium uppercase tracking-wide text-[var(--color-subtle)]">Reminder</h3>
+        <AddReminder kind="company" refId={company.id} />
+      </div>
     </aside>
   </div>
 </article>

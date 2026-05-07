@@ -41,6 +41,11 @@ export const PATCH: RequestHandler = async ({ request, params, locals }) => {
   if (Object.keys(updates).length === 1) throw error(400, 'no_updates');
   if ('name' in updates && !updates.name) throw error(400, 'missing_name');
 
+  if ('companyId' in updates && updates.companyId) {
+    updates.suggestedCompanyName = null;
+    updates.suggestedCompanyUrl = null;
+  }
+
   await d.update(people).set(updates).where(and(eq(people.id, id), eq(people.userId, locals.user.id)));
   const fresh = await d.select().from(people).where(eq(people.id, id)).get();
   return json(fresh);

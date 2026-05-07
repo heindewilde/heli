@@ -119,11 +119,31 @@ async function enrichPerson(id: string, userId: string, region: string, url: URL
           .where(and(eq(companies.userId, userId), eq(companies.domain, employerDomain)))
           .get();
         if (company) {
-          await d.update(people).set({ companyId: company.id }).where(eq(people.id, id));
+          await d
+            .update(people)
+            .set({
+              companyId: company.id,
+              suggestedCompanyName: null,
+              suggestedCompanyUrl: null
+            })
+            .where(eq(people.id, id));
+        } else if (worksFor.name) {
+          await d
+            .update(people)
+            .set({
+              suggestedCompanyName: worksFor.name.trim(),
+              suggestedCompanyUrl: worksFor.url
+            })
+            .where(eq(people.id, id));
         }
       } catch {
         // Bad URL in JSON-LD; ignore.
       }
+    } else if (worksFor?.name) {
+      await d
+        .update(people)
+        .set({ suggestedCompanyName: worksFor.name.trim(), suggestedCompanyUrl: null })
+        .where(eq(people.id, id));
     }
   } catch (err) {
     // Log enrichment errors in dev but don't throw — surface to user as "no enrichment yet".

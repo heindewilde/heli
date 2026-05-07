@@ -1,17 +1,22 @@
 <script lang="ts">
   import { goto, invalidateAll } from '$app/navigation';
-  import { Star, Archive, Trash2, ExternalLink, Loader2, Mail, Phone, MapPin, Building2 } from 'lucide-svelte';
+  import { Star, Archive, Trash2, ExternalLink, Loader2, Mail, Phone, MapPin, Building2, Sparkles } from 'lucide-svelte';
   import NotesEditor from '$lib/components/NotesEditor.svelte';
   import FieldRow from '$lib/components/FieldRow.svelte';
   import InteractionRow from '$lib/components/InteractionRow.svelte';
+  import TagInput from '$lib/components/TagInput.svelte';
+  import AddReminder from '$lib/components/AddReminder.svelte';
   import { Plus } from 'lucide-svelte';
   import { dayBucket } from '$lib/interactions';
   import { toast } from '$lib/toasts.svelte';
+  import { onMount } from 'svelte';
 
   let { data } = $props();
   const person = $derived(data.person);
   const company = $derived(data.company);
   const interactions = $derived(data.interactions);
+  const tags = $derived(data.tags);
+  const suggestion = $derived(data.suggestion);
 
   const interactionGroups = $derived.by(() => {
     const today = new Date();
@@ -29,6 +34,15 @@
   // svelte-ignore state_referenced_locally
   let nameDraft = $state(person.name);
   let nameInput = $state<HTMLInputElement | undefined>(undefined);
+
+  let tagSuggestions = $state<{ id: string; name: string; slug: string; count: number }[]>([]);
+
+  onMount(() => {
+    fetch('/api/tags?scope=person')
+      .then((r) => (r.ok ? r.json() : { items: [] }))
+      .then((d) => (tagSuggestions = d.items ?? []))
+      .catch(() => {});
+  });
 
   async function patch(patch: Record<string, unknown>) {
     const res = await fetch(`/api/people/${person.id}`, {
@@ -68,6 +82,48 @@
     }
     toast.success(`Deleted ${person.name}`);
     goto('/people');
+  }
+
+  async function linkSuggestedCompany() {
+    if (!suggestion) return;
+    if (suggestion.matchId) {
+      await patch({ companyId: suggestion.matchId });
+      return;
+    }
+    if (!suggestion.url) {
+      toast.warning('No URL for the suggested company; add manually.');
+      return;
+    }
+    const res = await fetch('/api/save', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ url: suggestion.url })
+    });
+    if (!res.ok) {
+      toast.danger('Could not save company');
+      return;
+    }
+    const out = (await res.json()) as { id: string; kind: 'person' | 'company' };
+    if (out.kind !== 'company') {
+      toast.warning('That URL was classified as a person, not a company.');
+      return;
+    }
+    await patch({ companyId: out.id });
+    toast.success(`Linked ${suggestion.name}`);
+  }
+
+  async function dismissSuggestion() {
+    // Clearing the suggested fields removes the banner without linking a company.
+    const res = await fetch(`/api/people/${person.id}`, {
+      method: 'PATCH',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ suggestedCompanyName: null, suggestedCompanyUrl: null })
+    });
+    if (!res.ok) {
+      toast.danger('Could not dismiss');
+      return;
+    }
+    await invalidateAll();
   }
 
   const initials = $derived(
@@ -162,6 +218,36 @@
     </div>
   </header>
 
+  {#if suggestion}
+    <aside class="flex items-start gap-3 rounded-[var(--radius-md)] border border-[var(--color-product-border)] bg-[var(--color-product-bg)] px-3 py-2 text-sm text-[var(--color-product)]">
+      <Sparkles size={14} strokeWidth={2} class="mt-0.5 shrink-0" />
+      <div class="min-w-0 flex-1">
+        <p>
+          Looks like {person.name} works at <strong>{suggestion.name}</strong>.
+          {#if suggestion.matchId}
+            We have a matching company on file.
+          {:else if suggestion.url}
+            Save it as a company and link it?
+          {:else}
+            Add it as a company?
+          {/if}
+        </p>
+      </div>
+      <div class="flex shrink-0 items-center gap-1">
+        <button
+          type="button"
+          onclick={linkSuggestedCompany}
+          class="rounded-[var(--radius-sm)] bg-[var(--color-product)] px-2 py-1 text-xs font-medium text-white"
+        >{suggestion.matchId ? 'Link company' : 'Add company'}</button>
+        <button
+          type="button"
+          onclick={dismissSuggestion}
+          class="rounded-[var(--radius-sm)] px-2 py-1 text-xs text-[var(--color-product)] hover:bg-[var(--color-product-border)]"
+        >Dismiss</button>
+      </div>
+    </aside>
+  {/if}
+
   <div class="grid gap-6 md:grid-cols-[1fr_260px]">
     <section class="flex flex-col gap-6">
       <div class="flex flex-col gap-3">
@@ -206,17 +292,27 @@
       </div>
     </section>
 
-    <aside class="flex flex-col gap-1 rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)] p-2 text-sm">
-      <FieldRow label="Email" icon={Mail} value={person.email} field="email" id={person.id} endpoint="people" />
-      <FieldRow label="Phone" icon={Phone} value={person.phone} field="phone" id={person.id} endpoint="people" />
-      <FieldRow label="Location" icon={MapPin} value={person.location} field="location" id={person.id} endpoint="people" />
-      <FieldRow label="Role" icon={Building2} value={person.role} field="role" id={person.id} endpoint="people" />
-      {#if company}
-        <div class="mt-2 rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-bg)] p-3">
-          <p class="text-xs text-[var(--color-muted)]">Linked company</p>
-          <a href={`/companies/${company.id}`} class="mt-1 block text-sm font-medium hover:underline">{company.name}</a>
-        </div>
-      {/if}
+    <aside class="flex flex-col gap-3">
+      <div class="flex flex-col gap-1 rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)] p-2 text-sm">
+        <FieldRow label="Email" icon={Mail} value={person.email} field="email" id={person.id} endpoint="people" />
+        <FieldRow label="Phone" icon={Phone} value={person.phone} field="phone" id={person.id} endpoint="people" />
+        <FieldRow label="Location" icon={MapPin} value={person.location} field="location" id={person.id} endpoint="people" />
+        <FieldRow label="Role" icon={Building2} value={person.role} field="role" id={person.id} endpoint="people" />
+        {#if company}
+          <div class="mt-2 rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-bg)] p-3">
+            <p class="text-xs text-[var(--color-muted)]">Linked company</p>
+            <a href={`/companies/${company.id}`} class="mt-1 block text-sm font-medium hover:underline">{company.name}</a>
+          </div>
+        {/if}
+      </div>
+      <div class="flex flex-col gap-2 rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)] p-3">
+        <h3 class="text-xs font-medium uppercase tracking-wide text-[var(--color-subtle)]">Tags</h3>
+        <TagInput scope="person" entityId={person.id} {tags} suggestions={tagSuggestions} />
+      </div>
+      <div class="flex flex-col gap-2 rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)] p-3">
+        <h3 class="text-xs font-medium uppercase tracking-wide text-[var(--color-subtle)]">Reminder</h3>
+        <AddReminder kind="person" refId={person.id} />
+      </div>
     </aside>
   </div>
 </article>

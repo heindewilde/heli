@@ -2,7 +2,7 @@
   import { goto, invalidateAll } from '$app/navigation';
   import { page } from '$app/state';
   import { onMount } from 'svelte';
-  import { Search, Plus, Star, Archive } from 'lucide-svelte';
+  import { Search, Plus, Star, Archive, Tag, X } from 'lucide-svelte';
   import EntityRow from '$lib/components/EntityRow.svelte';
   import { bindKeys } from '$lib/keyboard.svelte';
   import { toast } from '$lib/toasts.svelte';
@@ -131,7 +131,7 @@
 
   <div class="flex flex-wrap items-center gap-2 text-xs">
     <a
-      href={buildUrl({ favorite: !data.favorite, archived: data.archived })}
+      href={buildUrl({ favorite: !data.favorite, archived: data.archived, tag: data.tag?.slug ?? null })}
       class="inline-flex items-center gap-1 rounded-full border px-2.5 py-1 {data.favorite
         ? 'border-[var(--color-warning-border)] bg-[var(--color-warning-bg)] text-[var(--color-warning)]'
         : 'border-[var(--color-border)] text-[var(--color-muted)]'}"
@@ -140,7 +140,7 @@
       Favorites
     </a>
     <a
-      href={buildUrl({ archived: !data.archived, favorite: data.favorite })}
+      href={buildUrl({ archived: !data.archived, favorite: data.favorite, tag: data.tag?.slug ?? null })}
       class="inline-flex items-center gap-1 rounded-full border px-2.5 py-1 {data.archived
         ? 'border-[var(--color-product-border)] bg-[var(--color-product-bg)] text-[var(--color-product)]'
         : 'border-[var(--color-border)] text-[var(--color-muted)]'}"
@@ -148,23 +148,51 @@
       <Archive size={12} strokeWidth={2} />
       Archived
     </a>
+    {#if data.tag}
+      <a
+        href={buildUrl({ tag: null })}
+        class="inline-flex items-center gap-1 rounded-full border border-[var(--color-product-border)] bg-[var(--color-product-bg)] px-2.5 py-1 text-[var(--color-product)]"
+      >
+        <Tag size={12} strokeWidth={2} />
+        {data.tag.name}
+        <X size={10} strokeWidth={2} />
+      </a>
+    {:else if data.allTags.length > 0}
+      <span class="text-[var(--color-subtle)]">·</span>
+      {#each data.allTags.slice(0, 8) as t (t.id)}
+        <a
+          href={buildUrl({ tag: t.slug })}
+          class="inline-flex items-center gap-1 rounded-full border border-[var(--color-border)] px-2.5 py-1 text-[var(--color-muted)] hover:bg-[var(--color-surface)]"
+        >
+          <Tag size={12} strokeWidth={2} />
+          {t.name}
+          <span class="text-[var(--color-subtle)]">{t.count}</span>
+        </a>
+      {/each}
+    {/if}
   </div>
 
   {#if rows.length === 0}
-    <div class="rounded-[var(--radius-md)] border border-dashed border-[var(--color-border)] bg-[var(--color-surface)] p-8 text-center">
-      <p class="text-sm text-[var(--color-muted)]">
-        {data.q ? 'No companies match that search.' : 'No companies yet. Paste a website link in the topbar to get started.'}
-      </p>
-      {#if !data.q}
+    <div class="rounded-[var(--radius-md)] border border-dashed border-[var(--color-border)] bg-[var(--color-surface)] p-10 text-center">
+      {#if data.q}
+        <p class="text-sm text-[var(--color-muted)]">No companies match &ldquo;{data.q}&rdquo;.</p>
+      {:else if data.tag}
+        <p class="text-sm text-[var(--color-muted)]">No companies tagged <strong>{data.tag.name}</strong> yet.</p>
+        <a href="/companies" class="mt-3 inline-flex items-center gap-1 rounded-[var(--radius-sm)] border border-[var(--color-border)] px-3 py-1.5 text-sm">Clear tag filter</a>
+      {:else if data.favorite || data.archived}
+        <p class="text-sm text-[var(--color-muted)]">No companies in this filter.</p>
+      {:else}
+        <p class="text-sm text-[var(--color-muted)]">Paste a website link in the topbar to save your first company.</p>
         <a
           href="/companies/new"
           class="mt-3 inline-flex items-center gap-1 rounded-[var(--radius-sm)] bg-[var(--color-product)] px-3 py-1.5 text-sm font-medium text-white"
-        >Add manually</a>
+        ><Plus size={14} strokeWidth={2} /> Add manually</a>
       {/if}
     </div>
   {:else}
     <ul class="flex flex-col gap-1">
       {#each rows as company, i (company.id)}
+        {@const companyTagList = data.itemTags[company.id] ?? []}
         <li>
           <EntityRow
             href={`/companies/${company.id}`}
@@ -180,6 +208,16 @@
             onArchive={() => patch(company.id, { isArchived: !company.isArchived })}
             onDelete={() => del(company.id, company.name)}
           />
+          {#if companyTagList.length > 0}
+            <div class="ml-12 -mt-0.5 flex flex-wrap gap-1 pb-1">
+              {#each companyTagList as t (t.id)}
+                <a
+                  href={buildUrl({ tag: t.slug })}
+                  class="rounded-full bg-[var(--color-product-bg)] px-1.5 py-0.5 text-[10px] text-[var(--color-product)] hover:underline"
+                >{t.name}</a>
+              {/each}
+            </div>
+          {/if}
         </li>
       {/each}
     </ul>

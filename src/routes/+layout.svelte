@@ -3,15 +3,21 @@
   import { APP_NAME } from '$lib/branding';
   import Toaster from '$lib/components/Toaster.svelte';
   import SaveBar from '$lib/components/SaveBar.svelte';
-  import { Users, Building2, MessagesSquare, LogOut } from 'lucide-svelte';
+  import CommandPalette from '$lib/components/CommandPalette.svelte';
+  import ShortcutHelp from '$lib/components/ShortcutHelp.svelte';
+  import RemindersPopover from '$lib/components/RemindersPopover.svelte';
+  import { Users, Building2, MessagesSquare, LogOut, Search, HelpCircle } from 'lucide-svelte';
   import { page } from '$app/state';
   import { onMount } from 'svelte';
-  import { bindKeys } from '$lib/keyboard.svelte';
+  import { bindKeys, isTypingTarget } from '$lib/keyboard.svelte';
 
   let { data, children } = $props();
   const user = $derived(data.user);
+  const reminders = $derived(data.reminders ?? []);
 
   let saveBar = $state<SaveBar | undefined>(undefined);
+  let paletteOpen = $state(false);
+  let helpOpen = $state(false);
 
   const tabs = [
     { href: '/people', label: 'People', icon: Users },
@@ -20,17 +26,48 @@
   ];
 
   onMount(() => {
-    return bindKeys((e) => {
-      if (!user) return;
-      if (e.key === '/') {
-        const search = document.querySelector<HTMLInputElement>('[data-search-input]');
-        if (search) {
-          search.focus();
-          search.select?.();
-          return true;
-        }
+    const cleanups: Array<() => void> = [];
+
+    // cmd/ctrl + K is meta-modified, so it doesn't go through bindKeys' filter.
+    const onMetaKey = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && !e.shiftKey && !e.altKey && (e.key === 'k' || e.key === 'K')) {
+        e.preventDefault();
+        helpOpen = false;
+        paletteOpen = !paletteOpen;
       }
-    });
+    };
+    window.addEventListener('keydown', onMetaKey);
+    cleanups.push(() => window.removeEventListener('keydown', onMetaKey));
+
+    // `?` (shift+/) for help — fire even from inside no-input contexts; we still
+    // ignore inputs to avoid hijacking text entry.
+    const onPlainKey = (e: KeyboardEvent) => {
+      if (e.metaKey || e.ctrlKey || e.altKey) return;
+      if (isTypingTarget(e.target)) return;
+      if (e.key === '?') {
+        e.preventDefault();
+        paletteOpen = false;
+        helpOpen = !helpOpen;
+      }
+    };
+    window.addEventListener('keydown', onPlainKey);
+    cleanups.push(() => window.removeEventListener('keydown', onPlainKey));
+
+    cleanups.push(
+      bindKeys((e) => {
+        if (!user) return;
+        if (e.key === '/') {
+          const search = document.querySelector<HTMLInputElement>('[data-search-input]');
+          if (search) {
+            search.focus();
+            search.select?.();
+            return true;
+          }
+        }
+      })
+    );
+
+    return () => cleanups.forEach((c) => c());
   });
 </script>
 
@@ -47,6 +84,21 @@
     {/if}
     <div class="ml-auto flex items-center gap-3">
       {#if user}
+        <button
+          type="button"
+          onclick={() => (paletteOpen = true)}
+          title="Search (cmd+K)"
+          class="hidden items-center gap-1 rounded-[var(--radius-sm)] border border-[var(--color-border)] px-2 py-1 text-xs text-[var(--color-muted)] hover:bg-[var(--color-surface)] sm:inline-flex"
+        >
+          <Search size={12} strokeWidth={2} />
+          <kbd class="rounded bg-[var(--color-bg)] px-1 text-[10px]">⌘K</kbd>
+        </button>
+        <button
+          type="button"
+          onclick={() => (helpOpen = true)}
+          title="Keyboard shortcuts (?)"
+          class="hidden rounded-[var(--radius-sm)] p-1.5 text-[var(--color-subtle)] hover:bg-[var(--color-surface)] sm:inline-flex"
+        ><HelpCircle size={14} strokeWidth={2} /></button>
         <span class="text-sm text-[var(--color-muted)]">{user.username ?? user.email}</span>
         <form method="POST" action="/auth/logout" class="contents">
           <button
@@ -83,6 +135,9 @@
             </a>
           {/each}
         </nav>
+        <div class="mt-4 border-t border-[var(--color-border)] pt-3">
+          <RemindersPopover items={reminders} />
+        </div>
       </aside>
       <main class="flex-1 min-w-0">{@render children()}</main>
     </div>
@@ -91,4 +146,8 @@
   {/if}
 </div>
 
+{#if user}
+  <CommandPalette bind:open={paletteOpen} onClose={() => (paletteOpen = false)} />
+  <ShortcutHelp bind:open={helpOpen} onClose={() => (helpOpen = false)} />
+{/if}
 <Toaster />
