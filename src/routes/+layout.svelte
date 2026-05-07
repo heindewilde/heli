@@ -6,7 +6,7 @@
   import CommandPalette from '$lib/components/CommandPalette.svelte';
   import ShortcutHelp from '$lib/components/ShortcutHelp.svelte';
   import RemindersPopover from '$lib/components/RemindersPopover.svelte';
-  import { Users, Building2, MessagesSquare, LogOut, Search, HelpCircle } from 'lucide-svelte';
+  import { Users, Building2, MessagesSquare, LogOut, Search, HelpCircle, Settings } from 'lucide-svelte';
   import { page } from '$app/state';
   import { onMount } from 'svelte';
   import { bindKeys, isTypingTarget } from '$lib/keyboard.svelte';
@@ -99,6 +99,11 @@
           title="Keyboard shortcuts (?)"
           class="hidden rounded-[var(--radius-sm)] p-1.5 text-[var(--color-subtle)] hover:bg-[var(--color-surface)] sm:inline-flex"
         ><HelpCircle size={14} strokeWidth={2} /></button>
+        <a
+          href="/settings"
+          title="Settings"
+          class="rounded-[var(--radius-sm)] p-1.5 text-[var(--color-subtle)] hover:bg-[var(--color-surface)]"
+        ><Settings size={14} strokeWidth={2} /></a>
         <span class="text-sm text-[var(--color-muted)]">{user.username ?? user.email}</span>
         <form method="POST" action="/auth/logout" class="contents">
           <button

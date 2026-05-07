@@ -79,6 +79,7 @@
         }}
         class="flex flex-col gap-3"
       >
+        <input type="hidden" name="next" value={data.next} />
         {#if mode === 'register'}
           <label class="flex flex-col gap-1 text-sm">
             <span class="text-[var(--color-muted)]">Username (optional)</span>

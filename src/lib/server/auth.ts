@@ -226,6 +226,21 @@ export async function updatePassword(userId: string, region: string, newPassword
   await db(region).update(users).set({ passwordHash }).where(eq(users.id, userId));
 }
 
+export async function verifyPassword(userId: string, region: string, password: string): Promise<boolean> {
+  const u = await db(region).select().from(users).where(eq(users.id, userId)).get();
+  if (!u) return false;
+  return bcrypt.compare(password, u.passwordHash);
+}
+
+export async function deleteAccount(userId: string, region: string): Promise<void> {
+  // ON DELETE CASCADE handles sessions, password reset tokens, people,
+  // companies, interactions, tags, reminders, all join rows.
+  const user = await db(region).select().from(users).where(eq(users.id, userId)).get();
+  if (!user) return;
+  await db(region).delete(users).where(eq(users.id, userId));
+  await primaryDb().delete(emailRouting).where(eq(emailRouting.email, user.email));
+}
+
 export async function updateUsername(userId: string, region: string, username: string | null): Promise<void> {
   await db(region)
     .update(users)

@@ -5,19 +5,30 @@ import { isFirstUser } from '$lib/server/auth';
 import { setSessionCookie } from '$lib/server/cookies';
 import { checkRateLimit, LIMITS, RateLimitError } from '$lib/server/rate-limit';
 
+function safeNext(raw: string | null): string {
+  // Only allow same-origin absolute paths so a poisoned `?next=` can't
+  // redirect to an attacker-controlled URL.
+  if (!raw) return '/';
+  if (!raw.startsWith('/') || raw.startsWith('//')) return '/';
+  return raw;
+}
+
 export const load: PageServerLoad = async ({ locals, url }) => {
-  if (locals.user) throw redirect(303, '/');
+  const next = safeNext(url.searchParams.get('next'));
+  if (locals.user) throw redirect(303, next);
   return {
     mode: url.searchParams.get('mode') === 'register' ? 'register' : 'login',
+    next,
     registrationDisabled: process.env.DISABLE_REGISTRATION === '1' && !(await isFirstUser())
   };
 };
 
 export const actions: Actions = {
-  login: async ({ request, cookies, getClientAddress }) => {
+  login: async ({ request, cookies, getClientAddress, url }) => {
     const data = await request.formData();
     const email = String(data.get('email') ?? '');
     const password = String(data.get('password') ?? '');
+    const next = safeNext(String(data.get('next') ?? '') || url.searchParams.get('next'));
     try {
       checkRateLimit(LIMITS.login, `${getClientAddress()}:${email.toLowerCase()}`);
       const result = await login({ email, password });
@@ -31,14 +42,15 @@ export const actions: Actions = {
       }
       throw err;
     }
-    throw redirect(303, '/');
+    throw redirect(303, next);
   },
 
-  register: async ({ request, cookies, getClientAddress }) => {
+  register: async ({ request, cookies, getClientAddress, url }) => {
     const data = await request.formData();
     const email = String(data.get('email') ?? '');
     const password = String(data.get('password') ?? '');
     const username = String(data.get('username') ?? '') || null;
+    const next = safeNext(String(data.get('next') ?? '') || url.searchParams.get('next'));
 
     if (process.env.DISABLE_REGISTRATION === '1' && !(await isFirstUser())) {
       return fail(403, { mode: 'register', email, username, error: 'Registration is disabled.' });
@@ -65,6 +77,6 @@ export const actions: Actions = {
       }
       throw err;
     }
-    throw redirect(303, '/');
+    throw redirect(303, next);
   }
 };

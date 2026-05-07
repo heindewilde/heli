@@ -8,8 +8,7 @@ export type Limit = { name: string; max: number; windowMs: number };
 export const LIMITS: Record<string, Limit> = {
   register: { name: 'register', max: 5, windowMs: 60 * 60 * 1000 },
   login: { name: 'login', max: 10, windowMs: 15 * 60 * 1000 },
-  save: { name: 'save', max: 30, windowMs: 5 * 60 * 1000 },
-  inboundEmail: { name: 'inbound-email', max: 60, windowMs: 60 * 1000 }
+  save: { name: 'save', max: 30, windowMs: 5 * 60 * 1000 }
 };
 
 function gc() {

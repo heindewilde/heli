@@ -4,7 +4,7 @@ This file is the handoff note. Read `GUSTO.md` (the spec) and `CLAUDE.md` (the w
 
 ## Where we are
 
-**Phases 0–4 of `GUSTO.md` are done.** Phases 5 and 6 remain.
+**Phases 0–5 of `GUSTO.md` are done.** Phase 6 (ship) remains.
 
 ```
 edcd9d4  Phase 0  bootstrap (SvelteKit + Tailwind v4 + Geist)
@@ -14,10 +14,12 @@ dff2b4c  Phase 2  People & Companies — paste-a-link save + lists + detail
 6d2cf40  fix      QA pass — Tailwind class, p-shortcut, whitespace-pre-wrap
 e04d5b7  fix      stop importing $lib/server/saveInteraction from client code
 06a1ab0  notes    progress.md handoff note
-<sha>    Phase 4  Search, tags, polish — palette, ?, reminders, banner, j/k
+90cb90b  Phase 4  Search, tags, polish
+6bcae73  spec     drop CSV import + Postmark inbound-email from v1 scope
+<sha>    Phase 5  Capture surfaces & data portability
 ```
 
-Phase 4 went on the branch `claude/review-spec-continue-K6iKV` (per the harness directive for this session). Cherry-pick or merge into main when convenient.
+After Phase 5 the feature branch (`claude/review-spec-continue-K6iKV`) was fast-forwarded onto `main`; both branches now point at the Phase-5 commit. Future phases can go straight to `main` unless a directive forces a feature branch again.
 
 ## How to run / pick up
 
@@ -27,7 +29,7 @@ npm run dev          # vite dev on http://localhost:5173
 npm run check        # svelte-check + tsx scripts/check-classify.ts
 ```
 
-Dev login (registered fresh during the Phase 4 smoke): `test@gusto.local` / `hunter2hunter`.
+Dev login (registered fresh during the Phase 5 smoke): `user@gusto.local` / `newpassword123` (changed during the smoke; reset DB to start over).
 
 If the dev server starts throwing "An impossible situation occurred" or "Failed to fetch dynamically imported module" after lots of HMR churn:
 ```bash
@@ -35,123 +37,98 @@ rm -rf .svelte-kit node_modules/.vite
 npm run dev
 ```
 
-## Decisions locked in (project memory has these too)
+## Decisions locked in
 
 - **License**: AGPL-3.0 (overrides spec's MIT). Don't replace `LICENSE` in Phase 6.
-- **Branch**: typically `main` per `CLAUDE.md`, but Phase 4 was committed to `claude/review-spec-continue-K6iKV` because the harness directive forced that branch for this session. Future phases can return to `main` unless the same directive is in effect.
+- **Branch**: `main` is the canonical line. Phase 4–5 work was done on `claude/review-spec-continue-K6iKV` per a session directive, then merged forward.
 - **bcrypt rounds**: 10 (matches spec).
-- **Resolved dep versions** unchanged from earlier phases.
+- **Resolved dep versions**: unchanged from earlier phases.
 - **Geist font**: bundled at `static/fonts/Geist-Variable.woff2`.
-- **Outbound email**: not wired. Decide before Phase 5 (Resend / SES / nodemailer).
-- **Inbound email and CSV import are out of scope for v1.** Spec was trimmed mid-Phase-4 — see GUSTO.md history.
+- **Outbound email**: still not wired. Password reset links continue to log to dev console only. Pick a provider before Phase 6 ship (Resend / SES / nodemailer).
+- **Inbound email and CSV import are out of scope for v1.** Spec was trimmed mid-Phase 4; rate-limit table no longer carries the `inboundEmail` entry.
 
-## What Phase 4 shipped
+## What Phase 5 shipped
 
-**Schema additions (idempotent ALTERs in `migrate.ts`):**
-- `people.suggested_company_name`, `people.suggested_company_url` — populated by enrichment when JSON-LD `worksFor` is present but no matching company exists; cleared when `companyId` is set (manual link, suggestion accepted, or auto-link).
+**New routes:**
+- `GET /health` — plain `200 ok` text/plain. Used by the Dockerfile healthcheck.
+- `/save?url=&text=&title=` — PWA share-target + bookmarklet landing. Pulls the first http(s) URL from any of the three params (URL_RE matches inside free-form text), runs the standard save pipeline (rate-limit → cleanUrl → assertPublicUrl → classify → savePerson/saveCompany), and 303s to the detail page. Unauth gets redirected to `/auth?next=…` and round-trips back after sign-in. Errors render a small landing with a typed message.
+- `/settings` — five sections: bookmarklet, CSV export, account (username / email / password), sessions, danger zone. Settings link icon now sits in the topbar.
+
+**New API:**
+- `GET /api/export?kind=people|companies|interactions` — streamed CSV via a `ReadableStream<Uint8Array>` (`src/lib/server/csv.ts`). RFC 4180 quoting; `Content-Disposition: attachment; filename="gusto-<kind>-<date>.csv"`. Tags are pipe-separated; for interactions, `person_ids` is also pipe-separated.
+- `POST /api/user` — single endpoint dispatched by `action`: `updateUsername`, `updateEmail` (verifies current password), `updatePassword` (verifies current password), `signOutOtherDevices`, `deleteAccount` (verifies current password, cascades through schema, clears the session cookie).
 
 **Server modules:**
-- `tags.ts` — `slugify`, `ensureTag`, `attachTag`, `detachTag`, `deleteTag`, `listTagsWithCounts`, `getTagsForEntity`, `getTagsForEntities`, `findTagBySlug`, `entityIdsForTag`. Scope = `'person' | 'company' | 'interaction'`.
-- `reminders-query.ts` — `listReminders` resolves `refLabel` + `refHref` from the underlying entity in one extra query per kind.
-- `search.ts` — `searchAll(userId, region, q, perKind)` runs three FTS5 queries in parallel and returns a flat list of `CommandHit` for the palette.
+- `src/lib/server/csv.ts` — `csvLine`, `csvStream`, `isoDate`. Tiny, no external deps.
+- `auth.ts` gained `verifyPassword(userId, region, password)` and `deleteAccount(userId, region)`.
 
-**API endpoints:**
-- `POST/GET/DELETE /api/tags` (DELETE detaches; entity-level)
-- `DELETE /api/tags/[id]` (deletes the tag itself, cascades the join rows)
-- `GET/POST /api/reminders`, `DELETE /api/reminders/[id]`
-- `GET /api/search?q=` (palette feed)
+**`/auth` updates:**
+- Reads `?next=` and validates it's same-origin (must start with `/`, not `//`). Login + register actions read `next` from the form and redirect there. `/save?url=` is the main consumer.
 
-**Components:**
-- `TagInput.svelte` — chip strip + autocomplete from server-fetched suggestions; create-new on Enter; backspace to remove last.
-- `CommandPalette.svelte` — bound to `bind:open`, owns the cmd/ctrl-K dialog. Debounced (120ms) calls to `/api/search`. P/C/I tag chip on each row.
-- `ShortcutHelp.svelte` — `?` overlay listing globals + list shortcuts.
-- `RemindersPopover.svelte` — sidebar popover under the tab nav. Overdue items get a warning dot. Clicking the entity link closes the popover.
-- `AddReminder.svelte` — small inline date-picker on detail pages; defaults to "next week 09:00".
-
-**Layout:**
-- Topbar: search button + help icon (cmd-K / ? hints).
-- Sidebar: tabs + reminders popover.
-- Mounts `CommandPalette` and `ShortcutHelp` at the root, gated on signed-in user. Plain `?` opens help; `cmd/ctrl-K` toggles palette. `bindKeys` deliberately skips meta-modified events, so the palette has its own listener.
-- `+layout.server.ts` loads up to 25 upcoming reminders with resolved `refLabel`/`refHref`.
-
-**List pages:**
-- `/people`, `/companies`, `/interactions` all render scope-aware tag filter chips (top 8 by name) and an "x" pill for the active filter. Tag badges render under each row when present.
-- `?tag=<slug>` filters the list. Empty FTS results post-tag-filter short-circuit early.
-- Empty-state polish: separate prompts for "no rows yet" / "no rows match search" / "no rows in this filter / tag".
-- `/interactions` now has `j/k`/`ArrowUp`/`ArrowDown` row nav and `Enter`/`e` to open. `InteractionRow` accepts a `selected` prop.
-
-**Detail pages:**
-- Each detail (`/people/[id]`, `/companies/[id]`, `/interactions/[id]`) mounts `TagInput` + `AddReminder` in the side panel, fetching tag suggestions client-side from `/api/tags?scope=…`.
-- `/people/[id]` renders the **companion suggestion banner** when `suggestedCompanyName` is set and `companyId` is null. The load function recomputes the suggested-domain match against the user's companies on every load, so a company added later auto-resolves the suggestion target. Three actions: Link (auto-match), Add (POST `/api/save` with the suggested URL → link the resulting company), Dismiss (clears the suggested-* columns via PATCH).
+**Bookmarklet shape (important deviation from spec):**
+The spec showed `javascript:fetch('/api/save', …, {credentials:'include'})`, but that only works when invoked from a Gusto-origin tab — the cookie isn't sent cross-origin and we don't want to relax CORS. The deployed bookmarklet is therefore:
+```js
+javascript:void(window.location='<origin>/save?url='+encodeURIComponent(location.href))
+```
+A tab navigation, not a fetch. Origin is computed server-side from the request URL so localhost works in dev and gusto.sh works in prod. Settings explicitly documents the navigation-not-fetch behavior.
 
 ## Critical implementation notes (carry forward)
 
 Everything from prior phases, plus:
 
-- **Tags scope is enforced server-side.** Client passes `{scope, name, entityId}`; server validates the tag belongs to the user *and* the right scope before joining. Don't loosen this — a tag id from one scope must not be attachable to another entity type.
-- **Tag slug uniqueness** is per `(userId, slug, scope)`. Same slug can exist as `person` and `interaction` simultaneously and they don't collide.
-- **`{@const ...}` placement.** Svelte 5 only accepts it as the immediate child of `{#each}`/`{#if}`/`{#snippet}`. The interactions list page derives `flatIndexById` in the script block instead.
-- **CommandPalette key handler is separate from `bindKeys`.** `bindKeys` short-circuits on `meta/ctrl/alt` modifiers and on input targets; the palette needs the meta key, so it has its own `keydown` listener registered in `+layout.svelte`. The `?` handler is also separate (plain key, but explicit to keep input handling correct).
-- **`lastQuery` in CommandPalette is `$state(...)`.** Svelte 5 warns on `non_reactive_update` for plain `let` variables that get assigned during reactivity. If you add new in-component state, prefer `$state` even when it's not directly bound to a template node.
-- **Empty-DB freshness.** Phase 4 was tested with a fresh DB created during the smoke run. `data/gusto.db` now contains `test@gusto.local` again with one LinkedIn person, one VIP tag (since detached), and one reminder. Safe to delete to restart.
+- **`assertPublicUrl` SSRF guard runs in `/save` too.** The same redirect-aware URL pipeline applies — never bypass it because something is "just" a share-target.
+- **`?next=` validation is critical.** Always go through `safeNext` before redirecting. A `//attacker.com/foo` would otherwise be a same-origin-looking phishing redirect.
+- **`/api/user` requires the cookie to be present**, not just `locals.user`, because `signOutOtherDevices` keys on the *current* session id (not just user id) to keep the requester logged in. If you ever change the session-cookie name, update the read in `/api/user/+server.ts`.
+- **CSV export is a single transaction worth of reads.** For huge accounts (10k+ interactions) the whole result set materializes before streaming. Acceptable for v1; if it stops being acceptable, page through with cursor + `LIMIT` and yield batches.
+- **Deleting an account cascades via schema.** All FKs use `ON DELETE CASCADE` to `users.id`; no extra cleanup needed beyond removing the `email_routing` entry in the primary DB.
 
 ## What's actually built (cumulative)
 
-**Routes (added in Phase 4 in italics):**
+**Routes (added in Phase 5 in italics):**
 - `/`, `/auth/*`, `/auth/logout`
 - `/people`, `/people/new`, `/people/[id]`
 - `/companies`, `/companies/new`, `/companies/[id]`
 - `/interactions`, `/interactions/new`, `/interactions/[id]`
+- *`/save`, `/settings`, `/health`*
 - `/api/save`, `/api/people[...]`, `/api/companies[...]`, `/api/interactions[...]` (with `/[id]/people` for attach/detach)
-- *`/api/tags`, `/api/tags/[id]`, `/api/reminders`, `/api/reminders/[id]`, `/api/search`*
+- `/api/tags`, `/api/tags/[id]`, `/api/reminders`, `/api/reminders/[id]`, `/api/search`
+- *`/api/export`, `/api/user`*
 
-**Components (added in Phase 4 in italics):** `SaveBar`, `EntityRow`, `FieldRow`, `NotesEditor`, `Landing`, `PersonPicker`, `CompanyPicker`, `InteractionRow`, `Toaster`, *`TagInput`, `CommandPalette`, `ShortcutHelp`, `RemindersPopover`, `AddReminder`*.
+**Components:** `SaveBar`, `EntityRow`, `FieldRow`, `NotesEditor`, `Landing`, `PersonPicker`, `CompanyPicker`, `InteractionRow`, `Toaster`, `TagInput`, `CommandPalette`, `ShortcutHelp`, `RemindersPopover`, `AddReminder`. (No new components in Phase 5 — Settings is its own page.)
 
-**Server modules:** `db`, `schema`, `migrate`, `auth`, `cookies`, `rate-limit`, `sanitize`, `url`, `classify`, `og`, `search`, `savePerson`, `saveCompany`, `saveInteraction`, `interactions-query`, *`tags`, `reminders-query`*.
+**Server modules (added in Phase 5 in italics):** `db`, `schema`, `migrate`, `auth`, `cookies`, `rate-limit`, `sanitize`, `url`, `classify`, `og`, `search`, `savePerson`, `saveCompany`, `saveInteraction`, `interactions-query`, `tags`, `reminders-query`, *`csv`*.
 
-**Keyboard:**
-- `/` → focus search input on the current list page
-- `cmd/ctrl-k` → CommandPalette
-- `?` → ShortcutHelp
-- `j/k` (or arrows) → navigate rows on `/people`, `/companies`, `/interactions`
-- `Enter` / `e` → open selected row
-- `*` → toggle favorite (people/companies only)
-- `#` → toggle archive (people/companies only)
+**Verified end-to-end (Phase 5 smoke):**
+- `/health` → 200 `ok`
+- Register → 200; settings page → 200 with bookmarklet rendered
+- `/api/export?kind=` for all three kinds → 200 with proper CSV headers + content
+- `/save?url=https://stripe.com` (authed) → 303 to `/companies/<id>`
+- `/save?text=<free text containing URL>` → 303 to the matching entity
+- `/save` no URL → friendly error page
+- `/save` unauth → 303 to `/auth?next=/save?…`, round-trips after sign-in
+- `/api/user` updateUsername/updatePassword (correct + wrong-current 403)/signOutOtherDevices all behave as expected; invalid action → 400
 
-**Verified end-to-end (Phase 4 smoke):**
-- Register → 200, session cookie set; `/api/tags?scope=person` → 200 `{items: []}`
-- Save linkedin.com/in/satyanadella → 201; person stub created
-- Tag CRUD: create+attach (201), list with counts (200), detach (204)
-- Reminder CRUD: create (201), list with resolved labels (200)
-- Unified search (`/api/search?q=satya`) returns the person hit
-- `/people?tag=vip` filters render 200 with the tagged person
+## Deferred / open items going into Phase 6
 
-## Deferred items (Phase 5 or later)
-
+- **Outbound email** — `requestPasswordReset` returns a token and the dev console logs the link. Wire a provider so the link actually mails.
 - **Auto-refresh after enrichment** — still required; SaveBar redirects to a stub that doesn't poll. Add `setInterval` invalidate or SSE on `/people/[id]` and `/companies/[id]` while `source='parsing'`.
-- **`+error.svelte`** — still defaulted to SvelteKit's boundary.
-- **CSV export, bookmarklet snippet in Settings, `/save` PWA share-target route, `/health`** — all Phase 5. (CSV import and `/api/inbound-email` were dropped from v1.)
-- **README, SECURITY.md, GitHub Actions** — Phase 6.
-- **Reminder delivery** — none in v1 by spec. Popover only.
-- **Tag *delete* UI** (`/api/tags/[id]`) — endpoint exists but no UI. The TagInput only detaches (preserves the tag). Add a "manage tags" page in Phase 5/6 if it becomes painful.
-- **Sort dropdown on /people and /companies** — `sort` query param is parsed but no UI exposes it. Cheap to add when it matters.
+- **`+error.svelte`** — still defaults to SvelteKit's boundary.
+- **Tag *delete* UI** (`/api/tags/[id]`) — endpoint exists but no UI. The TagInput only detaches.
+- **README, SECURITY.md, GitHub Actions (`ci.yml`, `docker.yml`, `fly-deploy.yml`), Dockerfile sanity, optional `gusto.sh` Fly app** — Phase 6.
 
 ## Risk notes for the next session
 
-- **Companion banner re-fetch.** `/people/[id]` recomputes the suggested-domain → company match on every load. If the user has thousands of companies this is one extra indexed lookup; fine. If it ever becomes slow, denormalize the match id at enrichment time.
-- **SaveBar redirect** still lands on a parsing stub. Phase 4 didn't address auto-refresh — it's the same risk as before.
-- **Bookmarklet/CSP warning carried forward** — CSP `script-src: 'self'` still rejects inline event handlers outside SvelteKit hydration. Don't add inline `on…` to any non-SvelteKit-injected element.
-- **Tag input race** — TagInput uses `onmousedown` to commit before `onblur` closes the dropdown (same pattern as PersonPicker). Worth a real-browser stress test when QA is possible.
+- **Bookmarklet only works on browsers that support JavaScript URLs in bookmarks.** Most do; Safari iOS sometimes strips them. The `/save` route still works as a normal link (e.g., from email or a share sheet).
+- **PWA share-target** requires the manifest to be served and the user to have installed the app. iOS Safari only added share-target support recently and is fussy. Gracefully degrades — the same `/save?url=` works from desktop browsers without install.
+- **`/api/export` streams from a single Drizzle `.select().from()` call**, which materializes in memory. For very large accounts this is a memory cliff. Acceptable for v1; revisit if anyone hits it.
+- **Account deletion is permanent and there's no soft-delete fallback.** The "are you sure" `confirm()` is the only guard. If you want a 30-day undo window, add a `deleted_at` column to `users` and gate the cascade.
 
 ## Suggested next move
 
-Phase 5 — capture surfaces & data portability:
-1. Settings page with bookmarklet snippet (auto-built from `APP_DOMAIN`).
-2. `/save?url=` share-target route (PWA + manifest update if needed).
-3. CSV export (stream) per entity kind. (CSV import was dropped from v1.)
-4. `/health` endpoint (200 ok).
-5. Wire outbound email (Resend / SES / nodemailer) for password resets so the dev-console-log fallback can be retired.
-
-Note: `/api/inbound-email` (Postmark webhook) was scoped out of v1 along with CSV import.
-
-Then Phase 6 — README, SECURITY.md, GitHub Actions, optional `gusto.sh` Fly app.
+Phase 6 — ship:
+1. README with pitch, screenshots placeholder, `docker compose up` quickstart, env var table, backup = `cp data/gusto.db backup.db`.
+2. SECURITY.md (responsible disclosure, contact email, supported versions).
+3. LICENSE — already AGPL-3.0; leave it (overrides spec's MIT).
+4. GitHub Actions: `ci.yml` (Node 22 + `npm run check`), `docker.yml` (build + push to GHCR on tag), `fly-deploy.yml` (deploy on `main`).
+5. Wire outbound email so password reset actually mails.
+6. Optional: domain `gusto.sh` → Fly app, Let's Encrypt cert.
