@@ -163,9 +163,7 @@ gusto/
          ├─ tags/+server.ts, tags/[id]/+server.ts
          ├─ reminders/+server.ts, reminders/[id]/+server.ts
          ├─ user/+server.ts             # updateUsername, updateEmail, updatePassword, signOutOtherDevices
-         ├─ import/+server.ts           # CSV import (background, per-entity)
-         ├─ export/+server.ts           # CSV export
-         └─ inbound-email/+server.ts    # Postmark webhook (HMAC verified, phase 5)
+         └─ export/+server.ts           # CSV export
 ```
 
 ---
@@ -261,7 +259,6 @@ services:
       - ORIGIN=${ORIGIN:-http://localhost:3000}
       - DB_PATH=/app/data/gusto.db
       - DISABLE_REGISTRATION=${DISABLE_REGISTRATION:-}
-      - INBOUND_EMAIL_SECRET=${INBOUND_EMAIL_SECRET:-}
     volumes:
       - gusto-data:/app/data
 volumes:
@@ -302,8 +299,6 @@ DATABASE_URL_US=
 DATABASE_URL_APAC=
 # Set to "1" to disable new registrations after the first user is created
 DISABLE_REGISTRATION=
-# 32-byte hex; required only for /api/inbound-email
-INBOUND_EMAIL_SECRET=
 ```
 
 ### `app.html`
@@ -476,7 +471,6 @@ Rate limits in `src/lib/server/rate-limit.ts` (sliding window in-memory `Map<key
 - Register: 5 / hour / IP
 - Login: 10 / 15min / (IP + email)
 - `/api/save`: 30 / 5min / user
-- `/api/inbound-email`: 60 / min / IP
 
 **Bootstrap escape hatch**: even with `DISABLE_REGISTRATION=1`, allow registration when `users` table is empty so a fresh deploy can create its first owner.
 
@@ -838,8 +832,6 @@ All endpoints check `locals.user`, scope queries by `userId`, sanitize HTML on w
 | POST/DELETE | `/api/tags[...]` | scope-aware | |
 | POST | `/api/user` | `{ action: 'updateUsername'|'updateEmail'|'updatePassword'|'signOutOtherDevices', ... }` | |
 | GET | `/api/export` | `?kind=people|companies|interactions` | streams CSV |
-| POST | `/api/import` | multipart CSV | background job, progress polled |
-| POST | `/api/inbound-email` | Postmark webhook | HMAC verify against `INBOUND_EMAIL_SECRET` |
 | GET | `/health` | | returns `200 ok` |
 
 Form actions on the page routes mirror the API for progressive enhancement (no JS needed to use Gusto).
@@ -883,7 +875,7 @@ Form actions on the page routes mirror the API for progressive enhancement (no J
 
 **`CommandPalette`** (`cmd/ctrl-k`): single overlay searching all three FTS tables in parallel; result rows tagged P/C/I. `↑↓` to nav, `enter` to open.
 
-**Settings**: account (username/email/password), bookmarklet snippet, CSV import (per entity, drag-drop, progress), CSV export, sign out other devices, danger zone (delete all data).
+**Settings**: account (username/email/password), bookmarklet snippet, CSV export, sign out other devices, danger zone (delete all data).
 
 ---
 
@@ -933,9 +925,8 @@ Each phase ends at a green checkpoint. Do not move on until the checkpoint passe
 ### Phase 5 — Capture surfaces & data portability
 1. Settings: bookmarklet snippet (auto-built from `APP_DOMAIN`), copy-to-clipboard.
 2. `static/manifest.webmanifest` includes `share_target`. `/save?url=` route turns the GET into `POST /api/save` and redirects to the new entity's detail page (or back with a toast on dedup).
-3. CSV import (`/api/import`) for each entity; CSV export (`/api/export`). Background import with progress polled by the UI; per-domain rate limit when enrichment is triggered.
-4. `/api/inbound-email`: Postmark webhook (HMAC verify with `INBOUND_EMAIL_SECRET`); extract URLs from the email body; run each through `POST /api/save`; respond 200.
-5. **Checkpoint**: bookmarklet from a real LinkedIn page creates a person; iOS share-sheet → Gusto creates the right entity; CSV round-trip preserves all fields; an email to the configured Postmark address creates entities.
+3. CSV export (`/api/export`) — streams a CSV per entity kind. (CSV import was scoped out of v1.)
+4. **Checkpoint**: bookmarklet from a real LinkedIn page creates a person; iOS share-sheet → Gusto creates the right entity; CSV export downloads all rows for each kind and the columns round-trip on a re-import via spreadsheet.
 
 ### Phase 6 — Ship
 1. README: pitch (private / lightweight / focused), screenshots placeholder, `docker compose up` quickstart, env var table, backup = `cp data/gusto.db backup.db`.

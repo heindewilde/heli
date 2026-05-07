@@ -43,7 +43,7 @@ npm run dev
 - **Resolved dep versions** unchanged from earlier phases.
 - **Geist font**: bundled at `static/fonts/Geist-Variable.woff2`.
 - **Outbound email**: not wired. Decide before Phase 5 (Resend / SES / nodemailer).
-- **Postmark inbound webhook secret** lives in `INBOUND_EMAIL_SECRET`. Phase 5.
+- **Inbound email and CSV import are out of scope for v1.** Spec was trimmed mid-Phase-4 — see GUSTO.md history.
 
 ## What Phase 4 shipped
 
@@ -130,7 +130,7 @@ Everything from prior phases, plus:
 
 - **Auto-refresh after enrichment** — still required; SaveBar redirects to a stub that doesn't poll. Add `setInterval` invalidate or SSE on `/people/[id]` and `/companies/[id]` while `source='parsing'`.
 - **`+error.svelte`** — still defaulted to SvelteKit's boundary.
-- **CSV import/export, bookmarklet snippet in Settings, `/save` PWA share-target route, `/api/inbound-email` Postmark webhook, `/health`** — all Phase 5.
+- **CSV export, bookmarklet snippet in Settings, `/save` PWA share-target route, `/health`** — all Phase 5. (CSV import and `/api/inbound-email` were dropped from v1.)
 - **README, SECURITY.md, GitHub Actions** — Phase 6.
 - **Reminder delivery** — none in v1 by spec. Popover only.
 - **Tag *delete* UI** (`/api/tags/[id]`) — endpoint exists but no UI. The TagInput only detaches (preserves the tag). Add a "manage tags" page in Phase 5/6 if it becomes painful.
@@ -148,9 +148,10 @@ Everything from prior phases, plus:
 Phase 5 — capture surfaces & data portability:
 1. Settings page with bookmarklet snippet (auto-built from `APP_DOMAIN`).
 2. `/save?url=` share-target route (PWA + manifest update if needed).
-3. CSV export (stream) + CSV import (background, polled progress).
-4. `/api/inbound-email` Postmark webhook with HMAC verification.
-5. `/health` endpoint (200 ok).
-6. Wire outbound email (Resend / SES / nodemailer) for password resets so the dev-console-log fallback can be retired.
+3. CSV export (stream) per entity kind. (CSV import was dropped from v1.)
+4. `/health` endpoint (200 ok).
+5. Wire outbound email (Resend / SES / nodemailer) for password resets so the dev-console-log fallback can be retired.
+
+Note: `/api/inbound-email` (Postmark webhook) was scoped out of v1 along with CSV import.
 
 Then Phase 6 — README, SECURITY.md, GitHub Actions, optional `gusto.sh` Fly app.
