@@ -17,7 +17,8 @@
       rows: [
         { keys: ['p:'], desc: 'Scope search to people' },
         { keys: ['c:'], desc: 'Scope search to companies' },
-        { keys: ['i:'], desc: 'Scope search to interactions' }
+        { keys: ['i:'], desc: 'Scope search to interactions' },
+        { keys: ['pr:'], desc: 'Scope search to projects' }
       ]
     },
     {

@@ -6,7 +6,7 @@
   import CommandPalette from '$lib/components/CommandPalette.svelte';
   import ShortcutHelp from '$lib/components/ShortcutHelp.svelte';
   import RemindersPopover from '$lib/components/RemindersPopover.svelte';
-  import { Users, Building2, MessagesSquare, LogOut, Search, HelpCircle, Settings, Menu, X } from 'lucide-svelte';
+  import { Users, Building2, MessagesSquare, FolderKanban, LogOut, Search, HelpCircle, Settings, Menu, X } from 'lucide-svelte';
   import { page } from '$app/state';
   import { onMount } from 'svelte';
   import { bindKeys, isTypingTarget } from '$lib/keyboard.svelte';
@@ -23,7 +23,8 @@
   const tabs = [
     { href: '/people', label: 'People', icon: Users },
     { href: '/companies', label: 'Companies', icon: Building2 },
-    { href: '/interactions', label: 'Interactions', icon: MessagesSquare }
+    { href: '/interactions', label: 'Interactions', icon: MessagesSquare },
+    { href: '/projects', label: 'Projects', icon: FolderKanban }
   ];
 
   // Close the mobile drawer whenever the route changes (clicking a tab inside

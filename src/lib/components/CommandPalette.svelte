@@ -1,9 +1,9 @@
 <script lang="ts">
   import { goto } from '$app/navigation';
-  import { Search, User, Building2, MessageSquare } from 'lucide-svelte';
+  import { Search, User, Building2, MessageSquare, FolderKanban } from 'lucide-svelte';
 
   type Hit = {
-    kind: 'person' | 'company' | 'interaction';
+    kind: 'person' | 'company' | 'interaction' | 'project';
     id: string;
     title: string;
     sub: string | null;
@@ -22,12 +22,14 @@
 
   // Mirror of server's parseQueryScope, used purely to render the active
   // scope chip and the contextual placeholder. Server is the source of truth
-  // — passing the prefix through unchanged is fine.
-  const SCOPE_RE = /^(p|c|i):\s*(.*)$/i;
-  const SCOPE_LABEL: Record<string, { label: string; full: 'person' | 'company' | 'interaction' }> = {
+  // — passing the prefix through unchanged is fine. `pr:` MUST come before
+  // `p:` in the alternation or the regex would parse pr:foo as scope=person.
+  const SCOPE_RE = /^(pr|p|c|i):\s*(.*)$/i;
+  const SCOPE_LABEL: Record<string, { label: string; full: 'person' | 'company' | 'interaction' | 'project' }> = {
     p: { label: 'People', full: 'person' },
     c: { label: 'Companies', full: 'company' },
-    i: { label: 'Interactions', full: 'interaction' }
+    i: { label: 'Interactions', full: 'interaction' },
+    pr: { label: 'Projects', full: 'project' }
   };
   const activeScope = $derived.by(() => {
     const m = q.match(SCOPE_RE);
@@ -102,8 +104,8 @@
     }
   }
 
-  const KIND_ICON = { person: User, company: Building2, interaction: MessageSquare } as const;
-  const KIND_TAG = { person: 'P', company: 'C', interaction: 'I' } as const;
+  const KIND_ICON = { person: User, company: Building2, interaction: MessageSquare, project: FolderKanban } as const;
+  const KIND_TAG = { person: 'P', company: 'C', interaction: 'I', project: 'PR' } as const;
 
   const placeholder = $derived(
     activeScope
