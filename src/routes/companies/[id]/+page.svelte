@@ -11,6 +11,7 @@
   import { dayBucket } from '$lib/interactions';
   import { toast } from '$lib/toasts.svelte';
   import { onMount } from 'svelte';
+  import { pollWhile } from '$lib/polling';
 
   let { data } = $props();
   const company = $derived(data.company);
@@ -25,6 +26,13 @@
       .then((r) => (r.ok ? r.json() : { items: [] }))
       .then((d) => (tagSuggestions = d.items ?? []))
       .catch(() => {});
+  });
+
+  $effect(() => {
+    return pollWhile(
+      () => company.source === 'parsing',
+      () => invalidateAll()
+    );
   });
 
   const interactionGroups = $derived.by(() => {

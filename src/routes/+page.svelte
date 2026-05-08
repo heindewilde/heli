@@ -2,8 +2,19 @@
   import Landing from '$lib/components/Landing.svelte';
   import InteractionRow from '$lib/components/InteractionRow.svelte';
   import { Users, Building2, MessagesSquare, Loader2 } from 'lucide-svelte';
+  import { invalidateAll } from '$app/navigation';
+  import { pollWhile } from '$lib/polling';
 
   let { data } = $props();
+
+  const anyParsing = $derived((data.recent ?? []).some((r) => r.source === 'parsing'));
+
+  $effect(() => {
+    return pollWhile(
+      () => anyParsing,
+      () => invalidateAll()
+    );
+  });
 </script>
 
 {#if data.user}

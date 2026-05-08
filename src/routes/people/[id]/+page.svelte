@@ -11,6 +11,7 @@
   import { dayBucket } from '$lib/interactions';
   import { toast } from '$lib/toasts.svelte';
   import { onMount } from 'svelte';
+  import { pollWhile } from '$lib/polling';
 
   let { data } = $props();
   const person = $derived(data.person);
@@ -43,6 +44,16 @@
       .then((r) => (r.ok ? r.json() : { items: [] }))
       .then((d) => (tagSuggestions = d.items ?? []))
       .catch(() => {});
+  });
+
+  // Surface enrichment results without a manual refresh. Polls every 1.5s
+  // while the row is in 'parsing' state, capped at 30s. The cleanup runs both
+  // when the effect re-evaluates (source changed) and on unmount.
+  $effect(() => {
+    return pollWhile(
+      () => person.source === 'parsing',
+      () => invalidateAll()
+    );
   });
 
   async function patch(patch: Record<string, unknown>) {
