@@ -3,8 +3,12 @@
   import { Trash2, Pencil, Save, X, Building2 } from 'lucide-svelte';
   import PersonPicker from '$lib/components/PersonPicker.svelte';
   import CompanyPicker from '$lib/components/CompanyPicker.svelte';
+  import ProjectPicker from '$lib/components/ProjectPicker.svelte';
+  import StatusChip from '$lib/components/StatusChip.svelte';
   import TagInput from '$lib/components/TagInput.svelte';
   import AddReminder from '$lib/components/AddReminder.svelte';
+  import { FolderKanban } from 'lucide-svelte';
+  import type { ProjectStatus } from '$lib/server/schema';
   import {
     INTERACTION_TYPES,
     TYPE_META,
@@ -40,6 +44,7 @@
   let occurredAt = $state('');
   let people = $state<Array<{ id: string; name: string; avatarUrl: string | null; role: string | null }>>([]);
   let company = $state<{ id: string; name: string; logoUrl: string | null; faviconUrl: string | null; domain: string | null } | null>(null);
+  let projectsEditing = $state<Array<{ id: string; name: string; status: ProjectStatus }>>([]);
 
   function startEditing() {
     title = interaction.title;
@@ -50,6 +55,7 @@
     company = interaction.companyId
       ? { id: interaction.companyId, name: interaction.companyName ?? '', logoUrl: null, faviconUrl: null, domain: null }
       : null;
+    projectsEditing = interaction.projects.map((p) => ({ ...p }));
     editing = true;
   }
 
@@ -71,7 +77,8 @@
           type,
           occurredAt: ts,
           companyId: company?.id ?? null,
-          personIds: people.map((p) => p.id)
+          personIds: people.map((p) => p.id),
+          projectIds: projectsEditing.map((p) => p.id)
         })
       });
       if (!res.ok) {
@@ -238,6 +245,34 @@
           </a>
         {:else}
           <p class="italic text-[var(--color-subtle)]">No company.</p>
+        {/if}
+      </div>
+
+      <div>
+        <h2 class="mb-1 text-xs font-medium uppercase tracking-wide text-[var(--color-subtle)]">Projects</h2>
+        {#if editing}
+          <ProjectPicker
+            selected={projectsEditing}
+            onAdd={(p) => (projectsEditing = [...projectsEditing, p])}
+            onRemove={(id) => (projectsEditing = projectsEditing.filter((p) => p.id !== id))}
+          />
+        {:else if interaction.projects.length === 0}
+          <p class="italic text-[var(--color-subtle)]">No projects.</p>
+        {:else}
+          <ul class="flex flex-col gap-1">
+            {#each interaction.projects as p (p.id)}
+              <li>
+                <a
+                  href={`/projects/${p.id}`}
+                  class="flex items-center gap-2 rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-surface)] px-2 py-1 hover:border-[var(--color-border-strong)]"
+                >
+                  <FolderKanban size={12} strokeWidth={2} class="shrink-0 text-[var(--color-muted)]" />
+                  <span class="min-w-0 flex-1 truncate">{p.name}</span>
+                  <StatusChip status={p.status as ProjectStatus} size="sm" />
+                </a>
+              </li>
+            {/each}
+          </ul>
         {/if}
       </div>
 

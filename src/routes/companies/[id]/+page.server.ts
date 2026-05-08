@@ -4,6 +4,7 @@ import type { PageServerLoad } from './$types';
 import { db } from '$lib/server/db';
 import { companies, people } from '$lib/server/schema';
 import { listInteractions } from '$lib/server/interactions-query';
+import { projectsForCompany } from '$lib/server/projects-query';
 import { getTagsForEntity } from '$lib/server/tags';
 
 export const load: PageServerLoad = async ({ locals, params, url }) => {
@@ -41,5 +42,7 @@ export const load: PageServerLoad = async ({ locals, params, url }) => {
 
   const tags = await getTagsForEntity(locals.user.id, locals.user.region, 'company', company.id);
 
-  return { company, linkedPeople, interactions, tags, justSaved, dedup };
+  const projects = await projectsForCompany(locals.user.id, locals.user.region, company.id);
+
+  return { company, linkedPeople, interactions, tags, justSaved, dedup, projects };
 };

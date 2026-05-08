@@ -1,7 +1,8 @@
 import { and, desc, eq, gte, inArray, lte, sql } from 'drizzle-orm';
 import { db } from './db';
-import { interactions, interactionPeople, people, companies } from './schema';
+import { interactions, interactionPeople, interactionProjects, people, companies, projects } from './schema';
 import { ftsQuery } from './search';
+import type { ProjectStatus } from './schema';
 
 export type InteractionRow = {
   id: string;
@@ -14,6 +15,7 @@ export type InteractionRow = {
   createdAt: number;
   updatedAt: number;
   people: { id: string; name: string; avatarUrl: string | null }[];
+  projects: { id: string; name: string; status: ProjectStatus }[];
 };
 
 export type ListFilters = {
@@ -90,16 +92,28 @@ export async function listInteractions(
   if (items.length === 0) return [];
 
   const itemIds = items.map((i) => i.id);
-  const links = await d
-    .select({
-      interactionId: interactionPeople.interactionId,
-      personId: people.id,
-      name: people.name,
-      avatarUrl: people.avatarUrl
-    })
-    .from(interactionPeople)
-    .innerJoin(people, eq(people.id, interactionPeople.personId))
-    .where(inArray(interactionPeople.interactionId, itemIds));
+  const [links, projectLinks] = await Promise.all([
+    d
+      .select({
+        interactionId: interactionPeople.interactionId,
+        personId: people.id,
+        name: people.name,
+        avatarUrl: people.avatarUrl
+      })
+      .from(interactionPeople)
+      .innerJoin(people, eq(people.id, interactionPeople.personId))
+      .where(inArray(interactionPeople.interactionId, itemIds)),
+    d
+      .select({
+        interactionId: interactionProjects.interactionId,
+        id: projects.id,
+        name: projects.name,
+        status: projects.status
+      })
+      .from(interactionProjects)
+      .innerJoin(projects, eq(projects.id, interactionProjects.projectId))
+      .where(and(eq(projects.userId, userId), inArray(interactionProjects.interactionId, itemIds)))
+  ]);
 
   const byInteraction = new Map<string, InteractionRow['people']>();
   for (const l of links) {
@@ -107,8 +121,18 @@ export async function listInteractions(
     list.push({ id: l.personId, name: l.name, avatarUrl: l.avatarUrl });
     byInteraction.set(l.interactionId, list);
   }
+  const projectsByInteraction = new Map<string, InteractionRow['projects']>();
+  for (const l of projectLinks) {
+    const list = projectsByInteraction.get(l.interactionId) ?? [];
+    list.push({ id: l.id, name: l.name, status: l.status as ProjectStatus });
+    projectsByInteraction.set(l.interactionId, list);
+  }
 
-  return items.map((i) => ({ ...i, people: byInteraction.get(i.id) ?? [] }));
+  return items.map((i) => ({
+    ...i,
+    people: byInteraction.get(i.id) ?? [],
+    projects: projectsByInteraction.get(i.id) ?? []
+  }));
 }
 
 export async function getInteraction(
@@ -134,14 +158,29 @@ export async function getInteraction(
     .where(and(eq(interactions.id, id), eq(interactions.userId, userId)))
     .get();
   if (!item) return null;
-  const links = await d
-    .select({
-      personId: people.id,
-      name: people.name,
-      avatarUrl: people.avatarUrl
-    })
-    .from(interactionPeople)
-    .innerJoin(people, eq(people.id, interactionPeople.personId))
-    .where(eq(interactionPeople.interactionId, id));
-  return { ...item, people: links.map((l) => ({ id: l.personId, name: l.name, avatarUrl: l.avatarUrl })) };
+  const [links, projLinks] = await Promise.all([
+    d
+      .select({
+        personId: people.id,
+        name: people.name,
+        avatarUrl: people.avatarUrl
+      })
+      .from(interactionPeople)
+      .innerJoin(people, eq(people.id, interactionPeople.personId))
+      .where(eq(interactionPeople.interactionId, id)),
+    d
+      .select({
+        id: projects.id,
+        name: projects.name,
+        status: projects.status
+      })
+      .from(interactionProjects)
+      .innerJoin(projects, eq(projects.id, interactionProjects.projectId))
+      .where(and(eq(projects.userId, userId), eq(interactionProjects.interactionId, id)))
+  ]);
+  return {
+    ...item,
+    people: links.map((l) => ({ id: l.personId, name: l.name, avatarUrl: l.avatarUrl })),
+    projects: projLinks.map((l) => ({ id: l.id, name: l.name, status: l.status as ProjectStatus }))
+  };
 }

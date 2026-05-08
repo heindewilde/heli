@@ -1,7 +1,7 @@
 import { and, eq, inArray } from 'drizzle-orm';
 import { createId } from '@paralleldrive/cuid2';
 import { db } from './db';
-import { interactions, interactionPeople, people, companies } from './schema';
+import { interactions, interactionPeople, interactionProjects, people, companies, projects } from './schema';
 import { sanitize, sanitizePlainText } from './sanitize';
 import { INTERACTION_TYPES, isInteractionType, type InteractionType } from '$lib/interactions';
 
@@ -15,6 +15,7 @@ export type InteractionInput = {
   body?: string | null;
   companyId?: string | null;
   personIds?: string[];
+  projectIds?: string[];
 };
 
 async function validatePeopleIds(userId: string, region: string, ids: string[]): Promise<string[]> {
@@ -35,6 +36,15 @@ async function validateCompanyId(userId: string, region: string, id: string): Pr
   return row?.id ?? null;
 }
 
+async function validateProjectIds(userId: string, region: string, ids: string[]): Promise<string[]> {
+  if (ids.length === 0) return [];
+  const rows = await db(region)
+    .select({ id: projects.id })
+    .from(projects)
+    .where(and(eq(projects.userId, userId), inArray(projects.id, ids)));
+  return rows.map((r) => r.id);
+}
+
 export async function createInteraction(
   userId: string,
   region: string,
@@ -53,6 +63,9 @@ export async function createInteraction(
   const personIds = input.personIds
     ? await validatePeopleIds(userId, region, input.personIds)
     : [];
+  const projectIds = input.projectIds
+    ? await validateProjectIds(userId, region, input.projectIds)
+    : [];
 
   const d = db(region);
   await d.insert(interactions).values({
@@ -68,6 +81,11 @@ export async function createInteraction(
   });
   if (personIds.length > 0) {
     await d.insert(interactionPeople).values(personIds.map((pid) => ({ interactionId: id, personId: pid })));
+  }
+  if (projectIds.length > 0) {
+    await d
+      .insert(interactionProjects)
+      .values(projectIds.map((projectId) => ({ interactionId: id, projectId })));
   }
   return { id };
 }
@@ -117,6 +135,15 @@ export async function updateInteraction(
       await d
         .insert(interactionPeople)
         .values(valid.map((pid) => ({ interactionId: id, personId: pid })));
+    }
+  }
+  if (patch.projectIds !== undefined) {
+    const valid = await validateProjectIds(userId, region, patch.projectIds);
+    await d.delete(interactionProjects).where(eq(interactionProjects.interactionId, id));
+    if (valid.length > 0) {
+      await d
+        .insert(interactionProjects)
+        .values(valid.map((projectId) => ({ interactionId: id, projectId })));
     }
   }
 }

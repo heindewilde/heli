@@ -2,7 +2,7 @@
   import Landing from '$lib/components/Landing.svelte';
   import EmptyDashboard from '$lib/components/EmptyDashboard.svelte';
   import InteractionRow from '$lib/components/InteractionRow.svelte';
-  import { Users, Building2, MessagesSquare, Loader2 } from 'lucide-svelte';
+  import { Users, Building2, MessagesSquare, FolderKanban, Loader2, AlertTriangle, Calendar } from 'lucide-svelte';
   import { invalidateAll } from '$app/navigation';
   import { pollWhile } from '$lib/polling';
 
@@ -43,7 +43,7 @@
       </p>
     </header>
 
-    <div class="grid grid-cols-2 gap-3 sm:grid-cols-3">
+    <div class="grid grid-cols-2 gap-3 sm:grid-cols-4">
       <a
         href="/people"
         class="flex items-center gap-3 rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)] p-4 hover:border-[var(--color-border-strong)]"
@@ -74,7 +74,47 @@
           <div class="text-xs text-[var(--color-muted)]">Interactions this month</div>
         </div>
       </a>
+      <a
+        href="/projects"
+        class="flex items-center gap-3 rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)] p-4 hover:border-[var(--color-border-strong)]"
+      >
+        <FolderKanban size={20} strokeWidth={2} class="text-[var(--color-muted)]" />
+        <div>
+          <div class="text-2xl font-semibold tracking-tight">{data.counts?.projects ?? 0}</div>
+          <div class="text-xs text-[var(--color-muted)]">Active projects</div>
+        </div>
+      </a>
     </div>
+
+    {#if data.endingSoon && data.endingSoon.length > 0}
+      <section class="flex flex-col gap-2">
+        <h2 class="text-sm font-medium text-[var(--color-muted)]">Ending soon</h2>
+        <ul class="flex flex-col gap-1">
+          {#each data.endingSoon as p (p.id)}
+            {@const overdue = p.endDate != null && p.endDate < Date.now()}
+            {@const days = p.endDate == null ? null : Math.round((p.endDate - Date.now()) / 86_400_000)}
+            <li>
+              <a
+                href={`/projects/${p.id}`}
+                class="flex items-center gap-3 rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 hover:border-[var(--color-border-strong)]"
+              >
+                <span class="flex h-7 w-7 shrink-0 items-center justify-center rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-bg)] {overdue ? 'text-[var(--color-danger)]' : 'text-[var(--color-muted)]'}">
+                  {#if overdue}
+                    <AlertTriangle size={14} strokeWidth={2} />
+                  {:else}
+                    <Calendar size={14} strokeWidth={2} />
+                  {/if}
+                </span>
+                <span class="min-w-0 flex-1 truncate text-sm font-medium">{p.name}</span>
+                <span class="text-xs {overdue ? 'text-[var(--color-danger)]' : 'text-[var(--color-muted)]'}">
+                  {#if overdue}{Math.abs(days ?? 0)}d overdue{:else if days === 0}Today{:else}In {days}d{/if}
+                </span>
+              </a>
+            </li>
+          {/each}
+        </ul>
+      </section>
+    {/if}
 
     {#if data.recentInteractions && data.recentInteractions.length > 0}
       <section class="flex flex-col gap-2">
