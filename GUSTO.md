@@ -150,6 +150,10 @@ gusto/
       │  ├─ +page.{server.ts,svelte}
       │  ├─ new/+page.{server.ts,svelte}
       │  └─ [id]/+page.{server.ts,svelte}
+      ├─ projects/
+      │  ├─ +page.{server.ts,svelte}    # list with FTS, status filter, sort
+      │  ├─ new/+page.{server.ts,svelte}
+      │  └─ [id]/+page.{server.ts,svelte}
       ├─ save/+page.{server.ts,svelte}  # share-target & bookmarklet landing
       ├─ settings/+page.{server.ts,svelte}
       ├─ health/+server.ts
@@ -160,6 +164,12 @@ gusto/
          ├─ companies/+server.ts, companies/[id]/+server.ts
          ├─ interactions/+server.ts, interactions/[id]/+server.ts
          ├─ interactions/[id]/people/+server.ts   # attach/detach
+         ├─ projects/+server.ts, projects/[id]/+server.ts
+         ├─ projects/[id]/people/+server.ts       # attach/detach
+         ├─ projects/[id]/companies/+server.ts    # attach/detach
+         ├─ projects/[id]/interactions/+server.ts # attach/detach
+         ├─ projects/[id]/links/+server.ts        # external links CRUD
+         ├─ projects/suggest/+server.ts           # auto-suggest for /interactions/new
          ├─ tags/+server.ts, tags/[id]/+server.ts
          ├─ reminders/+server.ts, reminders/[id]/+server.ts
          ├─ user/+server.ts             # updateUsername, updateEmail, updatePassword, signOutOtherDevices
@@ -634,16 +644,74 @@ export const tags = sqliteTable('tags', {
 export const personTags      = sqliteTable('person_tags',      { personId: text('person_id').notNull().references(() => people.id, { onDelete: 'cascade' }),      tagId: text('tag_id').notNull().references(() => tags.id, { onDelete: 'cascade' }) }, t => ({ pk: primaryKey({ columns: [t.personId, t.tagId] }) }));
 export const companyTags     = sqliteTable('company_tags',     { companyId: text('company_id').notNull().references(() => companies.id, { onDelete: 'cascade' }), tagId: text('tag_id').notNull().references(() => tags.id, { onDelete: 'cascade' }) }, t => ({ pk: primaryKey({ columns: [t.companyId, t.tagId] }) }));
 export const interactionTags = sqliteTable('interaction_tags', { interactionId: text('interaction_id').notNull().references(() => interactions.id, { onDelete: 'cascade' }), tagId: text('tag_id').notNull().references(() => tags.id, { onDelete: 'cascade' }) }, t => ({ pk: primaryKey({ columns: [t.interactionId, t.tagId] }) }));
+export const projectTags     = sqliteTable('project_tags',     { projectId: text('project_id').notNull().references(() => projects.id, { onDelete: 'cascade' }), tagId: text('tag_id').notNull().references(() => tags.id, { onDelete: 'cascade' }) }, t => ({ pk: primaryKey({ columns: [t.projectId, t.tagId] }) }));
 
 export const reminders = sqliteTable('reminders', {
   id: text('id').primaryKey(),
   userId: text('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
-  kind: text('kind').notNull(),                  // 'person' | 'company' | 'interaction'
+  kind: text('kind').notNull(),                  // 'person' | 'company' | 'interaction' | 'project'
   refId: text('ref_id').notNull(),
   remindAt: integer('remind_at').notNull(),
   createdAt: integer('created_at').notNull()
 }, t => ({ byUserAt: index('idx_reminders_user_at').on(t.userId, t.remindAt) }));
+
+export const projects = sqliteTable('projects', {
+  id: text('id').primaryKey(),
+  userId: text('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  name: text('name').notNull(),
+  description: text('description'),
+  status: text('status').notNull().default('active'),     // 'active' | 'paused' | 'archived'
+  startDate: integer('start_date'),                       // epoch ms; optional
+  endDate: integer('end_date'),                           // epoch ms; optional
+  billingType: text('billing_type').notNull().default('none'),  // 'none' | 'hourly' | 'fixed'
+  hourlyRate: integer('hourly_rate'),                     // stored as cents; null when billingType != 'hourly'
+  fixedFee: integer('fixed_fee'),                         // stored as cents; null when billingType != 'fixed'
+  currency: text('currency'),                             // ISO 4217, e.g. 'USD', 'EUR'; null when billingType='none'
+  nextStep: text('next_step'),                            // single-line free text
+  createdAt: integer('created_at').notNull(),
+  updatedAt: integer('updated_at').notNull()
+}, t => ({
+  byUserStatus:    index('idx_projects_user_status').on(t.userId, t.status),
+  byUserEndDate:   index('idx_projects_user_end').on(t.userId, t.endDate),
+  byUserUpdated:   index('idx_projects_user_updated').on(t.userId, t.updatedAt)
+}));
+
+export const projectLinks = sqliteTable('project_links', {
+  id: text('id').primaryKey(),
+  projectId: text('project_id').notNull().references(() => projects.id, { onDelete: 'cascade' }),
+  url: text('url').notNull(),
+  label: text('label'),
+  createdAt: integer('created_at').notNull()
+}, t => ({ byProject: index('idx_project_links_project').on(t.projectId) }));
+
+export const projectPeople = sqliteTable('project_people', {
+  projectId: text('project_id').notNull().references(() => projects.id, { onDelete: 'cascade' }),
+  personId:  text('person_id').notNull().references(() => people.id, { onDelete: 'cascade' })
+}, t => ({
+  pk:       primaryKey({ columns: [t.projectId, t.personId] }),
+  byPerson: index('idx_pp_person').on(t.personId)
+}));
+
+export const projectCompanies = sqliteTable('project_companies', {
+  projectId: text('project_id').notNull().references(() => projects.id, { onDelete: 'cascade' }),
+  companyId: text('company_id').notNull().references(() => companies.id, { onDelete: 'cascade' })
+}, t => ({
+  pk:        primaryKey({ columns: [t.projectId, t.companyId] }),
+  byCompany: index('idx_pc_company').on(t.companyId)
+}));
+
+export const interactionProjects = sqliteTable('interaction_projects', {
+  interactionId: text('interaction_id').notNull().references(() => interactions.id, { onDelete: 'cascade' }),
+  projectId:     text('project_id').notNull().references(() => projects.id, { onDelete: 'cascade' })
+}, t => ({
+  pk:        primaryKey({ columns: [t.interactionId, t.projectId] }),
+  byProject: index('idx_ip_project').on(t.projectId)
+}));
 ```
+
+`tags.scope` is extended to accept `'project'` alongside `'person' | 'company' | 'interaction'`. The existing tag UI (`TagInput`, `RowTagAdder`, scope filters) works on projects with no further changes.
+
+Money fields are stored as **integer cents** to avoid float drift; the UI converts to/from `currency` for display via `Intl.NumberFormat`. `status` is a tagged text enum (no separate `is_archived` column — projects have a real lifecycle).
 
 `src/lib/server/migrate.ts` runs raw SQL in a single transaction at startup — every statement uses `CREATE … IF NOT EXISTS` (and column adds wrapped in try/catch) so it is idempotent. After the Drizzle-mirrored DDL, append:
 
@@ -655,6 +723,8 @@ CREATE VIRTUAL TABLE IF NOT EXISTS companies_fts
   USING fts5(name, description, notes, industry, location, content='companies', content_rowid='rowid', tokenize='unicode61');
 CREATE VIRTUAL TABLE IF NOT EXISTS interactions_fts
   USING fts5(title, body, content='interactions', content_rowid='rowid', tokenize='unicode61');
+CREATE VIRTUAL TABLE IF NOT EXISTS projects_fts
+  USING fts5(name, description, next_step, content='projects', content_rowid='rowid', tokenize='unicode61');
 
 -- Sync triggers (one set per FTS table)
 CREATE TRIGGER IF NOT EXISTS people_ai AFTER INSERT ON people BEGIN
@@ -671,7 +741,7 @@ CREATE TRIGGER IF NOT EXISTS people_au AFTER UPDATE ON people BEGIN
   INSERT INTO people_fts(rowid, name, role, notes, location)
   VALUES (new.rowid, new.name, COALESCE(new.role,''), COALESCE(new.notes,''), COALESCE(new.location,''));
 END;
--- repeat for companies and interactions with their respective columns
+-- repeat for companies, interactions, and projects with their respective columns
 ```
 
 A janitor at startup clears any rows where `source='parsing'` and `updatedAt < now-10min` (covers crashed enrichments).
@@ -829,9 +899,20 @@ All endpoints check `locals.user`, scope queries by `userId`, sanitize HTML on w
 | GET/POST/PATCH/DELETE | `/api/interactions[...]` | `InteractionInput { occurredAt, type, title, body, companyId }` | |
 | POST | `/api/interactions/[id]/people` | `{ personId }` | |
 | DELETE | `/api/interactions/[id]/people` | `{ personId }` | |
-| POST/DELETE | `/api/tags[...]` | scope-aware | |
+| GET | `/api/projects` | `?q=&status=active|paused|archived&personId=&companyId=&tag=&sort=` | typeahead + list (FTS when `q` set) |
+| POST | `/api/projects` | `ProjectInput { name, description?, status?, startDate?, endDate?, billingType?, hourlyRate?, fixedFee?, currency?, nextStep? }` | manual create |
+| PATCH | `/api/projects/[id]` | partial; whitelist: `name,description,status,startDate,endDate,billingType,hourlyRate,fixedFee,currency,nextStep` | |
+| DELETE | `/api/projects/[id]` | | hard delete (cascades to links + member joins + interaction joins + tags) |
+| POST/DELETE | `/api/projects/[id]/people` | `{ personId }` | attach/detach |
+| POST/DELETE | `/api/projects/[id]/companies` | `{ companyId }` | attach/detach |
+| POST/DELETE | `/api/projects/[id]/interactions` | `{ interactionId }` | attach/detach |
+| POST | `/api/projects/[id]/links` | `{ url, label? }` | create one external link |
+| PATCH | `/api/projects/[id]/links` | `{ id, url?, label? }` | edit a link in place |
+| DELETE | `/api/projects/[id]/links` | `{ id }` | remove a link |
+| GET | `/api/projects/suggest` | `?personIds=a,b,c&companyId=d` | active projects matching any selected person OR the company; used by `/interactions/new` |
+| POST/DELETE | `/api/tags[...]` | scope-aware (`person`/`company`/`interaction`/`project`) | |
 | POST | `/api/user` | `{ action: 'updateUsername'|'updateEmail'|'updatePassword'|'signOutOtherDevices', ... }` | |
-| GET | `/api/export` | `?kind=people|companies|interactions` | streams CSV |
+| GET | `/api/export` | `?kind=people|companies|interactions|projects` | streams CSV |
 | GET | `/health` | | returns `200 ok` |
 
 Form actions on the page routes mirror the API for progressive enhancement (no JS needed to use Gusto).
@@ -852,7 +933,8 @@ Form actions on the page routes mirror the API for progressive enhancement (no J
 **Dashboard (`/`)** — signed-in root:
 - "Recent interactions" timeline (last 14 days, max 10).
 - "Recently saved" combined People+Companies (last 7 days, max 8).
-- Counts strip: total people, total companies, interactions this month.
+- Counts strip: total people, total companies, interactions this month, **active projects**.
+- "Ending soon": projects with `endDate` within 14 days and `status='active'`, max 5. Overdue items (endDate in the past) get a warning chip.
 
 **`/people`** — list:
 - Header: count, sort dropdown (recently added | name | last interaction), filter chips (favorites, archived, by company, by tag).
@@ -864,18 +946,40 @@ Form actions on the page routes mirror the API for progressive enhancement (no J
 - Header: avatar, name (inline-editable), role, company link, source URL, favorite/archive buttons.
 - Side panel: email, phone, location, tags, "Linked company".
 - Main: `NotesEditor` (textarea → sanitized HTML preview on blur), Interactions timeline scoped to this person, "+ Log interaction" CTA pre-filling person.
+- **Projects section**: active projects this person is on, each row links to `/projects/[id]`. If the person has a linked company, an additional **"Together at {Company}"** subsection lists projects where *both* the person *and* their linked company are members — answers "what are we doing together right now" at a glance.
 - Companion suggestion: if enrichment found a `worksFor` not yet linked → banner "Looks like {name} works at {employer}. Add as a company?".
 
-**`/companies/[id]`** — same shape, plus a "People at this company" section listing linked people.
+**`/companies/[id]`** — same shape, plus a "People at this company" section listing linked people, and a **"Projects" section** showing active projects this company is involved in.
 
 **`/interactions`** — chronological timeline grouped by day. Filters: by person, company, type, date range.
 
 **`/interactions/new`**:
 - Date/time picker (default = now), type select (`call/email/meeting/dm/event/note/other`), title (required), body (textarea, sanitized on save), people multi-select via typeahead against `/api/people?q=`, optional company select. "Save" + "Save & log another".
+- **Project picker** (multi-select). Whenever the people or company selection changes, the client calls `GET /api/projects/suggest?personIds=&companyId=` and pre-fills the picker with `active` matches; the user can confirm or remove. Manual lookup via the same picker also supported.
 
-**`CommandPalette`** (`cmd/ctrl-k`): single overlay searching all three FTS tables in parallel; result rows tagged P/C/I. `↑↓` to nav, `enter` to open.
+**`/interactions/[id]`** — detail/edit form gets the same project multi-select. Linked-projects chips render in the side panel beside People and Company.
 
-**Settings**: account (username/email/password), bookmarklet snippet, CSV export, sign out other devices, danger zone (delete all data).
+**`/projects`** — list:
+- Header: count, sort dropdown (recently updated | end date | name | last interaction), status filter chips (active default | paused | archived | all), tag filter, search bar binds to `?q=`.
+- Rows: `ProjectRow` — name, `StatusChip` (active/paused/archived), member avatars stack (max 3 + "+N more"), end-date countdown (or overdue badge if `endDate` is in the past and status is active), tags, right-aligned actions (status menu, delete with undo).
+- `j/k` keyboard nav, `enter` opens detail. `cmd-K pr:foo` scopes the palette to projects (parser checks the longer prefix before `p:`).
+
+**`/projects/new`** — manual create form: name (required), description (optional), status (default active), startDate / endDate (optional), billing block (none / hourly + rate + currency / fixed + fee + currency), nextStep (single-line, optional), members (PersonPicker multi + CompanyPicker multi). Money inputs are decimal in the UI (e.g. `120.00`); persisted as integer cents.
+
+**`/projects/[id]`** — detail:
+- Header: name (inline-editable), `StatusChip` with quick-toggle to paused/archived, dates ("Started {Mar 3}, ends {Aug 12}"), overdue badge when applicable.
+- Side panel: billing card (rate / fee + currency, formatted via `Intl.NumberFormat`), tags, "Next step" inline-editable single-line field, reminder.
+- Main:
+  - `NotesEditor` for description (sanitized on save).
+  - `LinksEditor` — paste-and-add list of external URLs with optional labels. Each row is `{ url, label? }` from `project_links`.
+  - **Members**: People list (PersonPicker to add) + Companies list (CompanyPicker to add).
+  - Interactions timeline scoped to this project, with "+ Log interaction" pre-filling the project.
+
+**`CommandPalette`** (`cmd/ctrl-k`): single overlay searching all four FTS tables in parallel; result rows tagged P/C/I/PR. `↑↓` to nav, `enter` to open. Scope prefixes: `p:` (people), `c:` (companies), `i:` (interactions), `pr:` (projects). The parser matches `pr:` *before* `p:` to avoid the obvious collision.
+
+**Settings**: account (username/email/password), bookmarklet snippet, CSV export (people, companies, interactions, **projects**), sign out other devices, danger zone (delete all data).
+
+**`StatusChip`** (`active|paused|archived`): semantic color tones — `active` uses `--color-success`, `paused` uses `--color-warning`, `archived` uses `--color-subtle`. Click to open a small popover with the three options for one-click status changes (matches the favorite/archive quick-toggle pattern on EntityRow).
 
 ---
 
@@ -928,16 +1032,82 @@ Each phase ends at a green checkpoint. Do not move on until the checkpoint passe
 3. CSV export (`/api/export`) — streams a CSV per entity kind. (CSV import was scoped out of v1.)
 4. **Checkpoint**: bookmarklet from a real LinkedIn page creates a person; iOS share-sheet → Gusto creates the right entity; CSV export downloads all rows for each kind and the columns round-trip on a re-import via spreadsheet.
 
-### Phase 6 — Ship
+### Phase 6 — Projects (lightweight collaboration tracking)
+
+**Scope.** A *project* is a present-tense thing the user is working on with one or more people and/or companies — a fundraise, a launch, a consulting engagement, an intro thread. It's the cross-scope container tags can't model: members come from multiple entity types, and a project has a real lifecycle (active → paused → archived). Out of scope for v1: file uploads, time tracking, stages/pipelines, tasks/checklists, per-project permissions. Those are deliberate gravity wells we are not building. Attachments are surfaced as **external links** (paste a Drive / Notion / Dropbox URL), not file uploads.
+
+**Money.** Stored as integer **cents** in `hourlyRate` / `fixedFee` to avoid float drift. UI converts decimal ↔ cents on read/write and renders with `Intl.NumberFormat(locale, { style: 'currency', currency })`. `currency` is ISO 4217 (`USD`, `EUR`, `GBP`, …). When `billingType='none'`, all three (`hourlyRate`, `fixedFee`, `currency`) are null.
+
+**Status model.** Single `status` column with three values. There is no separate `is_archived` flag for projects (unlike people/companies, which have a real "I still have this contact, just not in my active list" use case). A project's lifecycle is: `active` → optionally `paused` → `archived`. `archived` projects are excluded from the default list view, the dashboard count, and the auto-suggest endpoint.
+
+**Schema work** (in `src/lib/server/schema.ts`):
+1. Add `projects`, `project_links`, `project_people`, `project_companies`, `interaction_projects`, `project_tags` tables (full DDL above in *Database & migrations*).
+2. Extend `TAG_SCOPES` to include `'project'` (and the matching `TagScope` type).
+3. Extend `REMINDER_KINDS` to include `'project'` so reminders can target a project.
+4. Migration is idempotent: `CREATE TABLE IF NOT EXISTS` for new tables. No `ALTER TABLE` needed since these are net-new tables.
+
+**FTS work**:
+5. Add the `projects_fts` virtual table over `(name, description, next_step)` plus the standard `ai/ad/au` triggers (mirror the `people_fts` shape — see *Database & migrations*).
+6. On migration, seed via `INSERT INTO projects_fts(rowid, …) SELECT …` so any pre-existing rows are searchable. The existing `rebuildFts()` count-mismatch path covers this automatically.
+
+**Server modules**:
+7. `src/lib/server/saveProject.ts` — `saveProject(userId, region, manual)` for manual create, `updateProject` (whitelisted PATCH), and `deleteProject` (cascades).
+8. `src/lib/server/projects-query.ts` — `listProjects(userId, region, filters)` returning `{ id, name, status, startDate, endDate, billingType, … memberCount, lastInteractionAt }`. `getProject(userId, region, id)` returning the full row plus eager-loaded `links`, `people`, `companies`, `interactions`, `tags`. `suggestProjectsFor({ personIds, companyId })` returning `active` projects matching any selected member. `projectsForPerson(personId)` and `projectsForCompany(companyId)` for the detail-page sections; `projectsTogether(personId, companyId)` for the **"Together at {Company}"** subsection.
+
+**API endpoints** (full table in *API contract*):
+9. `GET/POST /api/projects`, `PATCH/DELETE /api/projects/[id]`.
+10. `POST/DELETE /api/projects/[id]/people` `{ personId }`.
+11. `POST/DELETE /api/projects/[id]/companies` `{ companyId }`.
+12. `POST/DELETE /api/projects/[id]/interactions` `{ interactionId }`.
+13. `POST/PATCH/DELETE /api/projects/[id]/links`.
+14. `GET /api/projects/suggest?personIds=&companyId=` returns active projects matching any of the selected people OR the company. The handler de-duplicates and excludes projects the caller already has selected (via an optional `?exclude=` query param).
+15. `/api/tags*` accepts `scope='project'` with no further changes (same dispatch table; just unblock the new scope value in `isTagScope`).
+16. `/api/reminders*` accepts `kind='project'` (same dispatch).
+17. `/api/export?kind=projects` streams CSV with columns: `id, name, description, status, start_date, end_date, billing_type, hourly_rate_cents, fixed_fee_cents, currency, next_step, person_ids, company_ids, links, tags, created_at, updated_at`. `links` is `|`-separated `url|label` pairs (empty label allowed); `person_ids`, `company_ids`, `tags` use the existing `|`-separated convention. UTF-8 BOM as in the other exports.
+
+**Search**:
+18. Extend `searchAll` (in `src/lib/server/search.ts`) with a fourth parallel FTS5 query against `projects_fts`. `parseQueryScope` recognises `pr:` (matched *before* `p:` so the prefixes don't collide). The 4× scoped-limit budget rule applies when `pr:` is set.
+19. Update `CommandPalette.svelte`: render `PR` tag chip on project results; show "Projects only" indicator when `pr:` is the active prefix; backspace-at-column-0 clears the prefix as today.
+20. Add a "Search prefixes" row to `ShortcutHelp.svelte` for `pr:`.
+
+**Routes & UI**:
+21. `/projects` (list), `/projects/new` (manual), `/projects/[id]` (detail). All authed via the existing `hooks.server.ts` protected-pattern check (add `^/projects(\/|$)` to that list).
+22. Add a fourth top-level nav tab "Projects" with a `FolderOpen` (or `Briefcase`) icon. The mobile drawer auto-includes it.
+23. Components: `ProjectRow.svelte`, `StatusChip.svelte` (with quick-toggle popover), `LinksEditor.svelte`, `ProjectPicker.svelte` (multi-select typeahead, used by `/interactions/new`, `/interactions/[id]`, and the people/company detail pages when adding to an existing project).
+24. **`/people/[id]` surfacing**: section "Projects" listing active projects this person is on. **If the person has a non-null `companyId`, an additional "Together at {company.name}" subsection** lists projects where both the person *and* the linked company are members. Both subsections fetch via `projectsForPerson` and `projectsTogether`; render as small chip-style cards with status indicator, end-date countdown, and a click-through.
+25. **`/companies/[id]` surfacing**: section "Projects" listing active projects this company is involved in.
+26. **`/interactions/new` auto-suggest**: the existing form gains a multi-select `ProjectPicker`. A `$effect` watches `selectedPeople` and `selectedCompany`; on change, it debounces (250 ms) and calls `/api/projects/suggest?personIds=…&companyId=…`. Returned projects are *suggestions* — they auto-add to the picker but appear visually distinct (a soft "suggested" treatment) until the user confirms by submitting or removes them with the existing X button. New manual additions to the picker are not suggestions.
+27. **`/interactions/[id]`**: the detail's edit form has the same project multi-select; the read-only view renders project chips beside People and Company in the side panel.
+28. **Dashboard surfacing**: the counts strip gains an "Active projects" card. Below the existing "Recent interactions" and "Recently saved" sections, add an "Ending soon" mini-section listing projects with `status='active'` and `endDate` within 14 days, plus any overdue (endDate < today) — overdue items get the warning badge already used by the Reminders popover.
+
+**Polish**:
+29. Overdue badge (`endDate < today` *and* `status='active'`) on `/projects` rows, on `/projects/[id]` header, and on the dashboard "Ending soon" section. Reuses the warning color tokens.
+30. Reminder integration: from `/projects/[id]`, the existing `AddReminder` component accepts `kind='project'`. The Reminders popover renders project reminders with the project name and a `/projects/[id]` href.
+31. Empty states: list page shows "No projects yet — track a fundraise, a launch, or a consulting engagement" with a single CTA "New project". Detail subsections on /people/[id] and /companies/[id] simply hide when empty (no card placeholder, to avoid noise on entities not yet involved in a project).
+
+**Checkpoint** — manual smoke covering the unique value:
+- Create a project "Series A" via `/projects/new` with status=active, currency=USD, hourlyRate=$200/hr (stored as `20000` cents), startDate=today, endDate=today+30d.
+- Link two people and one company. Verify both `/people/[id]` show "Projects → Series A" and `/companies/[id]` shows "Projects → Series A".
+- Both linked people have `companyId` pointing at the linked company → the "Together at {Company}" subsection appears on each person and lists Series A.
+- Open `/interactions/new`, add one of the people. Series A pre-fills the project picker as a suggestion. Add the company. Series A is still there (not duplicated). Submit; the interaction shows up under `/projects/[id]`'s timeline.
+- Set `endDate` to yesterday. The list row, the detail header, and the dashboard "Ending soon" section show the overdue badge.
+- `cmd-K pr:series` returns Series A; `cmd-K pr:` (empty rest) shows the empty hint; plain `cmd-K series` includes Series A in the mixed results.
+- Add a tag "vc" to the project via `TagInput`. `/projects?tag=vc` filters the list. The tag also appears in the project's CSV export row.
+- Paste an external link "https://drive.google.com/…" with label "Term sheet" via `LinksEditor`. It renders, edits, and deletes round-trip.
+- `GET /api/export?kind=projects` returns a CSV beginning with the UTF-8 BOM and the documented column order.
+- Set status=archived. Project disappears from default `/projects`, `/people/[id]`, `/companies/[id]`, dashboard count, and `/api/projects/suggest`. `?status=archived` shows it again.
+- `npm run check` clean; the 10-step Verification smoke (below) extended with the new project step still passes end-to-end.
+
+### Phase 7 — Ship
 1. README: pitch (private / lightweight / focused), screenshots placeholder, `docker compose up` quickstart, env var table, backup = `cp data/gusto.db backup.db`.
 2. `SECURITY.md`: responsible disclosure, contact email, supported versions.
-3. `LICENSE`: MIT.
+3. `LICENSE`: MIT (note: the actual repo ships AGPL-3.0 per `CLAUDE.md` — overrides this).
 4. GitHub Actions: `ci.yml` (Node 22 + `npm run check`), `docker.yml` (build + push to GHCR on tag), `fly-deploy.yml` (deploy on `main`).
 5. Optional: domain `gusto.sh` → Fly app, Let's Encrypt cert.
 
 ---
 
-## Verification — full smoke (run after Phase 5; gate before merge)
+## Verification — full smoke (run after Phase 6; gate before merge)
 
 ```bash
 # Local dev
@@ -957,16 +1127,22 @@ npm run dev                                    # http://localhost:5173
 # 6. Add a tag to the person; filter by that tag.
 # 7. Archive the person -> hidden from default list; visible in archive filter.
 #    Unarchive restores it.
-# 8. Sign out, sign back in, all data persists.
-# 9. Bookmarklet: from a github.com/<user> page, click bookmarklet -> person
-#    created.
-# 10. Stop dev: cp data/gusto.db /tmp/gusto-backup.db; rm -rf data; restore;
-#    restart -> all data back.
+# 8. /projects/new: create "Series A" with status=active, billing=hourly $200/USD,
+#    endDate=+30d, link Satya + Stripe. /people/[satya] shows it under Projects;
+#    if Satya has companyId=Stripe, it also shows under "Together at Stripe".
+#    /companies/[stripe] shows it under Projects. /interactions/new with Satya
+#    pre-fills Series A as a suggested project. cmd-k pr:series returns it.
+#    Set endDate=yesterday → overdue badge on list, detail, and dashboard.
+# 9. Sign out, sign back in, all data persists.
+# 10. Bookmarklet: from a github.com/<user> page, click bookmarklet -> person
+#     created.
+# 11. Stop dev: cp data/gusto.db /tmp/gusto-backup.db; rm -rf data; restore;
+#     restart -> all data back.
 
 # Container smoke
 docker compose up --build
 curl -fsS http://localhost:3000/health        # 200 ok
-# repeat steps 1-10 against :3000
+# repeat steps 1-11 against :3000
 ```
 
-Passing all 10 steps in both `npm run dev` and the docker-compose container is the bar for **Gusto v1 done**.
+Passing all 11 steps in both `npm run dev` and the docker-compose container is the bar for **Gusto v1 done**.
