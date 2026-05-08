@@ -1,4 +1,4 @@
-import type { Handle } from '@sveltejs/kit';
+import { redirect, type Handle } from '@sveltejs/kit';
 import { dev } from '$app/environment';
 import { initDb } from '$lib/server/db';
 import { migrate } from '$lib/server/migrate';
@@ -8,6 +8,24 @@ const ready = (async () => {
   await initDb();
   await migrate();
 })();
+
+// Page routes that require a signed-in user. A logged-out request to any of
+// these is bounced to /auth?next=<full-path> so the round-trip preserves the
+// original deep link (e.g. /people/abc123 from a reminder email).
+//
+// Excluded:
+// - / and /auth/* are public.
+// - /save handles its own redirect (it can be unauthenticated and shows a
+//   targeted message to sign in).
+// - /health is public infra.
+// - /api/* returns 401 to programmatic callers; we don't redirect API calls
+//   to an HTML page.
+const PROTECTED_PATTERNS = [
+  /^\/people(\/|$)/,
+  /^\/companies(\/|$)/,
+  /^\/interactions(\/|$)/,
+  /^\/settings(\/|$)/
+];
 
 export const handle: Handle = async ({ event, resolve }) => {
   await ready;
@@ -23,6 +41,14 @@ export const handle: Handle = async ({ event, resolve }) => {
     }
   } else {
     event.locals.user = null;
+  }
+
+  if (!event.locals.user) {
+    const path = event.url.pathname;
+    if (PROTECTED_PATTERNS.some((p) => p.test(path))) {
+      const next = path + event.url.search;
+      throw redirect(303, `/auth?next=${encodeURIComponent(next)}`);
+    }
   }
 
   const response = await resolve(event);
