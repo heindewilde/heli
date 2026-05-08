@@ -1,16 +1,8 @@
 <script lang="ts">
   import { AlertTriangle } from 'lucide-svelte';
+  import { saveErrorMessage } from '$lib/save-errors';
   let { data } = $props();
-  const messages: Record<string, string> = {
-    no_url: 'No link found. Share a URL or type one in.',
-    rate_limited: 'Too many saves recently. Try again in a few minutes.',
-    bad_scheme: 'Only http(s) links can be saved.',
-    parse_failed: 'That link looked malformed.',
-    empty: 'No link in the share payload.',
-    private_address: 'That link points to a private address — Gusto only fetches public URLs.',
-    dns_failed: 'Could not resolve that domain.'
-  };
-  const message = $derived(messages[data.error ?? ''] ?? 'Could not save that link.');
+  const message = $derived(saveErrorMessage(data.error, "Couldn't save that link."));
 </script>
 
 <section class="mx-auto flex max-w-md flex-col gap-4 px-4 py-12 text-center">

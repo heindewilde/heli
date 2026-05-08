@@ -2,6 +2,7 @@
   import { Link as LinkIcon, Loader2 } from 'lucide-svelte';
   import { invalidateAll, goto } from '$app/navigation';
   import { toast } from '$lib/toasts.svelte';
+  import { saveErrorMessage } from '$lib/save-errors';
 
   let value = $state('');
   let busy = $state(false);
@@ -25,22 +26,18 @@
         body: JSON.stringify({ url })
       });
       if (!res.ok) {
-        const code = await res.text().catch(() => '');
-        toast.danger(`Couldn't save${code ? ` (${code})` : ''}`);
+        const code = (await res.text().catch(() => '')) || '';
+        toast.danger(saveErrorMessage(code));
         return;
       }
       const data = (await res.json()) as { id: string; kind: 'person' | 'company'; dedup: boolean };
       value = '';
       const path = data.kind === 'person' ? `/people/${data.id}` : `/companies/${data.id}`;
-      if (data.dedup) {
-        toast.info('Already saved — opening it', { undo: undefined });
-      } else {
-        toast.success(`Saved as ${data.kind}`);
-      }
+      // Detail page shows a banner driven by ?dedup / ?just; no toast needed.
       await invalidateAll();
-      await goto(path);
+      await goto(path + (data.dedup ? '?dedup=1' : '?just=1'));
     } catch (err) {
-      toast.danger((err as Error).message || 'Save failed');
+      toast.danger(saveErrorMessage(null, (err as Error).message || 'Save failed'));
     } finally {
       busy = false;
     }
