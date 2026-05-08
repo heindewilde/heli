@@ -1,5 +1,6 @@
 <script lang="ts">
   import Landing from '$lib/components/Landing.svelte';
+  import EmptyDashboard from '$lib/components/EmptyDashboard.svelte';
   import InteractionRow from '$lib/components/InteractionRow.svelte';
   import { Users, Building2, MessagesSquare, Loader2 } from 'lucide-svelte';
   import { invalidateAll } from '$app/navigation';
@@ -8,6 +9,17 @@
   let { data } = $props();
 
   const anyParsing = $derived((data.recent ?? []).some((r) => r.source === 'parsing'));
+
+  // First-run state: nothing saved yet, no recent activity. Replace the
+  // count cards (which would all read 0) with an onboarding panel that
+  // explains what to do next.
+  const firstRun = $derived(
+    !!data.user &&
+      (data.counts?.people ?? 0) === 0 &&
+      (data.counts?.companies ?? 0) === 0 &&
+      (data.recent ?? []).length === 0 &&
+      (data.recentInteractions ?? []).length === 0
+  );
 
   $effect(() => {
     return pollWhile(
@@ -18,6 +30,9 @@
 </script>
 
 {#if data.user}
+  {#if firstRun}
+    <EmptyDashboard username={data.user.username} />
+  {:else}
   <section class="flex flex-col gap-6">
     <header class="flex flex-col gap-1">
       <h1 class="text-2xl font-semibold tracking-tight">
@@ -109,6 +124,7 @@
       </section>
     {/if}
   </section>
+  {/if}
 {:else}
   <Landing />
 {/if}
