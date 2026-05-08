@@ -5,7 +5,7 @@
 
   type Reminder = {
     id: string;
-    kind: 'person' | 'company' | 'interaction';
+    kind: 'person' | 'company' | 'interaction' | 'project';
     refId: string;
     refLabel: string | null;
     refHref: string | null;

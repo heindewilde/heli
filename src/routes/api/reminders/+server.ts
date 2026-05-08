@@ -2,7 +2,7 @@ import { error, json, type RequestHandler } from '@sveltejs/kit';
 import { and, eq } from 'drizzle-orm';
 import { createId } from '@paralleldrive/cuid2';
 import { db } from '$lib/server/db';
-import { reminders, people, companies, interactions, REMINDER_KINDS, type ReminderKind } from '$lib/server/schema';
+import { reminders, people, companies, interactions, projects, REMINDER_KINDS, type ReminderKind } from '$lib/server/schema';
 import { listReminders } from '$lib/server/reminders-query';
 
 function isReminderKind(v: unknown): v is ReminderKind {
@@ -19,7 +19,11 @@ async function refExists(userId: string, region: string, kind: ReminderKind, ref
     const r = await d.select({ id: companies.id }).from(companies).where(and(eq(companies.id, refId), eq(companies.userId, userId))).get();
     return !!r;
   }
-  const r = await d.select({ id: interactions.id }).from(interactions).where(and(eq(interactions.id, refId), eq(interactions.userId, userId))).get();
+  if (kind === 'interaction') {
+    const r = await d.select({ id: interactions.id }).from(interactions).where(and(eq(interactions.id, refId), eq(interactions.userId, userId))).get();
+    return !!r;
+  }
+  const r = await d.select({ id: projects.id }).from(projects).where(and(eq(projects.id, refId), eq(projects.userId, userId))).get();
   return !!r;
 }
 
