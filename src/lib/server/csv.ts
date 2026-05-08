@@ -7,6 +7,10 @@
 
 const ENC = new TextEncoder();
 const CRLF = '\r\n';
+// UTF-8 byte-order mark. Excel needs it to render diacritics ("José",
+// "Müller") correctly when opening a CSV; LibreOffice / Numbers / Sheets
+// auto-detect either way. Cheap to include for the safety it buys.
+const UTF8_BOM = new Uint8Array([0xef, 0xbb, 0xbf]);
 
 function escapeField(value: unknown): string {
   if (value == null) return '';
@@ -31,6 +35,7 @@ export function csvStream<T>(src: CsvSource<T>): ReadableStream<Uint8Array> {
   return new ReadableStream<Uint8Array>({
     async start(controller) {
       try {
+        controller.enqueue(UTF8_BOM);
         controller.enqueue(ENC.encode(csvLine(src.header)));
         for await (const item of src.rows as AsyncIterable<T>) {
           controller.enqueue(ENC.encode(csvLine(src.toRow(item))));
