@@ -7,6 +7,9 @@
   import TagInput from '$lib/components/TagInput.svelte';
   import AddReminder from '$lib/components/AddReminder.svelte';
   import SaveBanner from '$lib/components/SaveBanner.svelte';
+  import StatusChip from '$lib/components/StatusChip.svelte';
+  import { FolderKanban } from 'lucide-svelte';
+  import type { ProjectStatus } from '$lib/server/schema';
   import { Plus } from 'lucide-svelte';
   import { dayBucket } from '$lib/interactions';
   import { toast } from '$lib/toasts.svelte';
@@ -345,6 +348,48 @@
           </div>
         {/if}
       </div>
+
+      {#if data.projectsTogether.length > 0 || data.projectsOther.length > 0}
+        <div class="flex flex-col gap-2">
+          {#if company && data.projectsTogether.length > 0}
+            <div class="flex items-center gap-2">
+              <h2 class="text-sm font-medium text-[var(--color-muted)]">Together at {company.name}</h2>
+              <span class="rounded-full bg-[var(--color-product-bg)] px-1.5 py-0.5 text-[10px] text-[var(--color-product)]">{data.projectsTogether.length}</span>
+            </div>
+            <ul class="flex flex-col gap-1">
+              {#each data.projectsTogether as p (p.id)}
+                <li>
+                  <a
+                    href={`/projects/${p.id}`}
+                    class="group flex items-center gap-2 rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 hover:border-[var(--color-product-border)]"
+                  >
+                    <FolderKanban size={14} strokeWidth={2} class="shrink-0 text-[var(--color-muted)]" />
+                    <span class="min-w-0 flex-1 truncate text-sm font-medium">{p.name}</span>
+                    <StatusChip status={p.status as ProjectStatus} size="sm" />
+                  </a>
+                </li>
+              {/each}
+            </ul>
+          {/if}
+          {#if data.projectsOther.length > 0}
+            <h2 class="mt-1 text-sm font-medium text-[var(--color-muted)]">{data.projectsTogether.length > 0 ? 'Other projects' : 'Projects'}</h2>
+            <ul class="flex flex-col gap-1">
+              {#each data.projectsOther as p (p.id)}
+                <li>
+                  <a
+                    href={`/projects/${p.id}`}
+                    class="group flex items-center gap-2 rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 hover:border-[var(--color-border-strong)]"
+                  >
+                    <FolderKanban size={14} strokeWidth={2} class="shrink-0 text-[var(--color-muted)]" />
+                    <span class="min-w-0 flex-1 truncate text-sm font-medium">{p.name}</span>
+                    <StatusChip status={p.status as ProjectStatus} size="sm" />
+                  </a>
+                </li>
+              {/each}
+            </ul>
+          {/if}
+        </div>
+      {/if}
     </section>
 
     <aside class="flex flex-col gap-3">

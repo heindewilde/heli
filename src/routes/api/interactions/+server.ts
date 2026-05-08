@@ -37,6 +37,9 @@ export const POST: RequestHandler = async ({ request, locals }) => {
   const personIds = Array.isArray(body.personIds)
     ? (body.personIds as unknown[]).filter((p): p is string => typeof p === 'string')
     : [];
+  const projectIds = Array.isArray(body.projectIds)
+    ? (body.projectIds as unknown[]).filter((p): p is string => typeof p === 'string')
+    : [];
   try {
     const result = await createInteraction(locals.user.id, locals.user.region, {
       occurredAt,
@@ -44,7 +47,8 @@ export const POST: RequestHandler = async ({ request, locals }) => {
       title: body.title,
       body: typeof body.body === 'string' ? body.body : null,
       companyId: typeof body.companyId === 'string' && body.companyId ? body.companyId : null,
-      personIds
+      personIds,
+      projectIds
     });
     return json(result, { status: 201 });
   } catch (err) {

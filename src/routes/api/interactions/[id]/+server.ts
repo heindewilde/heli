@@ -35,6 +35,9 @@ export const PATCH: RequestHandler = async ({ request, params, locals }) => {
   if (Array.isArray(body.personIds)) {
     patch.personIds = (body.personIds as unknown[]).filter((p): p is string => typeof p === 'string');
   }
+  if (Array.isArray(body.projectIds)) {
+    patch.projectIds = (body.projectIds as unknown[]).filter((p): p is string => typeof p === 'string');
+  }
   try {
     await updateInteraction(locals.user.id, locals.user.region, params.id!, patch);
   } catch (err) {

@@ -1,7 +1,7 @@
-import { and, desc, eq, gte, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, gte, ne, or, sql } from 'drizzle-orm';
 import type { PageServerLoad } from './$types';
 import { db } from '$lib/server/db';
-import { people, companies, interactions as interactionsTable } from '$lib/server/schema';
+import { people, companies, interactions as interactionsTable, projects } from '$lib/server/schema';
 import { listInteractions } from '$lib/server/interactions-query';
 
 export const load: PageServerLoad = async ({ locals }) => {
@@ -12,7 +12,9 @@ export const load: PageServerLoad = async ({ locals }) => {
   monthStart.setDate(1);
   monthStart.setHours(0, 0, 0, 0);
 
-  const [peopleCount, companiesCount, interactionsThisMonth, recentInteractions, recentPeople, recentCompanies] = await Promise.all([
+  const fourteenDaysAhead = Date.now() + 14 * 86_400_000;
+
+  const [peopleCount, companiesCount, interactionsThisMonth, projectsActiveCount, recentInteractions, recentPeople, recentCompanies, endingSoon] = await Promise.all([
     d
       .select({ n: sql<number>`COUNT(*)` })
       .from(people)
@@ -27,6 +29,11 @@ export const load: PageServerLoad = async ({ locals }) => {
       .select({ n: sql<number>`COUNT(*)` })
       .from(interactionsTable)
       .where(and(eq(interactionsTable.userId, locals.user.id), gte(interactionsTable.occurredAt, monthStart.getTime())))
+      .get(),
+    d
+      .select({ n: sql<number>`COUNT(*)` })
+      .from(projects)
+      .where(and(eq(projects.userId, locals.user.id), eq(projects.status, 'active')))
       .get(),
     listInteractions(locals.user.id, locals.user.region, { from: fourteenDaysAgo, limit: 10 }),
     d
@@ -56,6 +63,28 @@ export const load: PageServerLoad = async ({ locals }) => {
       .from(companies)
       .where(and(eq(companies.userId, locals.user.id), eq(companies.isArchived, 0)))
       .orderBy(desc(companies.createdAt))
+      .limit(5),
+    // "Ending soon": active projects whose endDate is within the next 14
+    // days OR already overdue. Overdue items appear first.
+    d
+      .select({
+        id: projects.id,
+        name: projects.name,
+        endDate: projects.endDate,
+        status: projects.status
+      })
+      .from(projects)
+      .where(
+        and(
+          eq(projects.userId, locals.user.id),
+          eq(projects.status, 'active'),
+          or(
+            and(gte(projects.endDate, 0), sql`${projects.endDate} < ${Date.now()}`),
+            and(gte(projects.endDate, Date.now()), sql`${projects.endDate} <= ${fourteenDaysAhead}`)
+          )
+        )
+      )
+      .orderBy(asc(projects.endDate))
       .limit(5)
   ]);
 
@@ -80,9 +109,11 @@ export const load: PageServerLoad = async ({ locals }) => {
     counts: {
       people: Number(peopleCount?.n ?? 0),
       companies: Number(companiesCount?.n ?? 0),
-      interactionsThisMonth: Number(interactionsThisMonth?.n ?? 0)
+      interactionsThisMonth: Number(interactionsThisMonth?.n ?? 0),
+      projects: Number(projectsActiveCount?.n ?? 0)
     },
     recent,
-    recentInteractions
+    recentInteractions,
+    endingSoon
   };
 };
