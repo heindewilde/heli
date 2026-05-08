@@ -13,6 +13,14 @@
       ]
     },
     {
+      label: 'Search prefixes (cmd-K)',
+      rows: [
+        { keys: ['p:'], desc: 'Scope search to people' },
+        { keys: ['c:'], desc: 'Scope search to companies' },
+        { keys: ['i:'], desc: 'Scope search to interactions' }
+      ]
+    },
+    {
       label: 'Lists (People / Companies / Interactions)',
       rows: [
         { keys: ['j'], desc: 'Next row' },

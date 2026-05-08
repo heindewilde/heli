@@ -20,6 +20,21 @@
   let timer: ReturnType<typeof setTimeout> | null = null;
   let lastQuery = $state('');
 
+  // Mirror of server's parseQueryScope, used purely to render the active
+  // scope chip and the contextual placeholder. Server is the source of truth
+  // — passing the prefix through unchanged is fine.
+  const SCOPE_RE = /^(p|c|i):\s*(.*)$/i;
+  const SCOPE_LABEL: Record<string, { label: string; full: 'person' | 'company' | 'interaction' }> = {
+    p: { label: 'People', full: 'person' },
+    c: { label: 'Companies', full: 'company' },
+    i: { label: 'Interactions', full: 'interaction' }
+  };
+  const activeScope = $derived.by(() => {
+    const m = q.match(SCOPE_RE);
+    return m ? SCOPE_LABEL[m[1].toLowerCase()] : null;
+  });
+  const queryAfterPrefix = $derived(q.match(SCOPE_RE)?.[2] ?? q);
+
   $effect(() => {
     if (open) {
       setTimeout(() => inputEl?.focus(), 10);
@@ -65,6 +80,14 @@
       onClose();
       return;
     }
+    // Backspace at the start of the input clears the active scope prefix in
+    // one tap so users can broaden their search without selecting the colon.
+    if (e.key === 'Backspace' && activeScope && (e.target as HTMLInputElement)?.selectionStart === 0) {
+      e.preventDefault();
+      q = queryAfterPrefix;
+      onInput();
+      return;
+    }
     if (items.length === 0) return;
     if (e.key === 'ArrowDown') {
       e.preventDefault();
@@ -81,6 +104,21 @@
 
   const KIND_ICON = { person: User, company: Building2, interaction: MessageSquare } as const;
   const KIND_TAG = { person: 'P', company: 'C', interaction: 'I' } as const;
+
+  const placeholder = $derived(
+    activeScope
+      ? `Search ${activeScope.label.toLowerCase()}…`
+      : 'Search people, companies, interactions…'
+  );
+
+  const emptyHint = $derived.by(() => {
+    if (!q.trim()) {
+      return activeScope
+        ? `Searching ${activeScope.label.toLowerCase()} only — keep typing.`
+        : 'Type to search across people, companies, and interactions. Tip: prefix with p:, c:, or i: to scope.';
+    }
+    return lastQuery ? 'No matches.' : 'Searching…';
+  });
 </script>
 
 {#if open}
@@ -96,12 +134,17 @@
     <div class="w-full max-w-xl overflow-hidden rounded-[var(--radius-lg)] border border-[var(--color-border)] bg-[var(--color-surface)] shadow-[var(--shadow-lg)]">
       <div class="flex items-center gap-2 border-b border-[var(--color-border)] px-3 py-2">
         <Search size={14} strokeWidth={2} class="text-[var(--color-subtle)]" />
+        {#if activeScope}
+          <span class="inline-flex items-center gap-1 rounded-full border border-[var(--color-product-border)] bg-[var(--color-product-bg)] px-2 py-0.5 text-[10px] font-medium text-[var(--color-product)]">
+            {activeScope.label} only
+          </span>
+        {/if}
         <input
           bind:this={inputEl}
           bind:value={q}
           oninput={onInput}
           type="search"
-          placeholder="Search people, companies, interactions…"
+          {placeholder}
           class="flex-1 bg-transparent text-sm outline-none placeholder:text-[var(--color-subtle)]"
         />
         <kbd class="rounded border border-[var(--color-border)] bg-[var(--color-bg)] px-1.5 py-0.5 text-[10px] text-[var(--color-muted)]">esc</kbd>
@@ -109,7 +152,7 @@
       <div class="max-h-[60vh] overflow-auto">
         {#if items.length === 0}
           <p class="px-3 py-6 text-center text-xs text-[var(--color-muted)]">
-            {q.trim() ? (lastQuery ? 'No matches.' : 'Searching…') : 'Type to search across people, companies, and interactions.'}
+            {emptyHint}
           </p>
         {:else}
           <ul class="py-1">
@@ -140,7 +183,7 @@
       </div>
       <div class="flex items-center justify-between gap-2 border-t border-[var(--color-border)] px-3 py-1.5 text-[10px] text-[var(--color-muted)]">
         <span><kbd>↑↓</kbd> navigate · <kbd>enter</kbd> open · <kbd>esc</kbd> close</span>
-        <span class="hidden sm:inline">parallel FTS across all three tables</span>
+        <span class="hidden sm:inline">scope: <kbd>p:</kbd> people · <kbd>c:</kbd> companies · <kbd>i:</kbd> interactions</span>
       </div>
     </div>
   </div>

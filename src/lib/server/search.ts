@@ -29,41 +29,82 @@ export type CommandHit = {
   href: string;
 };
 
+export type CommandScope = 'person' | 'company' | 'interaction';
+
+const SCOPE_PREFIX_RE = /^(p|c|i):\s*(.*)$/i;
+
+const SCOPE_FROM_LETTER: Record<string, CommandScope> = {
+  p: 'person',
+  c: 'company',
+  i: 'interaction'
+};
+
+/**
+ * Parse the cmd-K input. Recognised prefixes:
+ *   p:foo  → search people only
+ *   c:foo  → search companies only
+ *   i:foo  → search interactions only
+ *
+ * Returns the matched scope (if any) and the remaining query text. The
+ * client uses the same regex purely for a visual indicator; the source of
+ * truth lives here on the server.
+ */
+export function parseQueryScope(input: string): { scope: CommandScope | null; q: string } {
+  const m = input.match(SCOPE_PREFIX_RE);
+  if (!m) return { scope: null, q: input };
+  return { scope: SCOPE_FROM_LETTER[m[1].toLowerCase()] ?? null, q: m[2] };
+}
+
 export async function searchAll(
   userId: string,
   region: string,
-  q: string,
+  rawQ: string,
   perKind = 5
 ): Promise<CommandHit[]> {
+  const { scope, q } = parseQueryScope(rawQ);
   const fts = ftsQuery(q);
   if (!fts) return [];
   const d = db(region);
 
+  // When a scope is forced, devote the whole budget to that table so the user
+  // can scroll deeper into one kind.
+  const SCOPED_LIMIT = perKind * 4;
+
+  const wantPeople = !scope || scope === 'person';
+  const wantCompanies = !scope || scope === 'company';
+  const wantInteractions = !scope || scope === 'interaction';
+
   const [peopleRows, companyRows, interactionRows] = await Promise.all([
-    d.all<{ id: string; name: string; role: string | null; domain: string | null }>(sql`
-      SELECT p.id, p.name, p.role, p.domain
-      FROM people p
-      JOIN people_fts f ON f.rowid = p.rowid
-      WHERE p.user_id = ${userId} AND f.people_fts MATCH ${fts} AND p.is_archived = 0
-      ORDER BY rank
-      LIMIT ${perKind}
-    `),
-    d.all<{ id: string; name: string; description: string | null; domain: string | null }>(sql`
-      SELECT c.id, c.name, c.description, c.domain
-      FROM companies c
-      JOIN companies_fts f ON f.rowid = c.rowid
-      WHERE c.user_id = ${userId} AND f.companies_fts MATCH ${fts} AND c.is_archived = 0
-      ORDER BY rank
-      LIMIT ${perKind}
-    `),
-    d.all<{ id: string; title: string; type: string; occurredAt: number }>(sql`
-      SELECT i.id, i.title, i.type, i.occurred_at AS occurredAt
-      FROM interactions i
-      JOIN interactions_fts f ON f.rowid = i.rowid
-      WHERE i.user_id = ${userId} AND f.interactions_fts MATCH ${fts}
-      ORDER BY rank
-      LIMIT ${perKind}
-    `)
+    wantPeople
+      ? d.all<{ id: string; name: string; role: string | null; domain: string | null }>(sql`
+          SELECT p.id, p.name, p.role, p.domain
+          FROM people p
+          JOIN people_fts f ON f.rowid = p.rowid
+          WHERE p.user_id = ${userId} AND f.people_fts MATCH ${fts} AND p.is_archived = 0
+          ORDER BY rank
+          LIMIT ${scope === 'person' ? SCOPED_LIMIT : perKind}
+        `)
+      : Promise.resolve([] as { id: string; name: string; role: string | null; domain: string | null }[]),
+    wantCompanies
+      ? d.all<{ id: string; name: string; description: string | null; domain: string | null }>(sql`
+          SELECT c.id, c.name, c.description, c.domain
+          FROM companies c
+          JOIN companies_fts f ON f.rowid = c.rowid
+          WHERE c.user_id = ${userId} AND f.companies_fts MATCH ${fts} AND c.is_archived = 0
+          ORDER BY rank
+          LIMIT ${scope === 'company' ? SCOPED_LIMIT : perKind}
+        `)
+      : Promise.resolve([] as { id: string; name: string; description: string | null; domain: string | null }[]),
+    wantInteractions
+      ? d.all<{ id: string; title: string; type: string; occurredAt: number }>(sql`
+          SELECT i.id, i.title, i.type, i.occurred_at AS occurredAt
+          FROM interactions i
+          JOIN interactions_fts f ON f.rowid = i.rowid
+          WHERE i.user_id = ${userId} AND f.interactions_fts MATCH ${fts}
+          ORDER BY rank
+          LIMIT ${scope === 'interaction' ? SCOPED_LIMIT : perKind}
+        `)
+      : Promise.resolve([] as { id: string; title: string; type: string; occurredAt: number }[])
   ]);
 
   const hits: CommandHit[] = [];
