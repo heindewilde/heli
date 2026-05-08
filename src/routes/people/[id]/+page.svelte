@@ -212,8 +212,25 @@
         {/if}
       </div>
       {#if person.role || company}
-        <p class="text-sm text-[var(--color-muted)]">
-          {person.role ?? ''}{person.role && company ? ' · ' : ''}{#if company}<a class="hover:underline" href={`/companies/${company.id}`}>{company.name}</a>{/if}
+        <p class="flex flex-wrap items-center gap-1.5 text-sm text-[var(--color-muted)]">
+          {#if person.role}<span>{person.role}</span>{/if}
+          {#if person.role && company}<span class="text-[var(--color-subtle)]">·</span>{/if}
+          {#if company}
+            <a
+              class="inline-flex items-center gap-1.5 hover:underline"
+              href={`/companies/${company.id}`}
+            >
+              {#if company.logoUrl || company.faviconUrl}
+                <img
+                  src={company.logoUrl ?? company.faviconUrl ?? ''}
+                  alt=""
+                  loading="lazy"
+                  class="h-4 w-4 rounded-[var(--radius-sm)] object-cover"
+                />
+              {/if}
+              <span>{company.name}</span>
+            </a>
+          {/if}
         </p>
       {/if}
       {#if person.url}
@@ -339,7 +356,29 @@
         {#if company}
           <div class="mt-2 rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-bg)] p-3">
             <p class="text-xs text-[var(--color-muted)]">Linked company</p>
-            <a href={`/companies/${company.id}`} class="mt-1 block text-sm font-medium hover:underline">{company.name}</a>
+            <a
+              href={`/companies/${company.id}`}
+              class="mt-1 flex items-center gap-2 hover:underline"
+            >
+              <span class="flex h-7 w-7 shrink-0 items-center justify-center overflow-hidden rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-surface)] text-xs text-[var(--color-muted)]">
+                {#if company.logoUrl || company.faviconUrl}
+                  <img
+                    src={company.logoUrl ?? company.faviconUrl ?? ''}
+                    alt=""
+                    loading="lazy"
+                    class="h-full w-full object-cover"
+                  />
+                {:else}
+                  {(company.name[0] ?? '·').toUpperCase()}
+                {/if}
+              </span>
+              <span class="min-w-0 flex-1">
+                <span class="block truncate text-sm font-medium">{company.name}</span>
+                {#if company.domain}
+                  <span class="block truncate text-xs text-[var(--color-muted)]">{company.domain}</span>
+                {/if}
+              </span>
+            </a>
           </div>
         {/if}
       </div>

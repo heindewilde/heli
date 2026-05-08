@@ -27,7 +27,13 @@ export const load: PageServerLoad = async ({ locals, params, url }) => {
   let company = null;
   if (person.companyId) {
     company = await d
-      .select({ id: companies.id, name: companies.name, domain: companies.domain })
+      .select({
+        id: companies.id,
+        name: companies.name,
+        domain: companies.domain,
+        logoUrl: companies.logoUrl,
+        faviconUrl: companies.faviconUrl
+      })
       .from(companies)
       .where(and(eq(companies.id, person.companyId), eq(companies.userId, locals.user.id)))
       .get();
