@@ -4,6 +4,7 @@
   import { Plus, Search, Tag, X } from 'lucide-svelte';
   import { onMount } from 'svelte';
   import InteractionRow from '$lib/components/InteractionRow.svelte';
+  import RowTagAdder from '$lib/components/RowTagAdder.svelte';
   import { INTERACTION_TYPES, TYPE_META, dayBucket } from '$lib/interactions';
   import { bindKeys } from '$lib/keyboard.svelte';
 
@@ -209,16 +210,20 @@
               {@const itags = data.itemTags[i.id] ?? []}
               <li>
                 <InteractionRow {...i} selected={idx === selected} />
-                {#if itags.length > 0}
-                  <div class="ml-12 -mt-0.5 flex flex-wrap gap-1 pb-1">
-                    {#each itags as t (t.id)}
-                      <a
-                        href={buildUrl({ tag: t.slug })}
-                        class="rounded-full bg-[var(--color-product-bg)] px-1.5 py-0.5 text-[10px] text-[var(--color-product)] hover:underline"
-                      >{t.name}</a>
-                    {/each}
-                  </div>
-                {/if}
+                <div class="ml-12 -mt-0.5 flex flex-wrap items-center gap-1 pb-1">
+                  {#each itags as t (t.id)}
+                    <a
+                      href={buildUrl({ tag: t.slug })}
+                      class="rounded-full bg-[var(--color-product-bg)] px-1.5 py-0.5 text-[10px] text-[var(--color-product)] hover:underline"
+                    >{t.name}</a>
+                  {/each}
+                  <RowTagAdder
+                    scope="interaction"
+                    entityId={i.id}
+                    currentTags={itags}
+                    suggestions={data.allTags}
+                  />
+                </div>
               </li>
             {/each}
           </ul>

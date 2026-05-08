@@ -4,6 +4,7 @@
   import { onMount } from 'svelte';
   import { Search, Plus, Star, Archive, Tag, X } from 'lucide-svelte';
   import EntityRow from '$lib/components/EntityRow.svelte';
+  import RowTagAdder from '$lib/components/RowTagAdder.svelte';
   import { bindKeys } from '$lib/keyboard.svelte';
   import { toast } from '$lib/toasts.svelte';
 
@@ -208,16 +209,20 @@
             onArchive={() => patch(person.id, { isArchived: !person.isArchived })}
             onDelete={() => del(person.id, person.name)}
           />
-          {#if personTags.length > 0}
-            <div class="ml-12 -mt-0.5 flex flex-wrap gap-1 pb-1">
-              {#each personTags as t (t.id)}
-                <a
-                  href={buildUrl({ tag: t.slug })}
-                  class="rounded-full bg-[var(--color-product-bg)] px-1.5 py-0.5 text-[10px] text-[var(--color-product)] hover:underline"
-                >{t.name}</a>
-              {/each}
-            </div>
-          {/if}
+          <div class="ml-12 -mt-0.5 flex flex-wrap items-center gap-1 pb-1">
+            {#each personTags as t (t.id)}
+              <a
+                href={buildUrl({ tag: t.slug })}
+                class="rounded-full bg-[var(--color-product-bg)] px-1.5 py-0.5 text-[10px] text-[var(--color-product)] hover:underline"
+              >{t.name}</a>
+            {/each}
+            <RowTagAdder
+              scope="person"
+              entityId={person.id}
+              currentTags={personTags}
+              suggestions={data.allTags}
+            />
+          </div>
         </li>
       {/each}
     </ul>
