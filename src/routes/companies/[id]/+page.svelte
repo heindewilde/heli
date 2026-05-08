@@ -6,6 +6,7 @@
   import InteractionRow from '$lib/components/InteractionRow.svelte';
   import TagInput from '$lib/components/TagInput.svelte';
   import AddReminder from '$lib/components/AddReminder.svelte';
+  import SaveBanner from '$lib/components/SaveBanner.svelte';
   import { Plus } from 'lucide-svelte';
   import { dayBucket } from '$lib/interactions';
   import { toast } from '$lib/toasts.svelte';
@@ -95,6 +96,11 @@
 </script>
 
 <article class="flex flex-col gap-6">
+  {#if data.justSaved}
+    <SaveBanner variant="just" kind="company" entityId={company.id} entityName={company.name} createdAt={company.createdAt} />
+  {:else if data.dedup}
+    <SaveBanner variant="dedup" kind="company" entityId={company.id} entityName={company.name} createdAt={company.createdAt} />
+  {/if}
   <header class="flex items-start gap-4">
     <span class="flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)] text-base font-medium text-[var(--color-muted)]">
       {#if company.logoUrl || company.faviconUrl}

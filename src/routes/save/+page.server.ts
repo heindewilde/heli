@@ -62,9 +62,8 @@ export const load: PageServerLoad = async ({ url, locals }) => {
       ? await savePerson(locals.user.id, locals.user.region, cleaned)
       : await saveCompany(locals.user.id, locals.user.region, cleaned);
 
-  // Land on the detail page so the user can confirm + edit. The toast on
-  // detail pages already conveys parsing state for fresh stubs; for dedup we
-  // rely on the visible record being unchanged.
+  // Land on the detail page so the user can confirm + edit. SaveBanner reads
+  // these flags to show "Saved … (Undo)" or "You've already saved this".
   const path = kind === 'person' ? `/people/${result.id}` : `/companies/${result.id}`;
-  throw redirect(303, path + (result.dedup ? '?dedup=1' : ''));
+  throw redirect(303, path + (result.dedup ? '?dedup=1' : '?just=1'));
 };

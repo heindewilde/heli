@@ -6,7 +6,7 @@ import { companies, people } from '$lib/server/schema';
 import { listInteractions } from '$lib/server/interactions-query';
 import { getTagsForEntity } from '$lib/server/tags';
 
-export const load: PageServerLoad = async ({ locals, params }) => {
+export const load: PageServerLoad = async ({ locals, params, url }) => {
   if (!locals.user) throw redirect(303, '/auth');
   const d = db(locals.user.region);
   const company = await d
@@ -15,6 +15,10 @@ export const load: PageServerLoad = async ({ locals, params }) => {
     .where(and(eq(companies.id, params.id), eq(companies.userId, locals.user.id)))
     .get();
   if (!company) throw error(404, 'not_found');
+
+  const FRESH_GRACE_MS = 30_000;
+  const justSaved = url.searchParams.get('just') === '1' && Date.now() - company.createdAt < FRESH_GRACE_MS;
+  const dedup = url.searchParams.get('dedup') === '1';
 
   const linkedPeople = await d
     .select({
@@ -37,5 +41,5 @@ export const load: PageServerLoad = async ({ locals, params }) => {
 
   const tags = await getTagsForEntity(locals.user.id, locals.user.region, 'company', company.id);
 
-  return { company, linkedPeople, interactions, tags };
+  return { company, linkedPeople, interactions, tags, justSaved, dedup };
 };

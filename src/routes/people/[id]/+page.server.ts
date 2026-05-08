@@ -7,7 +7,7 @@ import { listInteractions } from '$lib/server/interactions-query';
 import { getTagsForEntity } from '$lib/server/tags';
 import { domainOf } from '$lib/server/url';
 
-export const load: PageServerLoad = async ({ locals, params }) => {
+export const load: PageServerLoad = async ({ locals, params, url }) => {
   if (!locals.user) throw redirect(303, '/auth');
   const d = db(locals.user.region);
   const person = await d
@@ -16,6 +16,13 @@ export const load: PageServerLoad = async ({ locals, params }) => {
     .where(and(eq(people.id, params.id), eq(people.userId, locals.user.id)))
     .get();
   if (!person) throw error(404, 'not_found');
+
+  // Banner flags. ?just stays valid until the entity is older than the undo
+  // window (~30s grace gives the client a buffer over its 6s countdown);
+  // ?dedup stays as long as the flag is set.
+  const FRESH_GRACE_MS = 30_000;
+  const justSaved = url.searchParams.get('just') === '1' && Date.now() - person.createdAt < FRESH_GRACE_MS;
+  const dedup = url.searchParams.get('dedup') === '1';
 
   let company = null;
   if (person.companyId) {
@@ -58,5 +65,5 @@ export const load: PageServerLoad = async ({ locals, params }) => {
     };
   }
 
-  return { person, company, interactions, tags, suggestion };
+  return { person, company, interactions, tags, suggestion, justSaved, dedup };
 };
