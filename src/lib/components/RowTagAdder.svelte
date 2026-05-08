@@ -7,7 +7,7 @@
   type SuggestionTag = { id: string; name: string; slug: string; count?: number };
 
   type Props = {
-    scope: 'person' | 'company' | 'interaction';
+    scope: 'person' | 'company' | 'interaction' | 'project';
     entityId: string;
     currentTags: AttachedTag[];
     suggestions: SuggestionTag[];

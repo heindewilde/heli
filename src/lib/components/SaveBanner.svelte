@@ -4,7 +4,7 @@
   import { toast } from '$lib/toasts.svelte';
 
   type Variant = 'just' | 'dedup';
-  type Kind = 'person' | 'company';
+  type Kind = 'person' | 'company' | 'project';
 
   type Props = {
     variant: Variant;
@@ -38,8 +38,12 @@
     !dismissed && (variant === 'dedup' || (variant === 'just' && !undoExpired))
   );
 
-  const listHref = $derived(kind === 'person' ? '/people' : '/companies');
-  const apiBase = $derived(kind === 'person' ? '/api/people' : '/api/companies');
+  const listHref = $derived(
+    kind === 'person' ? '/people' : kind === 'company' ? '/companies' : '/projects'
+  );
+  const apiBase = $derived(
+    kind === 'person' ? '/api/people' : kind === 'company' ? '/api/companies' : '/api/projects'
+  );
 
   let undoing = $state(false);
 

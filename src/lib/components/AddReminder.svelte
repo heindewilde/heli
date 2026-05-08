@@ -4,7 +4,7 @@
   import { toast } from '$lib/toasts.svelte';
 
   type Props = {
-    kind: 'person' | 'company' | 'interaction';
+    kind: 'person' | 'company' | 'interaction' | 'project';
     refId: string;
   };
 

@@ -18,8 +18,11 @@ export type ManualProjectInput = {
   name: string;
   description?: string | null;
   status?: ProjectStatus;
-  startDate?: number | null;
-  endDate?: number | null;
+  // Dates accept ISO strings (`'2026-05-01'`) or epoch ms — the form path
+  // submits strings, the API path can pass either. Coercion happens in
+  // sanitizeDate.
+  startDate?: number | string | null;
+  endDate?: number | string | null;
   billingType?: BillingType;
   hourlyRate?: number | null;
   fixedFee?: number | null;

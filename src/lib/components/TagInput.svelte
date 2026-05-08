@@ -6,7 +6,7 @@
   type ScopeTag = { id: string; name: string; slug: string; count?: number };
 
   type Props = {
-    scope: 'person' | 'company' | 'interaction';
+    scope: 'person' | 'company' | 'interaction' | 'project';
     entityId: string;
     tags: ScopeTag[];
     suggestions?: ScopeTag[];

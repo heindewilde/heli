@@ -24,6 +24,7 @@ const PROTECTED_PATTERNS = [
   /^\/people(\/|$)/,
   /^\/companies(\/|$)/,
   /^\/interactions(\/|$)/,
+  /^\/projects(\/|$)/,
   /^\/settings(\/|$)/
 ];
 
