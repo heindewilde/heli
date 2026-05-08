@@ -36,6 +36,12 @@
   // svelte-ignore state_referenced_locally
   let nameDraft = $state(person.name);
   let nameInput = $state<HTMLInputElement | undefined>(undefined);
+  // Tracks an in-flight commitName so action buttons (delete/favorite/archive)
+  // can serialize against it. Without this, clicking Delete during a name edit
+  // races: blur commits the rename, click runs delete; the rename then 404s
+  // and toasts a confusing "Update failed".
+  let nameCommitInFlight: Promise<void> | null = $state(null);
+  let deleting = $state(false);
 
   let tagSuggestions = $state<{ id: string; name: string; slug: string; count: number }[]>([]);
 
@@ -57,26 +63,36 @@
   });
 
   async function patch(patch: Record<string, unknown>) {
+    if (nameCommitInFlight) await nameCommitInFlight;
     const res = await fetch(`/api/people/${person.id}`, {
       method: 'PATCH',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify(patch)
     });
     if (!res.ok) {
-      toast.danger('Update failed');
+      // 404 here means a concurrent delete already won — don't add a
+      // confusing "Update failed" on top of the user's intended action.
+      if (!deleting) toast.danger('Update failed');
       return;
     }
-    await invalidateAll();
+    if (!deleting) await invalidateAll();
   }
 
   async function commitName() {
+    // Exit edit mode synchronously so onblur firing during shutdown can't
+    // re-enter this function while the PATCH is in flight.
+    if (!editingName) return;
     const next = nameDraft.trim();
-    if (!next || next === person.name) {
-      editingName = false;
-      return;
-    }
-    await patch({ name: next });
     editingName = false;
+    if (!next || next === person.name) return;
+    nameCommitInFlight = (async () => {
+      try {
+        await patch({ name: next });
+      } finally {
+        nameCommitInFlight = null;
+      }
+    })();
+    await nameCommitInFlight;
   }
 
   function startEditingName() {
@@ -86,9 +102,14 @@
   }
 
   async function del() {
+    // Settle any in-flight rename first so we don't race the delete.
+    if (editingName) await commitName();
+    if (nameCommitInFlight) await nameCommitInFlight;
     if (!confirm(`Delete ${person.name}?`)) return;
+    deleting = true;
     const res = await fetch(`/api/people/${person.id}`, { method: 'DELETE' });
     if (!res.ok) {
+      deleting = false;
       toast.danger('Delete failed');
       return;
     }

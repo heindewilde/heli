@@ -51,28 +51,36 @@
   // svelte-ignore state_referenced_locally
   let nameDraft = $state(company.name);
   let nameInput = $state<HTMLInputElement | undefined>(undefined);
+  let nameCommitInFlight: Promise<void> | null = $state(null);
+  let deleting = $state(false);
 
   async function patch(patch: Record<string, unknown>) {
+    if (nameCommitInFlight) await nameCommitInFlight;
     const res = await fetch(`/api/companies/${company.id}`, {
       method: 'PATCH',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify(patch)
     });
     if (!res.ok) {
-      toast.danger('Update failed');
+      if (!deleting) toast.danger('Update failed');
       return;
     }
-    await invalidateAll();
+    if (!deleting) await invalidateAll();
   }
 
   async function commitName() {
+    if (!editingName) return;
     const next = nameDraft.trim();
-    if (!next || next === company.name) {
-      editingName = false;
-      return;
-    }
-    await patch({ name: next });
     editingName = false;
+    if (!next || next === company.name) return;
+    nameCommitInFlight = (async () => {
+      try {
+        await patch({ name: next });
+      } finally {
+        nameCommitInFlight = null;
+      }
+    })();
+    await nameCommitInFlight;
   }
 
   function startEditingName() {
@@ -82,9 +90,13 @@
   }
 
   async function del() {
+    if (editingName) await commitName();
+    if (nameCommitInFlight) await nameCommitInFlight;
     if (!confirm(`Delete ${company.name}? Linked people will keep their records but lose the link.`)) return;
+    deleting = true;
     const res = await fetch(`/api/companies/${company.id}`, { method: 'DELETE' });
     if (!res.ok) {
+      deleting = false;
       toast.danger('Delete failed');
       return;
     }
