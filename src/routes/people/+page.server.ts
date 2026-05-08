@@ -72,6 +72,40 @@ export const load: PageServerLoad = async ({ locals, url }) => {
       const set = new Set(tagFilterIds);
       items = items.filter((i) => set.has(i.id));
     }
+  } else if (sort === 'lastInteraction') {
+    // Raw SQL because Drizzle's relational query builder doesn't compose well
+    // with the LEFT JOIN + GROUP BY + MAX(occurred_at) we need here. Push
+    // NULLs (no interactions logged) to the bottom and tie-break by createdAt
+    // so the order is deterministic.
+    const userId = locals.user.id;
+    const tagFilter = tagFilterIds
+      ? sql`AND p.id IN (${sql.join(
+          tagFilterIds.map((id) => sql`${id}`),
+          sql`, `
+        )})`
+      : sql``;
+    items = await d.all<{
+      id: string; name: string; role: string | null; companyId: string | null;
+      url: string | null; domain: string | null; avatarUrl: string | null;
+      faviconUrl: string | null; isFavorite: number; isArchived: number;
+      source: string | null; createdAt: number; updatedAt: number;
+    }>(sql`
+      SELECT p.id, p.name, p.role, p.company_id AS companyId, p.url, p.domain,
+             p.avatar_url AS avatarUrl, p.favicon_url AS faviconUrl,
+             p.is_favorite AS isFavorite, p.is_archived AS isArchived,
+             p.source, p.created_at AS createdAt, p.updated_at AS updatedAt,
+             MAX(i.occurred_at) AS lastAt
+      FROM people p
+      LEFT JOIN interaction_people ip ON ip.person_id = p.id
+      LEFT JOIN interactions i ON i.id = ip.interaction_id AND i.user_id = ${userId}
+      WHERE p.user_id = ${userId}
+        ${archived ? sql`` : sql`AND p.is_archived = 0`}
+        ${favorite ? sql`AND p.is_favorite = 1` : sql``}
+        ${tagFilter}
+      GROUP BY p.id
+      ORDER BY (lastAt IS NULL), lastAt DESC, p.created_at DESC
+      LIMIT 200
+    `);
   } else {
     const filters = [eq(people.userId, locals.user.id)];
     if (!archived) filters.push(eq(people.isArchived, 0));

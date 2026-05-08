@@ -2,7 +2,7 @@
   import { goto, invalidateAll } from '$app/navigation';
   import { page } from '$app/state';
   import { onMount } from 'svelte';
-  import { Search, Plus, Star, Archive, Tag, X } from 'lucide-svelte';
+  import { Search, Plus, Star, Archive, Tag, X, ArrowDownUp } from 'lucide-svelte';
   import EntityRow from '$lib/components/EntityRow.svelte';
   import RowTagAdder from '$lib/components/RowTagAdder.svelte';
   import { bindKeys } from '$lib/keyboard.svelte';
@@ -106,6 +106,22 @@
       {data.total}
     </span>
     <div class="ml-auto flex items-center gap-2">
+      <label class="inline-flex items-center gap-1 rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-surface)] pl-2 pr-1 text-xs text-[var(--color-muted)]">
+        <ArrowDownUp size={12} strokeWidth={2} class="text-[var(--color-subtle)]" />
+        <span class="sr-only">Sort by</span>
+        <select
+          value={data.sort}
+          onchange={(e) => goto(buildUrl({ sort: (e.currentTarget as HTMLSelectElement).value }), { replaceState: true, keepFocus: true, noScroll: true })}
+          disabled={!!data.q}
+          class="bg-transparent py-1 pl-1 pr-1 text-xs outline-none disabled:opacity-60"
+          title={data.q ? 'Sort is fixed to relevance while searching' : 'Sort by'}
+        >
+          <option value="recent">Recently added</option>
+          <option value="updated">Recently updated</option>
+          <option value="name">Name</option>
+          <option value="lastInteraction">Last interaction</option>
+        </select>
+      </label>
       <a
         href="/people/new"
         class="inline-flex items-center gap-1 rounded-[var(--radius-sm)] border border-[var(--color-border)] px-3 py-1.5 text-sm hover:bg-[var(--color-surface)]"
