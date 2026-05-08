@@ -1,11 +1,20 @@
 import { error, type RequestHandler } from '@sveltejs/kit';
-import { eq } from 'drizzle-orm';
+import { eq, asc } from 'drizzle-orm';
 import { db } from '$lib/server/db';
-import { people, companies, interactions, interactionPeople } from '$lib/server/schema';
+import {
+  people,
+  companies,
+  interactions,
+  interactionPeople,
+  projects,
+  projectLinks,
+  projectPeople,
+  projectCompanies
+} from '$lib/server/schema';
 import { csvStream, isoDate } from '$lib/server/csv';
 import { getTagsForEntities } from '$lib/server/tags';
 
-const KINDS = ['people', 'companies', 'interactions'] as const;
+const KINDS = ['people', 'companies', 'interactions', 'projects'] as const;
 type Kind = (typeof KINDS)[number];
 
 function isKind(v: string | null): v is Kind {
@@ -111,7 +120,7 @@ export const GET: RequestHandler = async ({ url, locals }) => {
         isoDate(c.updatedAt)
       ]
     });
-  } else {
+  } else if (kind === 'interactions') {
     const rows = await d
       .select()
       .from(interactions)
@@ -157,6 +166,93 @@ export const GET: RequestHandler = async ({ url, locals }) => {
         (tagMap.get(i.id) ?? []).map((t) => t.name).join('|'),
         isoDate(i.createdAt),
         isoDate(i.updatedAt)
+      ]
+    });
+  } else {
+    // projects
+    const rows = await d
+      .select()
+      .from(projects)
+      .where(eq(projects.userId, userId));
+    const ids = rows.map((r) => r.id);
+    const tagMap = await getTagsForEntities(userId, region, 'project', ids);
+
+    // Sub-resources fetched in parallel; the empty-id-array case still works
+    // because the IN clause naturally returns nothing.
+    const [linkRows, peopleLinks, companyLinks] = ids.length
+      ? await Promise.all([
+          d
+            .select({ projectId: projectLinks.projectId, url: projectLinks.url, label: projectLinks.label })
+            .from(projectLinks)
+            .orderBy(asc(projectLinks.createdAt)),
+          d
+            .select({ projectId: projectPeople.projectId, personId: projectPeople.personId })
+            .from(projectPeople),
+          d
+            .select({ projectId: projectCompanies.projectId, companyId: projectCompanies.companyId })
+            .from(projectCompanies)
+        ])
+      : [[], [], []];
+
+    const linksByProject = new Map<string, string[]>();
+    for (const l of linkRows) {
+      const list = linksByProject.get(l.projectId) ?? [];
+      // url|label pair, label may be empty. Split per-pair on |, pairs joined by ;
+      list.push(`${l.url}|${l.label ?? ''}`);
+      linksByProject.set(l.projectId, list);
+    }
+    const peopleByProject = new Map<string, string[]>();
+    for (const l of peopleLinks) {
+      const list = peopleByProject.get(l.projectId) ?? [];
+      list.push(l.personId);
+      peopleByProject.set(l.projectId, list);
+    }
+    const companiesByProject = new Map<string, string[]>();
+    for (const l of companyLinks) {
+      const list = companiesByProject.get(l.projectId) ?? [];
+      list.push(l.companyId);
+      companiesByProject.set(l.projectId, list);
+    }
+
+    stream = csvStream({
+      header: [
+        'id',
+        'name',
+        'description',
+        'status',
+        'start_date',
+        'end_date',
+        'billing_type',
+        'hourly_rate_cents',
+        'fixed_fee_cents',
+        'currency',
+        'next_step',
+        'person_ids',
+        'company_ids',
+        'links',
+        'tags',
+        'created_at',
+        'updated_at'
+      ],
+      rows,
+      toRow: (p) => [
+        p.id,
+        p.name,
+        p.description ?? '',
+        p.status,
+        isoDate(p.startDate),
+        isoDate(p.endDate),
+        p.billingType,
+        p.hourlyRate ?? '',
+        p.fixedFee ?? '',
+        p.currency ?? '',
+        p.nextStep ?? '',
+        (peopleByProject.get(p.id) ?? []).join('|'),
+        (companiesByProject.get(p.id) ?? []).join('|'),
+        (linksByProject.get(p.id) ?? []).join(';'),
+        (tagMap.get(p.id) ?? []).map((t) => t.name).join('|'),
+        isoDate(p.createdAt),
+        isoDate(p.updatedAt)
       ]
     });
   }

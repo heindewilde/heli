@@ -22,28 +22,33 @@ export function ftsQuery(input: string): string | null {
 }
 
 export type CommandHit = {
-  kind: 'person' | 'company' | 'interaction';
+  kind: 'person' | 'company' | 'interaction' | 'project';
   id: string;
   title: string;
   sub: string | null;
   href: string;
 };
 
-export type CommandScope = 'person' | 'company' | 'interaction';
+export type CommandScope = 'person' | 'company' | 'interaction' | 'project';
 
-const SCOPE_PREFIX_RE = /^(p|c|i):\s*(.*)$/i;
+// `pr:` MUST be checked before `p:` — otherwise "pr:foo" parses as scope=person
+// query="r:foo". Order in the regex's alternation matters because the regex
+// engine tries left-to-right.
+const SCOPE_PREFIX_RE = /^(pr|p|c|i):\s*(.*)$/i;
 
 const SCOPE_FROM_LETTER: Record<string, CommandScope> = {
   p: 'person',
   c: 'company',
-  i: 'interaction'
+  i: 'interaction',
+  pr: 'project'
 };
 
 /**
  * Parse the cmd-K input. Recognised prefixes:
- *   p:foo  → search people only
- *   c:foo  → search companies only
- *   i:foo  → search interactions only
+ *   p:foo   → search people only
+ *   c:foo   → search companies only
+ *   i:foo   → search interactions only
+ *   pr:foo  → search projects only
  *
  * Returns the matched scope (if any) and the remaining query text. The
  * client uses the same regex purely for a visual indicator; the source of
@@ -73,8 +78,9 @@ export async function searchAll(
   const wantPeople = !scope || scope === 'person';
   const wantCompanies = !scope || scope === 'company';
   const wantInteractions = !scope || scope === 'interaction';
+  const wantProjects = !scope || scope === 'project';
 
-  const [peopleRows, companyRows, interactionRows] = await Promise.all([
+  const [peopleRows, companyRows, interactionRows, projectRows] = await Promise.all([
     wantPeople
       ? d.all<{ id: string; name: string; role: string | null; domain: string | null }>(sql`
           SELECT p.id, p.name, p.role, p.domain
@@ -104,7 +110,19 @@ export async function searchAll(
           ORDER BY rank
           LIMIT ${scope === 'interaction' ? SCOPED_LIMIT : perKind}
         `)
-      : Promise.resolve([] as { id: string; title: string; type: string; occurredAt: number }[])
+      : Promise.resolve([] as { id: string; title: string; type: string; occurredAt: number }[]),
+    wantProjects
+      ? d.all<{ id: string; name: string; status: string; description: string | null }>(sql`
+          SELECT p.id, p.name, p.status, p.description
+          FROM projects p
+          JOIN projects_fts f ON f.rowid = p.rowid
+          WHERE p.user_id = ${userId}
+            AND f.projects_fts MATCH ${fts}
+            AND p.status != 'archived'
+          ORDER BY rank
+          LIMIT ${scope === 'project' ? SCOPED_LIMIT : perKind}
+        `)
+      : Promise.resolve([] as { id: string; name: string; status: string; description: string | null }[])
   ]);
 
   const hits: CommandHit[] = [];
@@ -134,6 +152,15 @@ export async function searchAll(
       title: i.title,
       sub: `${i.type} · ${when}`,
       href: `/interactions/${i.id}`
+    });
+  }
+  for (const p of projectRows) {
+    hits.push({
+      kind: 'project',
+      id: p.id,
+      title: p.name,
+      sub: p.status === 'paused' ? 'paused' : p.description,
+      href: `/projects/${p.id}`
     });
   }
   return hits;
