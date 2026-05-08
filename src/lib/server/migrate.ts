@@ -136,6 +136,62 @@ CREATE TABLE IF NOT EXISTS reminders (
   created_at INTEGER NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_reminders_user_at ON reminders(user_id, remind_at);
+
+CREATE TABLE IF NOT EXISTS projects (
+  id TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  name TEXT NOT NULL,
+  description TEXT,
+  status TEXT NOT NULL DEFAULT 'active',
+  start_date INTEGER,
+  end_date INTEGER,
+  billing_type TEXT NOT NULL DEFAULT 'none',
+  hourly_rate INTEGER,
+  fixed_fee INTEGER,
+  currency TEXT,
+  next_step TEXT,
+  created_at INTEGER NOT NULL,
+  updated_at INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_projects_user_status ON projects(user_id, status);
+CREATE INDEX IF NOT EXISTS idx_projects_user_end ON projects(user_id, end_date);
+CREATE INDEX IF NOT EXISTS idx_projects_user_updated ON projects(user_id, updated_at);
+
+CREATE TABLE IF NOT EXISTS project_links (
+  id TEXT PRIMARY KEY,
+  project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+  url TEXT NOT NULL,
+  label TEXT,
+  created_at INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_project_links_project ON project_links(project_id);
+
+CREATE TABLE IF NOT EXISTS project_people (
+  project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+  person_id TEXT NOT NULL REFERENCES people(id) ON DELETE CASCADE,
+  PRIMARY KEY (project_id, person_id)
+);
+CREATE INDEX IF NOT EXISTS idx_pp_person ON project_people(person_id);
+
+CREATE TABLE IF NOT EXISTS project_companies (
+  project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+  company_id TEXT NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
+  PRIMARY KEY (project_id, company_id)
+);
+CREATE INDEX IF NOT EXISTS idx_pc_company ON project_companies(company_id);
+
+CREATE TABLE IF NOT EXISTS interaction_projects (
+  interaction_id TEXT NOT NULL REFERENCES interactions(id) ON DELETE CASCADE,
+  project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+  PRIMARY KEY (interaction_id, project_id)
+);
+CREATE INDEX IF NOT EXISTS idx_ip_project ON interaction_projects(project_id);
+
+CREATE TABLE IF NOT EXISTS project_tags (
+  project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+  tag_id TEXT NOT NULL REFERENCES tags(id) ON DELETE CASCADE,
+  PRIMARY KEY (project_id, tag_id)
+);
 `;
 
 const FTS = `
@@ -196,6 +252,26 @@ CREATE TRIGGER IF NOT EXISTS interactions_au AFTER UPDATE ON interactions BEGIN
   INSERT INTO interactions_fts(rowid, title, body)
   VALUES (new.rowid, new.title, COALESCE(new.body,''));
 END;
+
+CREATE VIRTUAL TABLE IF NOT EXISTS projects_fts USING fts5(
+  name, description, next_step,
+  content='projects', content_rowid='rowid', tokenize='unicode61'
+);
+
+CREATE TRIGGER IF NOT EXISTS projects_ai AFTER INSERT ON projects BEGIN
+  INSERT INTO projects_fts(rowid, name, description, next_step)
+  VALUES (new.rowid, new.name, COALESCE(new.description,''), COALESCE(new.next_step,''));
+END;
+CREATE TRIGGER IF NOT EXISTS projects_ad AFTER DELETE ON projects BEGIN
+  INSERT INTO projects_fts(projects_fts, rowid, name, description, next_step)
+  VALUES('delete', old.rowid, old.name, COALESCE(old.description,''), COALESCE(old.next_step,''));
+END;
+CREATE TRIGGER IF NOT EXISTS projects_au AFTER UPDATE ON projects BEGIN
+  INSERT INTO projects_fts(projects_fts, rowid, name, description, next_step)
+  VALUES('delete', old.rowid, old.name, COALESCE(old.description,''), COALESCE(old.next_step,''));
+  INSERT INTO projects_fts(rowid, name, description, next_step)
+  VALUES (new.rowid, new.name, COALESCE(new.description,''), COALESCE(new.next_step,''));
+END;
 `;
 
 async function execMany(c: Client, sql: string) {
@@ -223,7 +299,7 @@ async function applyAlters(c: Client) {
 
 async function rebuildFts(c: Client) {
   // Cheap and idempotent: only rebuild if FTS tables look out of sync with the source table.
-  for (const name of ['people', 'companies', 'interactions']) {
+  for (const name of ['people', 'companies', 'interactions', 'projects']) {
     const src = await c.execute(`SELECT COUNT(*) AS n FROM ${name}`);
     const fts = await c.execute(`SELECT COUNT(*) AS n FROM ${name}_fts`);
     const a = Number(src.rows[0]?.n ?? 0);

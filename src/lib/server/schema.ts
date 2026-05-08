@@ -205,6 +205,108 @@ export const reminders = sqliteTable(
   (t) => [index('idx_reminders_user_at').on(t.userId, t.remindAt)]
 );
 
+export const projects = sqliteTable(
+  'projects',
+  {
+    id: text('id').primaryKey(),
+    userId: text('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    name: text('name').notNull(),
+    description: text('description'),
+    status: text('status').notNull().default('active'),
+    startDate: integer('start_date'),
+    endDate: integer('end_date'),
+    billingType: text('billing_type').notNull().default('none'),
+    hourlyRate: integer('hourly_rate'),
+    fixedFee: integer('fixed_fee'),
+    currency: text('currency'),
+    nextStep: text('next_step'),
+    createdAt: integer('created_at').notNull(),
+    updatedAt: integer('updated_at').notNull()
+  },
+  (t) => [
+    index('idx_projects_user_status').on(t.userId, t.status),
+    index('idx_projects_user_end').on(t.userId, t.endDate),
+    index('idx_projects_user_updated').on(t.userId, t.updatedAt)
+  ]
+);
+
+export const projectLinks = sqliteTable(
+  'project_links',
+  {
+    id: text('id').primaryKey(),
+    projectId: text('project_id')
+      .notNull()
+      .references(() => projects.id, { onDelete: 'cascade' }),
+    url: text('url').notNull(),
+    label: text('label'),
+    createdAt: integer('created_at').notNull()
+  },
+  (t) => [index('idx_project_links_project').on(t.projectId)]
+);
+
+export const projectPeople = sqliteTable(
+  'project_people',
+  {
+    projectId: text('project_id')
+      .notNull()
+      .references(() => projects.id, { onDelete: 'cascade' }),
+    personId: text('person_id')
+      .notNull()
+      .references(() => people.id, { onDelete: 'cascade' })
+  },
+  (t) => [
+    primaryKey({ columns: [t.projectId, t.personId] }),
+    index('idx_pp_person').on(t.personId)
+  ]
+);
+
+export const projectCompanies = sqliteTable(
+  'project_companies',
+  {
+    projectId: text('project_id')
+      .notNull()
+      .references(() => projects.id, { onDelete: 'cascade' }),
+    companyId: text('company_id')
+      .notNull()
+      .references(() => companies.id, { onDelete: 'cascade' })
+  },
+  (t) => [
+    primaryKey({ columns: [t.projectId, t.companyId] }),
+    index('idx_pc_company').on(t.companyId)
+  ]
+);
+
+export const interactionProjects = sqliteTable(
+  'interaction_projects',
+  {
+    interactionId: text('interaction_id')
+      .notNull()
+      .references(() => interactions.id, { onDelete: 'cascade' }),
+    projectId: text('project_id')
+      .notNull()
+      .references(() => projects.id, { onDelete: 'cascade' })
+  },
+  (t) => [
+    primaryKey({ columns: [t.interactionId, t.projectId] }),
+    index('idx_ip_project').on(t.projectId)
+  ]
+);
+
+export const projectTags = sqliteTable(
+  'project_tags',
+  {
+    projectId: text('project_id')
+      .notNull()
+      .references(() => projects.id, { onDelete: 'cascade' }),
+    tagId: text('tag_id')
+      .notNull()
+      .references(() => tags.id, { onDelete: 'cascade' })
+  },
+  (t) => [primaryKey({ columns: [t.projectId, t.tagId] })]
+);
+
 export type User = typeof users.$inferSelect;
 export type Session = typeof sessions.$inferSelect;
 export type Person = typeof people.$inferSelect;
@@ -212,8 +314,15 @@ export type Company = typeof companies.$inferSelect;
 export type Interaction = typeof interactions.$inferSelect;
 export type Tag = typeof tags.$inferSelect;
 export type Reminder = typeof reminders.$inferSelect;
+export type Project = typeof projects.$inferSelect;
+export type ProjectLink = typeof projectLinks.$inferSelect;
 
-export const TAG_SCOPES = ['person', 'company', 'interaction'] as const;
+export const TAG_SCOPES = ['person', 'company', 'interaction', 'project'] as const;
 export type TagScope = (typeof TAG_SCOPES)[number];
-export const REMINDER_KINDS = ['person', 'company', 'interaction'] as const;
+export const REMINDER_KINDS = ['person', 'company', 'interaction', 'project'] as const;
 export type ReminderKind = (typeof REMINDER_KINDS)[number];
+
+export const PROJECT_STATUSES = ['active', 'paused', 'archived'] as const;
+export type ProjectStatus = (typeof PROJECT_STATUSES)[number];
+export const BILLING_TYPES = ['none', 'hourly', 'fixed'] as const;
+export type BillingType = (typeof BILLING_TYPES)[number];

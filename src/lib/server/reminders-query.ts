@@ -1,6 +1,6 @@
 import { and, asc, eq, inArray } from 'drizzle-orm';
 import { db } from './db';
-import { reminders, people, companies, interactions, type ReminderKind } from './schema';
+import { reminders, people, companies, interactions, projects, type ReminderKind } from './schema';
 
 export type ReminderRow = {
   id: string;
@@ -59,6 +59,14 @@ export async function listReminders(
       .from(interactions)
       .where(and(eq(interactions.userId, userId), inArray(interactions.id, interactionIds)));
     for (const i of is) labels.set(`interaction:${i.id}`, { label: i.title, href: `/interactions/${i.id}` });
+  }
+  const projectIds = groups.get('project') ?? [];
+  if (projectIds.length) {
+    const ps = await d
+      .select({ id: projects.id, name: projects.name })
+      .from(projects)
+      .where(and(eq(projects.userId, userId), inArray(projects.id, projectIds)));
+    for (const p of ps) labels.set(`project:${p.id}`, { label: p.name, href: `/projects/${p.id}` });
   }
 
   return rows.map((r) => {
