@@ -13,3 +13,4 @@ data
 .vscode
 .idea
 graphify-out
+.claude/settings.local.json
