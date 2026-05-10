@@ -24,17 +24,21 @@ export function isInteractionType(v: unknown): v is InteractionType {
   return typeof v === 'string' && (INTERACTION_TYPES as readonly string[]).includes(v);
 }
 
+// Interaction tones are deliberately quiet. The icon carries the type;
+// color is a faint accent, not a banner. Synchronous/realtime modes
+// (call, meeting, event) share the warmer info hue; async (email, dm,
+// note) sit on the muted-text family so they blend into the timeline.
 export const TYPE_META: Record<
   InteractionType,
   { label: string; icon: typeof Phone; tone: string }
 > = {
   call: { label: 'Call', icon: Phone, tone: 'text-[var(--color-info)]' },
-  email: { label: 'Email', icon: Mail, tone: 'text-[var(--color-info)]' },
-  meeting: { label: 'Meeting', icon: Users, tone: 'text-[var(--color-product)]' },
-  dm: { label: 'DM', icon: MessageSquare, tone: 'text-[var(--color-product)]' },
+  email: { label: 'Email', icon: Mail, tone: 'text-[var(--color-muted)]' },
+  meeting: { label: 'Meeting', icon: Users, tone: 'text-[var(--color-info)]' },
+  dm: { label: 'DM', icon: MessageSquare, tone: 'text-[var(--color-muted)]' },
   event: { label: 'Event', icon: Calendar, tone: 'text-[var(--color-warning)]' },
-  note: { label: 'Note', icon: StickyNote, tone: 'text-[var(--color-success)]' },
-  other: { label: 'Other', icon: Sparkle, tone: 'text-[var(--color-muted)]' }
+  note: { label: 'Note', icon: StickyNote, tone: 'text-[var(--color-muted)]' },
+  other: { label: 'Other', icon: Sparkle, tone: 'text-[var(--color-subtle)]' }
 };
 
 export function dayBucket(ts: number, today = new Date()): { key: string; label: string } {

@@ -109,7 +109,7 @@
             <button
               type="button"
               onmousedown={(e) => { e.preventDefault(); pick(c); }}
-              class="flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm {i === highlight ? 'bg-[var(--color-product-bg)]' : 'hover:bg-[var(--color-bg)]'}"
+              class="flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm {i === highlight ? 'bg-[var(--color-highlight-bg)]' : 'hover:bg-[var(--color-bg)]'}"
             >
               <span class="flex h-6 w-6 items-center justify-center overflow-hidden rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-bg)] text-[10px]">
                 {#if c.logoUrl || c.faviconUrl}

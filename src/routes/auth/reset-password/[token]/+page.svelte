@@ -27,7 +27,7 @@
 
     <button
       type="submit"
-      class="rounded-[var(--radius-sm)] bg-[var(--color-product)] px-3 py-2 text-sm font-medium text-white"
+      class="rounded-[var(--radius-sm)] bg-[var(--color-accent)] transition-colors hover:bg-[var(--color-accent-hover)] px-3 py-2 text-sm font-medium text-[var(--color-accent-fg)]"
     >Update password</button>
   </form>
 

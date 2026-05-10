@@ -83,13 +83,13 @@
       <Tag size={12} strokeWidth={2} />
     </span>
     {#each tags as t (t.id)}
-      <span class="inline-flex items-center gap-1 rounded-full bg-[var(--color-product-bg)] py-0.5 pl-2 pr-0.5 text-xs text-[var(--color-product)]">
+      <span class="inline-flex items-center gap-1 rounded-full bg-[var(--color-highlight-bg)] py-0.5 pl-2 pr-0.5 text-xs text-[var(--color-text)]">
         <span class="font-medium">{t.name}</span>
         <button
           type="button"
           onclick={() => remove(t.id)}
           aria-label="Remove {t.name}"
-          class="rounded-full p-0.5 hover:bg-[var(--color-product-border)]"
+          class="rounded-full p-0.5 hover:bg-[var(--color-highlight-border)]"
         ><X size={10} strokeWidth={2} /></button>
       </span>
     {/each}
@@ -126,7 +126,7 @@
             <button
               type="button"
               onmousedown={(e) => { e.preventDefault(); addByName(q); }}
-              class="flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs text-[var(--color-product)] hover:bg-[var(--color-bg)]"
+              class="flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs text-[var(--color-text)] hover:bg-[var(--color-bg)]"
             >
               Create &ldquo;{q.trim()}&rdquo;
             </button>

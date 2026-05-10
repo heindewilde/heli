@@ -130,7 +130,7 @@
 
 <article class="flex flex-col gap-4">
   {#if data.justSaved}
-    <div class="rounded-[var(--radius-sm)] border border-[var(--color-product-border)] bg-[var(--color-product-bg)] px-3 py-2 text-sm text-[var(--color-product)]">
+    <div class="rounded-[var(--radius-sm)] border border-[var(--color-highlight-border)] bg-[var(--color-highlight-bg)] px-3 py-2 text-sm text-[var(--color-text)]">
       Saved &ldquo;{pipeline.name}&rdquo;. Add people or companies to start populating stages.
     </div>
   {/if}
@@ -175,13 +175,13 @@
           type="button"
           onclick={() => setView('kanban')}
           title="Kanban view"
-          class="inline-flex items-center gap-1 px-2 py-1.5 text-xs {view === 'kanban' ? 'bg-[var(--color-product-bg)] text-[var(--color-product)]' : 'text-[var(--color-muted)] hover:bg-[var(--color-surface)]'}"
+          class="inline-flex items-center gap-1 px-2 py-1.5 text-xs {view === 'kanban' ? 'bg-[var(--color-highlight-bg)] text-[var(--color-text)]' : 'text-[var(--color-muted)] hover:bg-[var(--color-surface)]'}"
         ><LayoutGrid size={12} strokeWidth={2} /> Kanban</button>
         <button
           type="button"
           onclick={() => setView('list')}
           title="List view"
-          class="inline-flex items-center gap-1 px-2 py-1.5 text-xs {view === 'list' ? 'bg-[var(--color-product-bg)] text-[var(--color-product)]' : 'text-[var(--color-muted)] hover:bg-[var(--color-surface)]'}"
+          class="inline-flex items-center gap-1 px-2 py-1.5 text-xs {view === 'list' ? 'bg-[var(--color-highlight-bg)] text-[var(--color-text)]' : 'text-[var(--color-muted)] hover:bg-[var(--color-surface)]'}"
         ><ListIcon size={12} strokeWidth={2} /> List</button>
       </div>
       <button

@@ -38,8 +38,8 @@
     <p class="text-sm text-[var(--color-muted)]">
       Paste a profile or website link in the search bar above. {APP_NAME} classifies and enriches it in the background — no forms, no fields to fill in first.
     </p>
-    <p class="hidden items-center gap-1 text-xs text-[var(--color-product)] sm:flex">
-      <ArrowUp size={12} strokeWidth={2} class="-mt-px" />
+    <p class="hidden items-center gap-1 text-xs font-medium text-[var(--color-text)] sm:flex">
+      <ArrowUp size={12} strokeWidth={2.25} class="-mt-px" />
       Drop a link up there.
     </p>
   </header>
@@ -52,7 +52,7 @@
         <a
           href={`/save?url=${encodeURIComponent(t.url)}`}
           data-sveltekit-preload-data="off"
-          class="flex flex-col gap-1 rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)] px-4 py-3 text-left transition-colors hover:border-[var(--color-product-border)] hover:bg-[var(--color-product-bg)]"
+          class="group flex flex-col gap-1 rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)] px-4 py-3 text-left shadow-[var(--shadow-xs)] transition-all hover:-translate-y-px hover:border-[var(--color-border-strong)] hover:shadow-[var(--shadow-sm)]"
         >
           <span class="flex items-center gap-2 text-sm font-medium">
             <Icon size={14} strokeWidth={2} class="text-[var(--color-muted)]" />
@@ -92,7 +92,7 @@
         <span class="min-w-0 flex-1">
           <span class="font-medium">Drag the bookmarklet to save from any tab</span>
           <span class="block text-xs text-[var(--color-muted)]">
-            <a href="/settings" class="text-[var(--color-product)] hover:underline">Settings → Bookmarklet</a> has a one-click setup.
+            <a href="/settings" class="font-medium text-[var(--color-text)] underline decoration-[var(--color-border-strong)] underline-offset-2 hover:decoration-[var(--color-accent)]">Settings → Bookmarklet</a> has a one-click setup.
           </span>
         </span>
       </li>

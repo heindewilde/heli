@@ -123,7 +123,7 @@
       </label>
       <a
         href="/collections/new"
-        class="inline-flex items-center gap-1 rounded-[var(--radius-sm)] bg-[var(--color-product)] px-3 py-1.5 text-sm font-medium text-white"
+        class="inline-flex items-center gap-1 rounded-[var(--radius-sm)] bg-[var(--color-accent)] transition-colors hover:bg-[var(--color-accent-hover)] px-3 py-1.5 text-sm font-medium text-[var(--color-accent-fg)]"
       >
         <Plus size={14} strokeWidth={2} />
         New collection
@@ -150,7 +150,7 @@
       <a
         href={buildUrl({ archived: f.value === 'active' ? null : f.value })}
         class="rounded-full border px-2.5 py-1 {data.archived === f.value
-          ? 'border-[var(--color-product-border)] bg-[var(--color-product-bg)] text-[var(--color-product)]'
+          ? 'border-[var(--color-highlight-border)] bg-[var(--color-highlight-bg)] text-[var(--color-text)]'
           : 'border-[var(--color-border)] text-[var(--color-muted)] hover:bg-[var(--color-surface)]'}"
       >{f.label}</a>
     {/each}
@@ -166,7 +166,7 @@
         <p class="text-sm text-[var(--color-muted)]">No collections yet — group people and companies into named lists.</p>
         <a
           href="/collections/new"
-          class="mt-3 inline-flex items-center gap-1 rounded-[var(--radius-sm)] bg-[var(--color-product)] px-3 py-1.5 text-sm font-medium text-white"
+          class="mt-3 inline-flex items-center gap-1 rounded-[var(--radius-sm)] bg-[var(--color-accent)] transition-colors hover:bg-[var(--color-accent-hover)] px-3 py-1.5 text-sm font-medium text-[var(--color-accent-fg)]"
         ><Plus size={14} strokeWidth={2} /> New collection</a>
       {/if}
     </div>

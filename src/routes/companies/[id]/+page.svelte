@@ -285,7 +285,7 @@
               <li>
                 <a
                   href={`/projects/${p.id}`}
-                  class="group flex items-center gap-2 rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 hover:border-[var(--color-product-border)]"
+                  class="group flex items-center gap-2 rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 hover:border-[var(--color-highlight-border)]"
                 >
                   <FolderKanban size={14} strokeWidth={2} class="shrink-0 text-[var(--color-muted)]" />
                   <span class="min-w-0 flex-1 truncate text-sm font-medium">{p.name}</span>

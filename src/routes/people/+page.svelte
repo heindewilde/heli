@@ -158,9 +158,9 @@
     </a>
     <a
       href={buildUrl({ archived: !data.archived, favorite: data.favorite, tag: data.tag?.slug ?? null })}
-      class="inline-flex items-center gap-1 rounded-full border px-2.5 py-1 {data.archived
-        ? 'border-[var(--color-product-border)] bg-[var(--color-product-bg)] text-[var(--color-product)]'
-        : 'border-[var(--color-border)] text-[var(--color-muted)]'}"
+      class="inline-flex items-center gap-1 rounded-full border px-2.5 py-1 transition-colors {data.archived
+        ? 'border-[var(--color-border-strong)] bg-[var(--color-highlight-bg)] text-[var(--color-text)]'
+        : 'border-[var(--color-border)] text-[var(--color-muted)] hover:text-[var(--color-text)]'}"
     >
       <Archive size={12} strokeWidth={2} />
       Archived
@@ -168,7 +168,7 @@
     {#if data.tag}
       <a
         href={buildUrl({ tag: null })}
-        class="inline-flex items-center gap-1 rounded-full border border-[var(--color-product-border)] bg-[var(--color-product-bg)] px-2.5 py-1 text-[var(--color-product)]"
+        class="inline-flex items-center gap-1 rounded-full border border-[var(--color-border-strong)] bg-[var(--color-highlight-bg)] px-2.5 py-1 text-[var(--color-text)] transition-colors hover:bg-[var(--color-surface-2)]"
       >
         <Tag size={12} strokeWidth={2} />
         {data.tag.name}
@@ -202,7 +202,7 @@
         <p class="text-sm text-[var(--color-muted)]">Paste a profile link in the topbar to save your first person.</p>
         <a
           href="/people/new"
-          class="mt-3 inline-flex items-center gap-1 rounded-[var(--radius-sm)] bg-[var(--color-product)] px-3 py-1.5 text-sm font-medium text-white"
+          class="mt-3 inline-flex items-center gap-1 rounded-[var(--radius-sm)] bg-[var(--color-accent)] transition-colors hover:bg-[var(--color-accent-hover)] px-3 py-1.5 text-sm font-medium text-[var(--color-accent-fg)]"
         ><Plus size={14} strokeWidth={2} /> Add manually</a>
       {/if}
     </div>
@@ -229,7 +229,7 @@
             {#each personTags as t (t.id)}
               <a
                 href={buildUrl({ tag: t.slug })}
-                class="rounded-full bg-[var(--color-product-bg)] px-1.5 py-0.5 text-[10px] text-[var(--color-product)] hover:underline"
+                class="rounded-full border border-[var(--color-border)] bg-[var(--color-surface-2)] px-1.5 py-0.5 text-[10px] text-[var(--color-muted)] transition-colors hover:border-[var(--color-border-strong)] hover:text-[var(--color-text)]"
               >{t.name}</a>
             {/each}
             <RowTagAdder

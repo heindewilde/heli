@@ -27,7 +27,7 @@
   href={`/interactions/${id}`}
   data-interaction-row
   class="flex items-start gap-3 rounded-[var(--radius-md)] border px-3 py-2 transition-colors {selected
-    ? 'border-[var(--color-product-border)] bg-[var(--color-product-bg)]'
+    ? 'border-[var(--color-highlight-border)] bg-[var(--color-highlight-bg)]'
     : 'border-transparent hover:bg-[var(--color-surface)]'}"
 >
   <span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-[var(--color-border)] bg-[var(--color-surface)]">

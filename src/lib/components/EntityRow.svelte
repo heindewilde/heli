@@ -46,7 +46,7 @@
   {href}
   data-entity-row
   class="group relative flex items-center gap-3 rounded-[var(--radius-md)] border border-transparent px-3 py-2 transition-colors hover:bg-[var(--color-surface)] {selected
-    ? 'border-[var(--color-product-border)] bg-[var(--color-product-bg)]'
+    ? 'border-[var(--color-highlight-border)] bg-[var(--color-highlight-bg)]'
     : ''} {isArchived ? 'opacity-60' : ''}"
 >
   <span class="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-full border border-[var(--color-border)] bg-[var(--color-surface)] text-xs font-medium text-[var(--color-muted)]">

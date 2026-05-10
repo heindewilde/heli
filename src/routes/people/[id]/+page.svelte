@@ -279,7 +279,7 @@
   </header>
 
   {#if suggestion}
-    <aside class="flex items-start gap-3 rounded-[var(--radius-md)] border border-[var(--color-product-border)] bg-[var(--color-product-bg)] px-3 py-2 text-sm text-[var(--color-product)]">
+    <aside class="flex items-start gap-3 rounded-[var(--radius-md)] border border-[var(--color-highlight-border)] bg-[var(--color-highlight-bg)] px-3 py-2 text-sm text-[var(--color-text)]">
       <Sparkles size={14} strokeWidth={2} class="mt-0.5 shrink-0" />
       <div class="min-w-0 flex-1">
         <p>
@@ -297,12 +297,12 @@
         <button
           type="button"
           onclick={linkSuggestedCompany}
-          class="rounded-[var(--radius-sm)] bg-[var(--color-product)] px-2 py-1 text-xs font-medium text-white"
+          class="rounded-[var(--radius-sm)] bg-[var(--color-accent)] transition-colors hover:bg-[var(--color-accent-hover)] px-2 py-1 text-xs font-medium text-[var(--color-accent-fg)]"
         >{suggestion.matchId ? 'Link company' : 'Add company'}</button>
         <button
           type="button"
           onclick={dismissSuggestion}
-          class="rounded-[var(--radius-sm)] px-2 py-1 text-xs text-[var(--color-product)] hover:bg-[var(--color-product-border)]"
+          class="rounded-[var(--radius-sm)] px-2 py-1 text-xs text-[var(--color-text)] hover:bg-[var(--color-highlight-border)]"
         >Dismiss</button>
       </div>
     </aside>
@@ -356,14 +356,14 @@
           {#if company && data.projectsTogether.length > 0}
             <div class="flex items-center gap-2">
               <h2 class="text-sm font-medium text-[var(--color-muted)]">Together at {company.name}</h2>
-              <span class="rounded-full bg-[var(--color-product-bg)] px-1.5 py-0.5 text-[10px] text-[var(--color-product)]">{data.projectsTogether.length}</span>
+              <span class="rounded-full bg-[var(--color-highlight-bg)] px-1.5 py-0.5 text-[10px] text-[var(--color-text)]">{data.projectsTogether.length}</span>
             </div>
             <ul class="flex flex-col gap-1">
               {#each data.projectsTogether as p (p.id)}
                 <li>
                   <a
                     href={`/projects/${p.id}`}
-                    class="group flex items-center gap-2 rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 hover:border-[var(--color-product-border)]"
+                    class="group flex items-center gap-2 rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 hover:border-[var(--color-highlight-border)]"
                   >
                     <FolderKanban size={14} strokeWidth={2} class="shrink-0 text-[var(--color-muted)]" />
                     <span class="min-w-0 flex-1 truncate text-sm font-medium">{p.name}</span>

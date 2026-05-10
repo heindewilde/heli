@@ -6,6 +6,7 @@
   import CommandPalette from '$lib/components/CommandPalette.svelte';
   import ShortcutHelp from '$lib/components/ShortcutHelp.svelte';
   import RemindersPopover from '$lib/components/RemindersPopover.svelte';
+  import BrandMark from '$lib/components/BrandMark.svelte';
   import { Users, Building2, MessagesSquare, FolderKanban, FolderOpen, GitBranch, LogOut, Search, HelpCircle, Settings, Menu, X } from 'lucide-svelte';
   import { page } from '$app/state';
   import { onMount } from 'svelte';
@@ -94,7 +95,7 @@
 </script>
 
 <div class="min-h-screen bg-[var(--color-bg)] text-[var(--color-text)]">
-  <header class="sticky top-0 z-30 flex h-14 items-center gap-3 border-b border-[var(--color-border)] bg-[var(--color-bg)] px-4">
+  <header class="sticky top-0 z-30 flex h-14 items-center gap-3 border-b border-[var(--color-border)] bg-[color-mix(in_srgb,var(--color-bg)_88%,transparent)] px-4 backdrop-blur supports-[backdrop-filter]:bg-[color-mix(in_srgb,var(--color-bg)_72%,transparent)]">
     {#if user}
       <button
         type="button"
@@ -107,7 +108,7 @@
       </button>
     {/if}
     <a href="/" class="flex items-center gap-2 font-semibold tracking-tight">
-      <span class="inline-block h-6 w-6 rounded-[var(--radius-sm)] bg-[var(--color-product)]"></span>
+      <BrandMark size={22} />
       <span class="hidden sm:inline">{APP_NAME}</span>
     </a>
     {#if user}
@@ -115,43 +116,47 @@
         <SaveBar bind:this={saveBar} />
       </div>
     {/if}
-    <div class="ml-auto flex items-center gap-2 sm:gap-3">
+    <div class="ml-auto flex items-center gap-1 sm:gap-2">
       {#if user}
         <button
           type="button"
           onclick={() => (paletteOpen = true)}
-          title="Search (cmd+K)"
-          class="hidden items-center gap-1 rounded-[var(--radius-sm)] border border-[var(--color-border)] px-2 py-1 text-xs text-[var(--color-muted)] hover:bg-[var(--color-surface)] sm:inline-flex"
+          title="Search (⌘K)"
+          aria-label="Search"
+          class="hidden items-center gap-1.5 rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-surface)] px-2 py-1 text-xs text-[var(--color-muted)] shadow-[var(--shadow-xs)] transition-colors hover:border-[var(--color-border-strong)] hover:text-[var(--color-text)] sm:inline-flex"
         >
           <Search size={12} strokeWidth={2} />
-          <kbd class="rounded bg-[var(--color-bg)] px-1 text-[10px]">⌘K</kbd>
+          <kbd class="rounded border border-[var(--color-border)] bg-[var(--color-bg)] px-1 font-sans text-[10px] leading-none">⌘K</kbd>
         </button>
         <button
           type="button"
           onclick={() => (helpOpen = true)}
           title="Keyboard shortcuts (?)"
-          class="hidden rounded-[var(--radius-sm)] p-1.5 text-[var(--color-subtle)] hover:bg-[var(--color-surface)] sm:inline-flex"
+          aria-label="Keyboard shortcuts"
+          class="hidden rounded-[var(--radius-sm)] p-1.5 text-[var(--color-subtle)] transition-colors hover:bg-[var(--color-surface)] hover:text-[var(--color-text)] sm:inline-flex"
         ><HelpCircle size={14} strokeWidth={2} /></button>
         <a
           href="/settings"
           title="Settings"
-          class="rounded-[var(--radius-sm)] p-1.5 text-[var(--color-subtle)] hover:bg-[var(--color-surface)]"
+          aria-label="Settings"
+          class="rounded-[var(--radius-sm)] p-1.5 text-[var(--color-subtle)] transition-colors hover:bg-[var(--color-surface)] hover:text-[var(--color-text)]"
         ><Settings size={14} strokeWidth={2} /></a>
-        <span class="hidden text-sm text-[var(--color-muted)] md:inline">{user.username ?? user.email}</span>
+        <span aria-hidden="true" class="mx-1 hidden h-5 w-px bg-[var(--color-border)] sm:inline-block"></span>
+        <span class="hidden max-w-[12rem] truncate text-sm text-[var(--color-muted)] md:inline">{user.username ?? user.email}</span>
         <form method="POST" action="/auth/logout" class="contents">
           <button
             type="submit"
             title="Sign out"
-            class="flex items-center gap-1 rounded-[var(--radius-sm)] border border-[var(--color-border)] px-2 py-1 text-sm text-[var(--color-muted)] hover:bg-[var(--color-surface)]"
+            aria-label="Sign out"
+            class="inline-flex items-center gap-1 rounded-[var(--radius-sm)] p-1.5 text-[var(--color-subtle)] transition-colors hover:bg-[var(--color-surface)] hover:text-[var(--color-text)]"
           >
             <LogOut size={14} strokeWidth={2} />
-            <span class="hidden sm:inline">Sign out</span>
           </button>
         </form>
       {:else}
         <a
           href="/auth"
-          class="rounded-[var(--radius-sm)] bg-[var(--color-product)] px-3 py-1.5 text-sm font-medium text-white"
+          class="rounded-[var(--radius-sm)] bg-[var(--color-accent)] px-3 py-1.5 text-sm font-medium text-[var(--color-accent-fg)] shadow-[var(--shadow-sm)] transition-colors hover:bg-[var(--color-accent-hover)]"
         >Sign in</a>
       {/if}
     </div>
@@ -173,16 +178,21 @@
         class="fixed inset-y-0 left-0 top-14 z-40 w-64 shrink-0 transform border-r border-[var(--color-border)] bg-[var(--color-bg)] p-4 transition-transform duration-200 ease-out md:static md:top-0 md:w-48 md:border-r-0 md:bg-transparent md:p-0 md:translate-x-0 {sidebarOpen ? 'translate-x-0 shadow-[var(--shadow-lg)]' : '-translate-x-full md:transform-none'}"
         aria-label="Primary navigation"
       >
-        <nav class="flex flex-col gap-1">
+        <nav class="flex flex-col gap-0.5">
           {#each tabs as tab (tab.href)}
             {@const active = page.url.pathname === tab.href || page.url.pathname.startsWith(tab.href + '/')}
             <a
               href={tab.href}
-              class="flex items-center gap-2 rounded-[var(--radius-sm)] px-2 py-1.5 text-sm {active
-                ? 'bg-[var(--color-surface)] text-[var(--color-text)]'
-                : 'text-[var(--color-muted)] hover:bg-[var(--color-surface)]'}"
+              aria-current={active ? 'page' : undefined}
+              class="group relative flex items-center gap-2.5 rounded-[var(--radius-sm)] px-2.5 py-1.5 text-sm transition-colors {active
+                ? 'font-medium text-[var(--color-text)]'
+                : 'text-[var(--color-muted)] hover:bg-[var(--color-surface)] hover:text-[var(--color-text)]'}"
             >
-              <tab.icon size={14} strokeWidth={2} />
+              <span
+                aria-hidden="true"
+                class="absolute inset-y-1 left-0 w-0.5 rounded-full bg-[var(--color-accent)] transition-opacity {active ? 'opacity-100' : 'opacity-0'}"
+              ></span>
+              <tab.icon size={14} strokeWidth={active ? 2.25 : 2} class={active ? 'text-[var(--color-text)]' : 'text-[var(--color-subtle)] group-hover:text-[var(--color-muted)]'} />
               <span>{tab.label}</span>
             </a>
           {/each}

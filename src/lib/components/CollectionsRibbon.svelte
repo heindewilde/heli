@@ -96,7 +96,7 @@
   {#each collections as c (c.id)}
     <a
       href={`/collections/${c.id}`}
-      class="group inline-flex items-center gap-1 rounded-full border border-[var(--color-border)] bg-[var(--color-surface)] px-2 py-0.5 text-xs text-[var(--color-muted)] hover:border-[var(--color-product-border)] {c.isArchived ? 'opacity-60' : ''}"
+      class="group inline-flex items-center gap-1 rounded-full border border-[var(--color-border)] bg-[var(--color-surface)] px-2 py-0.5 text-xs text-[var(--color-muted)] hover:border-[var(--color-highlight-border)] {c.isArchived ? 'opacity-60' : ''}"
     >
       <FolderOpen size={10} strokeWidth={2} />
       <span>{c.name}</span>

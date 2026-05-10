@@ -30,7 +30,7 @@
   {href}
   data-collection-row
   class="group flex items-center gap-3 rounded-[var(--radius-md)] border px-3 py-2 transition-colors {selected
-    ? 'border-[var(--color-product-border)] bg-[var(--color-product-bg)]'
+    ? 'border-[var(--color-highlight-border)] bg-[var(--color-highlight-bg)]'
     : 'border-transparent hover:bg-[var(--color-surface)]'} {isArchived ? 'opacity-60' : ''}"
 >
   <span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-surface)] text-[var(--color-muted)]">

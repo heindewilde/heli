@@ -112,7 +112,7 @@
 
 <article class="flex flex-col gap-6">
   {#if data.justSaved}
-    <div class="rounded-[var(--radius-sm)] border border-[var(--color-product-border)] bg-[var(--color-product-bg)] px-3 py-2 text-sm text-[var(--color-product)]">
+    <div class="rounded-[var(--radius-sm)] border border-[var(--color-highlight-border)] bg-[var(--color-highlight-bg)] px-3 py-2 text-sm text-[var(--color-text)]">
       Saved &ldquo;{collection.name}&rdquo;. Add people and companies below.
     </div>
   {/if}

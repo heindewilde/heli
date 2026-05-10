@@ -107,7 +107,7 @@
   function badgeClass(kind: string): string {
     if (kind === 'won') return 'border-emerald-300/40 bg-emerald-300/15 text-emerald-700 dark:text-emerald-300';
     if (kind === 'lost') return 'border-rose-300/40 bg-rose-300/15 text-rose-700 dark:text-rose-300';
-    return 'border-[var(--color-product-border)] bg-[var(--color-product-bg)] text-[var(--color-product)]';
+    return 'border-[var(--color-highlight-border)] bg-[var(--color-highlight-bg)] text-[var(--color-text)]';
   }
 </script>
 

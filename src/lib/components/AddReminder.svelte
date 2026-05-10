@@ -74,7 +74,7 @@
         type="button"
         onclick={save}
         disabled={saving}
-        class="inline-flex items-center gap-1 rounded-[var(--radius-sm)] bg-[var(--color-product)] px-2 py-1 text-xs text-white"
+        class="inline-flex items-center gap-1 rounded-[var(--radius-sm)] bg-[var(--color-accent)] transition-colors hover:bg-[var(--color-accent-hover)] px-2 py-1 text-xs text-[var(--color-accent-fg)]"
       >
         <Plus size={12} strokeWidth={2} />
         Set

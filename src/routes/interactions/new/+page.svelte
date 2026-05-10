@@ -172,7 +172,7 @@
             type="button"
             onclick={() => (type = t)}
             class="inline-flex items-center gap-1 rounded-[var(--radius-sm)] border px-2.5 py-1 text-sm {type === t
-              ? 'border-[var(--color-product-border)] bg-[var(--color-product-bg)] text-[var(--color-product)]'
+              ? 'border-[var(--color-highlight-border)] bg-[var(--color-highlight-bg)] text-[var(--color-text)]'
               : 'border-[var(--color-border)] bg-[var(--color-surface)] text-[var(--color-muted)] hover:text-[var(--color-text)]'}"
           >
             <I size={12} strokeWidth={2} />
@@ -241,7 +241,7 @@
         type="button"
         onclick={() => submit(false)}
         disabled={saving}
-        class="rounded-[var(--radius-sm)] bg-[var(--color-product)] px-4 py-2 text-sm font-medium text-white disabled:opacity-60"
+        class="rounded-[var(--radius-sm)] bg-[var(--color-accent)] transition-colors hover:bg-[var(--color-accent-hover)] px-4 py-2 text-sm font-medium text-[var(--color-accent-fg)] disabled:opacity-60"
       >{saving ? 'Saving…' : 'Save'}</button>
       <button
         type="button"

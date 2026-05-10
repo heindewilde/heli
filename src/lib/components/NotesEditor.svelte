@@ -62,7 +62,7 @@
         type="button"
         onclick={commit}
         disabled={saving}
-        class="rounded-[var(--radius-sm)] bg-[var(--color-product)] px-3 py-1.5 font-medium text-white disabled:opacity-60"
+        class="rounded-[var(--radius-sm)] bg-[var(--color-accent)] transition-colors hover:bg-[var(--color-accent-hover)] px-3 py-1.5 font-medium text-[var(--color-accent-fg)] disabled:opacity-60"
       >{saving ? 'Saving…' : saveLabel}</button>
       <button
         type="button"
@@ -80,7 +80,7 @@
     >
       <span class="min-w-0 flex-1">
         {#if value}
-          <div class="prose prose-sm max-w-none whitespace-pre-wrap text-[var(--color-text)] [&_a]:text-[var(--color-product)]">
+          <div class="prose prose-sm max-w-none whitespace-pre-wrap text-[var(--color-text)] [&_a]:text-[var(--color-text)]">
             {@html value}
           </div>
         {:else}

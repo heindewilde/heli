@@ -154,7 +154,7 @@
           onkeydown={(e) => {
             if (e.key === 'Enter') (e.currentTarget as HTMLInputElement).blur();
           }}
-          class="min-w-0 flex-1 rounded-[var(--radius-sm)] border border-transparent bg-transparent px-2 py-1 text-sm hover:border-[var(--color-border)] focus:border-[var(--color-product-border)] focus:outline-none"
+          class="min-w-0 flex-1 rounded-[var(--radius-sm)] border border-transparent bg-transparent px-2 py-1 text-sm hover:border-[var(--color-border)] focus:border-[var(--color-highlight-border)] focus:outline-none"
         />
         <select
           value={stage.kind}
@@ -196,7 +196,7 @@
     </select>
     <button
       type="submit"
-      class="inline-flex items-center gap-1 rounded-[var(--radius-sm)] bg-[var(--color-product)] px-2 py-1 text-xs font-medium text-white"
+      class="inline-flex items-center gap-1 rounded-[var(--radius-sm)] bg-[var(--color-accent)] transition-colors hover:bg-[var(--color-accent-hover)] px-2 py-1 text-xs font-medium text-[var(--color-accent-fg)]"
     >
       <Plus size={12} strokeWidth={2} /> Add
     </button>

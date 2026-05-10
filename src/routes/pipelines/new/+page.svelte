@@ -79,7 +79,7 @@
       <legend class="w-full text-[var(--color-muted)]">Default view</legend>
       {#each ['kanban', 'list'] as v (v)}
         <label class="inline-flex items-center gap-1.5 rounded-[var(--radius-sm)] border px-2.5 py-1 {defaultView === v
-          ? 'border-[var(--color-product-border)] bg-[var(--color-product-bg)] text-[var(--color-product)]'
+          ? 'border-[var(--color-highlight-border)] bg-[var(--color-highlight-bg)] text-[var(--color-text)]'
           : 'border-[var(--color-border)] bg-[var(--color-surface)] text-[var(--color-muted)]'}">
           <input
             type="radio"
@@ -170,7 +170,7 @@
       <button
         type="submit"
         disabled={submitting}
-        class="rounded-[var(--radius-sm)] bg-[var(--color-product)] px-4 py-2 text-sm font-medium text-white disabled:opacity-60"
+        class="rounded-[var(--radius-sm)] bg-[var(--color-accent)] transition-colors hover:bg-[var(--color-accent-hover)] px-4 py-2 text-sm font-medium text-[var(--color-accent-fg)] disabled:opacity-60"
       >{submitting ? 'Saving…' : 'Save pipeline'}</button>
       <a href="/pipelines" class="rounded-[var(--radius-sm)] border border-[var(--color-border)] px-4 py-2 text-sm">Cancel</a>
     </div>

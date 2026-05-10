@@ -44,46 +44,25 @@
     </header>
 
     <div class="grid grid-cols-2 gap-3 sm:grid-cols-4">
-      <a
-        href="/people"
-        class="flex items-center gap-3 rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)] p-4 hover:border-[var(--color-border-strong)]"
-      >
-        <Users size={20} strokeWidth={2} class="text-[var(--color-muted)]" />
-        <div>
-          <div class="text-2xl font-semibold tracking-tight">{data.counts?.people ?? 0}</div>
-          <div class="text-xs text-[var(--color-muted)]">People</div>
-        </div>
-      </a>
-      <a
-        href="/companies"
-        class="flex items-center gap-3 rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)] p-4 hover:border-[var(--color-border-strong)]"
-      >
-        <Building2 size={20} strokeWidth={2} class="text-[var(--color-muted)]" />
-        <div>
-          <div class="text-2xl font-semibold tracking-tight">{data.counts?.companies ?? 0}</div>
-          <div class="text-xs text-[var(--color-muted)]">Companies</div>
-        </div>
-      </a>
-      <a
-        href="/interactions"
-        class="flex items-center gap-3 rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)] p-4 hover:border-[var(--color-border-strong)]"
-      >
-        <MessagesSquare size={20} strokeWidth={2} class="text-[var(--color-muted)]" />
-        <div>
-          <div class="text-2xl font-semibold tracking-tight">{data.counts?.interactionsThisMonth ?? 0}</div>
-          <div class="text-xs text-[var(--color-muted)]">Interactions this month</div>
-        </div>
-      </a>
-      <a
-        href="/projects"
-        class="flex items-center gap-3 rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)] p-4 hover:border-[var(--color-border-strong)]"
-      >
-        <FolderKanban size={20} strokeWidth={2} class="text-[var(--color-muted)]" />
-        <div>
-          <div class="text-2xl font-semibold tracking-tight">{data.counts?.projects ?? 0}</div>
-          <div class="text-xs text-[var(--color-muted)]">Active projects</div>
-        </div>
-      </a>
+      {#each [
+        { href: '/people', icon: Users, value: data.counts?.people ?? 0, label: 'People' },
+        { href: '/companies', icon: Building2, value: data.counts?.companies ?? 0, label: 'Companies' },
+        { href: '/interactions', icon: MessagesSquare, value: data.counts?.interactionsThisMonth ?? 0, label: 'Interactions this month' },
+        { href: '/projects', icon: FolderKanban, value: data.counts?.projects ?? 0, label: 'Active projects' }
+      ] as card (card.href)}
+        <a
+          href={card.href}
+          class="group flex items-center gap-3 rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)] p-4 shadow-[var(--shadow-xs)] transition-all hover:-translate-y-px hover:border-[var(--color-border-strong)] hover:shadow-[var(--shadow-sm)]"
+        >
+          <span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-[var(--radius-sm)] bg-[var(--color-surface-2)] text-[var(--color-muted)] transition-colors group-hover:bg-[var(--color-accent)] group-hover:text-[var(--color-accent-fg)]">
+            <card.icon size={16} strokeWidth={2} />
+          </span>
+          <div class="min-w-0">
+            <div class="tabular text-2xl font-semibold tracking-tight">{card.value}</div>
+            <div class="truncate text-xs text-[var(--color-muted)]">{card.label}</div>
+          </div>
+        </a>
+      {/each}
     </div>
 
     {#if data.endingSoon && data.endingSoon.length > 0}

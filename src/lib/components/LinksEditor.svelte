@@ -148,7 +148,7 @@
                   type="button"
                   onclick={commitEdit}
                   disabled={saving}
-                  class="inline-flex items-center gap-1 rounded-[var(--radius-sm)] bg-[var(--color-product)] px-2 py-1 text-xs text-white"
+                  class="inline-flex items-center gap-1 rounded-[var(--radius-sm)] bg-[var(--color-accent)] transition-colors hover:bg-[var(--color-accent-hover)] px-2 py-1 text-xs text-[var(--color-accent-fg)]"
                 ><Check size={12} strokeWidth={2} /> Save</button>
                 <button
                   type="button"
@@ -214,7 +214,7 @@
           type="button"
           onclick={add}
           disabled={saving || !newUrl.trim()}
-          class="inline-flex items-center gap-1 rounded-[var(--radius-sm)] bg-[var(--color-product)] px-2 py-1 text-xs text-white disabled:opacity-60"
+          class="inline-flex items-center gap-1 rounded-[var(--radius-sm)] bg-[var(--color-accent)] transition-colors hover:bg-[var(--color-accent-hover)] px-2 py-1 text-xs text-[var(--color-accent-fg)] disabled:opacity-60"
         ><Check size={12} strokeWidth={2} /> Add link</button>
         <button
           type="button"
@@ -228,7 +228,7 @@
     <button
       type="button"
       onclick={startAdding}
-      class="inline-flex items-center gap-1 self-start rounded-[var(--radius-sm)] border border-dashed border-[var(--color-border)] px-2.5 py-1 text-xs text-[var(--color-muted)] hover:border-[var(--color-product-border)] hover:bg-[var(--color-product-bg)] hover:text-[var(--color-product)]"
+      class="inline-flex items-center gap-1 self-start rounded-[var(--radius-sm)] border border-dashed border-[var(--color-border)] px-2.5 py-1 text-xs text-[var(--color-muted)] hover:border-[var(--color-highlight-border)] hover:bg-[var(--color-highlight-bg)] hover:text-[var(--color-text)]"
     >
       <Plus size={12} strokeWidth={2} />
       Add link

@@ -69,8 +69,8 @@
 <div
   role="article"
   class="group relative flex flex-col gap-1.5 rounded-[var(--radius-md)] border bg-[var(--color-bg)] p-2.5 text-sm shadow-[var(--shadow-sm)] {selected
-    ? 'border-[var(--color-product-border)] ring-1 ring-[var(--color-product-border)]'
-    : 'border-[var(--color-border)] hover:border-[var(--color-product-border)]'}"
+    ? 'border-[var(--color-highlight-border)] ring-1 ring-[var(--color-highlight-border)]'
+    : 'border-[var(--color-border)] hover:border-[var(--color-highlight-border)]'}"
   draggable={draggable}
   ondragstart={onDragStart}
   ondragend={onDragEnd}
@@ -123,6 +123,6 @@
     <p class="line-clamp-2 text-xs text-[var(--color-muted)]">{item.note}</p>
   {/if}
   {#if valueLabel}
-    <span class="self-start rounded-full bg-[var(--color-product-bg)] px-1.5 py-0.5 text-[10px] font-medium text-[var(--color-product)]">{valueLabel}</span>
+    <span class="tabular self-start rounded-full border border-[var(--color-border)] bg-[var(--color-surface-2)] px-2 py-0.5 text-[10px] font-medium text-[var(--color-text)]">{valueLabel}</span>
   {/if}
 </div>

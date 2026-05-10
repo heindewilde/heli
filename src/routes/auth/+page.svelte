@@ -2,6 +2,7 @@
   import { APP_NAME } from '$lib/branding';
   import { Lock, Database, Zap, Sparkles } from 'lucide-svelte';
   import { enhance } from '$app/forms';
+  import BrandMark from '$lib/components/BrandMark.svelte';
 
   let { data, form } = $props();
 
@@ -25,7 +26,7 @@
 <section class="grid min-h-[calc(100vh-3.5rem)] grid-cols-1 md:grid-cols-2">
   <aside class="hidden flex-col justify-between gap-12 border-r border-[var(--color-border)] bg-[var(--color-surface)] p-12 md:flex">
     <a href="/" class="flex items-center gap-2 font-semibold tracking-tight">
-      <span class="inline-block h-6 w-6 rounded-[var(--radius-sm)] bg-[var(--color-product)]"></span>
+      <BrandMark size={24} />
       <span>{APP_NAME}</span>
     </a>
     <ul class="flex flex-col gap-3">
@@ -125,7 +126,7 @@
         <button
           type="submit"
           disabled={submitting}
-          class="mt-1 rounded-[var(--radius-sm)] bg-[var(--color-product)] px-3 py-2 text-sm font-medium text-white disabled:opacity-60"
+          class="mt-1 rounded-[var(--radius-sm)] bg-[var(--color-accent)] px-3 py-2 text-sm font-medium text-[var(--color-accent-fg)] shadow-[var(--shadow-sm)] transition-colors hover:bg-[var(--color-accent-hover)] disabled:opacity-60"
         >
           {submitting ? 'Working…' : mode === 'login' ? 'Sign in' : 'Create account'}
         </button>

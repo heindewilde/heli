@@ -167,7 +167,7 @@
       <a
         href={bookmarkletJs}
         onclick={(e) => e.preventDefault()}
-        class="inline-flex cursor-grab items-center gap-2 rounded-[var(--radius-sm)] border border-[var(--color-product-border)] bg-[var(--color-product-bg)] px-3 py-2 text-sm font-medium text-[var(--color-product)]"
+        class="inline-flex cursor-grab items-center gap-2 rounded-[var(--radius-sm)] border border-[var(--color-highlight-border)] bg-[var(--color-highlight-bg)] px-3 py-2 text-sm font-medium text-[var(--color-text)]"
         draggable="true"
       >
         <Bookmark size={14} strokeWidth={2} />
@@ -218,7 +218,7 @@
         type="button"
         onclick={saveUsername}
         disabled={saving === 'username'}
-        class="self-start rounded-[var(--radius-sm)] bg-[var(--color-product)] px-3 py-1.5 text-sm font-medium text-white disabled:opacity-60"
+        class="self-start rounded-[var(--radius-sm)] bg-[var(--color-accent)] transition-colors hover:bg-[var(--color-accent-hover)] px-3 py-1.5 text-sm font-medium text-[var(--color-accent-fg)] disabled:opacity-60"
       >Save username</button>
     </div>
 
@@ -249,7 +249,7 @@
         type="button"
         onclick={saveEmail}
         disabled={saving === 'email'}
-        class="self-start rounded-[var(--radius-sm)] bg-[var(--color-product)] px-3 py-1.5 text-sm font-medium text-white disabled:opacity-60"
+        class="self-start rounded-[var(--radius-sm)] bg-[var(--color-accent)] transition-colors hover:bg-[var(--color-accent-hover)] px-3 py-1.5 text-sm font-medium text-[var(--color-accent-fg)] disabled:opacity-60"
       >Update email</button>
     </div>
 
@@ -275,7 +275,7 @@
         type="button"
         onclick={savePassword}
         disabled={saving === 'password'}
-        class="self-start rounded-[var(--radius-sm)] bg-[var(--color-product)] px-3 py-1.5 text-sm font-medium text-white disabled:opacity-60"
+        class="self-start rounded-[var(--radius-sm)] bg-[var(--color-accent)] transition-colors hover:bg-[var(--color-accent-hover)] px-3 py-1.5 text-sm font-medium text-[var(--color-accent-fg)] disabled:opacity-60"
       >Update password</button>
     </div>
 

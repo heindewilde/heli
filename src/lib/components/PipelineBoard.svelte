@@ -71,8 +71,8 @@
   }
 
   function stageKindClass(kind: StageKind): string {
-    if (kind === 'won') return 'border-emerald-300/40 bg-emerald-300/5';
-    if (kind === 'lost') return 'border-rose-300/40 bg-rose-300/5';
+    if (kind === 'won') return 'border-[var(--color-success-border)] bg-[var(--color-success-bg)]';
+    if (kind === 'lost') return 'border-[var(--color-danger-border)] bg-[var(--color-danger-bg)]';
     return 'border-[var(--color-border)] bg-[var(--color-surface)]';
   }
 </script>
@@ -99,7 +99,7 @@
       <!-- svelte-ignore a11y_no_static_element_interactions -->
       <section
         aria-label={`${stage.name} stage`}
-        class="flex w-72 shrink-0 flex-col gap-2 rounded-[var(--radius-md)] border p-2 transition-colors {stageKindClass(stage.kind as StageKind)} {hot ? 'ring-2 ring-[var(--color-product-border)]' : ''}"
+        class="flex w-72 shrink-0 flex-col gap-2 rounded-[var(--radius-md)] border p-2 transition-colors {stageKindClass(stage.kind as StageKind)} {hot ? 'ring-2 ring-[var(--color-accent)] ring-offset-2 ring-offset-[var(--color-bg)]' : ''}"
         ondragover={(e) => onDragOver(e, stage.id)}
         ondragleave={() => onDragLeave(stage.id)}
         ondrop={(e) => onDrop(e, stage.id)}

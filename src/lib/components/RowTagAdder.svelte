@@ -126,7 +126,7 @@
     aria-label="Add tag"
     aria-expanded={open}
     onclick={() => (open = !open)}
-    class="inline-flex items-center gap-0.5 rounded-full border border-dashed border-[var(--color-border)] bg-transparent px-1.5 py-0.5 text-[10px] text-[var(--color-muted)] transition-colors hover:border-[var(--color-product-border)] hover:bg-[var(--color-product-bg)] hover:text-[var(--color-product)]"
+    class="inline-flex items-center gap-0.5 rounded-full border border-dashed border-[var(--color-border)] bg-transparent px-1.5 py-0.5 text-[10px] text-[var(--color-muted)] transition-colors hover:border-[var(--color-highlight-border)] hover:bg-[var(--color-highlight-bg)] hover:text-[var(--color-text)]"
   >
     <Plus size={10} strokeWidth={2} />
     tag
@@ -159,11 +159,11 @@
             >
               <span class="flex min-w-0 items-center gap-1.5">
                 {#if attached}
-                  <Check size={10} strokeWidth={2} class="shrink-0 text-[var(--color-product)]" />
+                  <Check size={10} strokeWidth={2} class="shrink-0 text-[var(--color-text)]" />
                 {:else}
                   <Tag size={10} strokeWidth={2} class="shrink-0 text-[var(--color-subtle)]" />
                 {/if}
-                <span class="truncate {attached ? 'text-[var(--color-product)]' : ''}">{s.name}</span>
+                <span class="truncate {attached ? 'text-[var(--color-text)]' : ''}">{s.name}</span>
               </span>
               {#if s.count != null}
                 <span class="shrink-0 text-[var(--color-subtle)]">{s.count}</span>
@@ -177,7 +177,7 @@
               type="button"
               onclick={() => attachByName(q.trim())}
               disabled={saving}
-              class="flex w-full items-center gap-1.5 px-3 py-1.5 text-left text-xs text-[var(--color-product)] hover:bg-[var(--color-bg)] disabled:opacity-60"
+              class="flex w-full items-center gap-1.5 px-3 py-1.5 text-left text-xs text-[var(--color-text)] hover:bg-[var(--color-bg)] disabled:opacity-60"
             >
               <Plus size={10} strokeWidth={2} />
               Create &ldquo;{q.trim()}&rdquo;

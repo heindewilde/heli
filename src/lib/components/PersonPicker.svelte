@@ -80,8 +80,8 @@
 <div class="flex flex-col gap-2">
   <div class="flex flex-wrap items-center gap-1.5 rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-surface)] p-1.5">
     {#each selected as p (p.id)}
-      <span class="inline-flex items-center gap-1 rounded-full bg-[var(--color-product-bg)] py-0.5 pl-1 pr-0.5 text-xs text-[var(--color-product)]">
-        <span class="flex h-5 w-5 items-center justify-center overflow-hidden rounded-full border border-[var(--color-product-border)] bg-white text-[10px]">
+      <span class="inline-flex items-center gap-1 rounded-full bg-[var(--color-highlight-bg)] py-0.5 pl-1 pr-0.5 text-xs text-[var(--color-text)]">
+        <span class="flex h-5 w-5 items-center justify-center overflow-hidden rounded-full border border-[var(--color-highlight-border)] bg-white text-[10px]">
           {#if p.avatarUrl}
             <img src={p.avatarUrl} alt="" class="h-full w-full object-cover" />
           {:else}
@@ -93,7 +93,7 @@
           type="button"
           onclick={() => onRemove(p.id)}
           aria-label="Remove {p.name}"
-          class="rounded-full p-0.5 hover:bg-[var(--color-product-border)]"
+          class="rounded-full p-0.5 hover:bg-[var(--color-highlight-border)]"
         ><X size={12} strokeWidth={2} /></button>
       </span>
     {/each}
@@ -117,7 +117,7 @@
           <button
             type="button"
             onmousedown={(e) => { e.preventDefault(); pick(p); }}
-            class="flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm {i === highlight ? 'bg-[var(--color-product-bg)]' : 'hover:bg-[var(--color-bg)]'}"
+            class="flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm {i === highlight ? 'bg-[var(--color-highlight-bg)]' : 'hover:bg-[var(--color-bg)]'}"
           >
             <span class="flex h-6 w-6 items-center justify-center overflow-hidden rounded-full border border-[var(--color-border)] bg-[var(--color-bg)] text-[10px] text-[var(--color-muted)]">
               {#if p.avatarUrl}

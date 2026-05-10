@@ -92,8 +92,8 @@
       {@const isSuggested = suggestedIds.has(p.id)}
       <span
         class="inline-flex items-center gap-1 rounded-full py-0.5 pl-2 pr-0.5 text-xs {isSuggested
-          ? 'border border-dashed border-[var(--color-product-border)] bg-[var(--color-product-bg)] text-[var(--color-product)]'
-          : 'bg-[var(--color-product-bg)] text-[var(--color-product)]'}"
+          ? 'border border-dashed border-[var(--color-highlight-border)] bg-[var(--color-highlight-bg)] text-[var(--color-text)]'
+          : 'bg-[var(--color-highlight-bg)] text-[var(--color-text)]'}"
         title={isSuggested ? 'Suggested — confirm by saving or remove with X' : undefined}
       >
         {#if isSuggested}
@@ -106,7 +106,7 @@
           type="button"
           onclick={() => onRemove(p.id)}
           aria-label="Remove {p.name}"
-          class="rounded-full p-0.5 hover:bg-[var(--color-product-border)]"
+          class="rounded-full p-0.5 hover:bg-[var(--color-highlight-border)]"
         ><X size={12} strokeWidth={2} /></button>
       </span>
     {/each}
@@ -130,7 +130,7 @@
           <button
             type="button"
             onmousedown={(e) => { e.preventDefault(); pick(p); }}
-            class="flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm {i === highlight ? 'bg-[var(--color-product-bg)]' : 'hover:bg-[var(--color-bg)]'}"
+            class="flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm {i === highlight ? 'bg-[var(--color-highlight-bg)]' : 'hover:bg-[var(--color-bg)]'}"
           >
             <FolderKanban size={12} strokeWidth={2} class="shrink-0 text-[var(--color-subtle)]" />
             <span class="flex min-w-0 flex-1 flex-col">

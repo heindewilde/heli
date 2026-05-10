@@ -58,7 +58,7 @@
       spellcheck="false"
       placeholder="Paste a link to save a person or company…"
       disabled={busy}
-      class="h-9 w-full rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)] pl-9 pr-9 text-sm placeholder:text-[var(--color-subtle)]"
+      class="h-9 w-full rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)] pl-9 pr-9 text-sm shadow-[var(--shadow-xs)] placeholder:text-[var(--color-subtle)] transition-[border-color,box-shadow] focus:border-[var(--color-border-strong)] focus:shadow-[var(--shadow-sm)] focus:outline-none"
     />
     {#if busy}
       <span class="absolute inset-y-0 right-3 flex items-center text-[var(--color-muted)]">

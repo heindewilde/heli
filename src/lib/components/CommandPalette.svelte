@@ -153,7 +153,7 @@
       <div class="flex items-center gap-2 border-b border-[var(--color-border)] px-3 py-2">
         <Search size={14} strokeWidth={2} class="text-[var(--color-subtle)]" />
         {#if activeScope}
-          <span class="inline-flex items-center gap-1 rounded-full border border-[var(--color-product-border)] bg-[var(--color-product-bg)] px-2 py-0.5 text-[10px] font-medium text-[var(--color-product)]">
+          <span class="inline-flex items-center gap-1 rounded-full border border-[var(--color-highlight-border)] bg-[var(--color-highlight-bg)] px-2 py-0.5 text-[10px] font-medium text-[var(--color-text)]">
             {activeScope.label} only
           </span>
         {/if}
@@ -181,7 +181,7 @@
                   type="button"
                   onmousedown={(e) => { e.preventDefault(); pick(h); }}
                   onmouseenter={() => (highlight = i)}
-                  class="flex w-full items-center gap-3 px-3 py-2 text-left text-sm {i === highlight ? 'bg-[var(--color-product-bg)]' : ''}"
+                  class="flex w-full items-center gap-3 px-3 py-2 text-left text-sm {i === highlight ? 'bg-[var(--color-highlight-bg)]' : ''}"
                 >
                   <span class="flex h-7 w-7 shrink-0 items-center justify-center rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-bg)] text-[var(--color-muted)]">
                     <Icon size={14} strokeWidth={2} />
