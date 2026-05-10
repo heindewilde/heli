@@ -1,9 +1,9 @@
 <script lang="ts">
   import { goto } from '$app/navigation';
-  import { Search, User, Building2, MessageSquare, FolderKanban } from 'lucide-svelte';
+  import { Search, User, Building2, MessageSquare, FolderKanban, FolderOpen, GitBranch } from 'lucide-svelte';
 
   type Hit = {
-    kind: 'person' | 'company' | 'interaction' | 'project';
+    kind: 'person' | 'company' | 'interaction' | 'project' | 'collection' | 'pipeline';
     id: string;
     title: string;
     sub: string | null;
@@ -24,12 +24,14 @@
   // scope chip and the contextual placeholder. Server is the source of truth
   // — passing the prefix through unchanged is fine. `pr:` MUST come before
   // `p:` in the alternation or the regex would parse pr:foo as scope=person.
-  const SCOPE_RE = /^(pr|p|c|i):\s*(.*)$/i;
-  const SCOPE_LABEL: Record<string, { label: string; full: 'person' | 'company' | 'interaction' | 'project' }> = {
+  const SCOPE_RE = /^(col|pl|pr|p|c|i):\s*(.*)$/i;
+  const SCOPE_LABEL: Record<string, { label: string; full: 'person' | 'company' | 'interaction' | 'project' | 'collection' | 'pipeline' }> = {
     p: { label: 'People', full: 'person' },
     c: { label: 'Companies', full: 'company' },
     i: { label: 'Interactions', full: 'interaction' },
-    pr: { label: 'Projects', full: 'project' }
+    pr: { label: 'Projects', full: 'project' },
+    col: { label: 'Collections', full: 'collection' },
+    pl: { label: 'Pipelines', full: 'pipeline' }
   };
   const activeScope = $derived.by(() => {
     const m = q.match(SCOPE_RE);
@@ -104,20 +106,34 @@
     }
   }
 
-  const KIND_ICON = { person: User, company: Building2, interaction: MessageSquare, project: FolderKanban } as const;
-  const KIND_TAG = { person: 'P', company: 'C', interaction: 'I', project: 'PR' } as const;
+  const KIND_ICON = {
+    person: User,
+    company: Building2,
+    interaction: MessageSquare,
+    project: FolderKanban,
+    collection: FolderOpen,
+    pipeline: GitBranch
+  } as const;
+  const KIND_TAG = {
+    person: 'P',
+    company: 'C',
+    interaction: 'I',
+    project: 'PR',
+    collection: 'COL',
+    pipeline: 'PL'
+  } as const;
 
   const placeholder = $derived(
     activeScope
       ? `Search ${activeScope.label.toLowerCase()}…`
-      : 'Search people, companies, interactions…'
+      : 'Search people, companies, interactions, collections, pipelines…'
   );
 
   const emptyHint = $derived.by(() => {
     if (!q.trim()) {
       return activeScope
         ? `Searching ${activeScope.label.toLowerCase()} only — keep typing.`
-        : 'Type to search across people, companies, and interactions. Tip: prefix with p:, c:, or i: to scope.';
+        : 'Type to search across everything. Tip: prefix with p:, c:, i:, pr:, col:, or pl: to scope.';
     }
     return lastQuery ? 'No matches.' : 'Searching…';
   });

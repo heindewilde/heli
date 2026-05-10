@@ -192,6 +192,77 @@ CREATE TABLE IF NOT EXISTS project_tags (
   tag_id TEXT NOT NULL REFERENCES tags(id) ON DELETE CASCADE,
   PRIMARY KEY (project_id, tag_id)
 );
+
+CREATE TABLE IF NOT EXISTS collections (
+  id TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  name TEXT NOT NULL,
+  description TEXT,
+  is_archived INTEGER NOT NULL DEFAULT 0,
+  created_at INTEGER NOT NULL,
+  updated_at INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_collections_user_arch ON collections(user_id, is_archived);
+CREATE INDEX IF NOT EXISTS idx_collections_user_updated ON collections(user_id, updated_at);
+
+CREATE TABLE IF NOT EXISTS collection_items (
+  collection_id TEXT NOT NULL REFERENCES collections(id) ON DELETE CASCADE,
+  kind TEXT NOT NULL,
+  ref_id TEXT NOT NULL,
+  added_at INTEGER NOT NULL,
+  PRIMARY KEY (collection_id, kind, ref_id)
+);
+CREATE INDEX IF NOT EXISTS idx_collection_items_ref ON collection_items(kind, ref_id);
+
+CREATE TABLE IF NOT EXISTS pipelines (
+  id TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  name TEXT NOT NULL,
+  description TEXT,
+  default_view TEXT NOT NULL DEFAULT 'kanban',
+  is_archived INTEGER NOT NULL DEFAULT 0,
+  created_at INTEGER NOT NULL,
+  updated_at INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_pipelines_user_arch ON pipelines(user_id, is_archived);
+CREATE INDEX IF NOT EXISTS idx_pipelines_user_updated ON pipelines(user_id, updated_at);
+
+CREATE TABLE IF NOT EXISTS pipeline_stages (
+  id TEXT PRIMARY KEY,
+  pipeline_id TEXT NOT NULL REFERENCES pipelines(id) ON DELETE CASCADE,
+  name TEXT NOT NULL,
+  kind TEXT NOT NULL DEFAULT 'open',
+  position INTEGER NOT NULL,
+  created_at INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_pipeline_stages_pipeline_pos ON pipeline_stages(pipeline_id, position);
+
+CREATE TABLE IF NOT EXISTS pipeline_items (
+  id TEXT PRIMARY KEY,
+  pipeline_id TEXT NOT NULL REFERENCES pipelines(id) ON DELETE CASCADE,
+  kind TEXT NOT NULL,
+  ref_id TEXT NOT NULL,
+  stage_id TEXT NOT NULL REFERENCES pipeline_stages(id),
+  entered_stage_at INTEGER NOT NULL,
+  note TEXT,
+  value_cents INTEGER,
+  currency TEXT,
+  created_at INTEGER NOT NULL,
+  updated_at INTEGER NOT NULL
+);
+CREATE UNIQUE INDEX IF NOT EXISTS uq_pipeline_items_pipeline_ref ON pipeline_items(pipeline_id, kind, ref_id);
+CREATE INDEX IF NOT EXISTS idx_pipeline_items_ref ON pipeline_items(kind, ref_id);
+CREATE INDEX IF NOT EXISTS idx_pipeline_items_pipeline_stage ON pipeline_items(pipeline_id, stage_id);
+
+CREATE TABLE IF NOT EXISTS pipeline_item_events (
+  id TEXT PRIMARY KEY,
+  item_id TEXT NOT NULL REFERENCES pipeline_items(id) ON DELETE CASCADE,
+  from_stage_id TEXT,
+  to_stage_id TEXT NOT NULL,
+  at INTEGER NOT NULL,
+  by_user_id TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_pipeline_item_events_item_at ON pipeline_item_events(item_id, at);
 `;
 
 const FTS = `
@@ -272,6 +343,46 @@ CREATE TRIGGER IF NOT EXISTS projects_au AFTER UPDATE ON projects BEGIN
   INSERT INTO projects_fts(rowid, name, description, next_step)
   VALUES (new.rowid, new.name, COALESCE(new.description,''), COALESCE(new.next_step,''));
 END;
+
+CREATE VIRTUAL TABLE IF NOT EXISTS collections_fts USING fts5(
+  name, description,
+  content='collections', content_rowid='rowid', tokenize='unicode61'
+);
+
+CREATE TRIGGER IF NOT EXISTS collections_ai AFTER INSERT ON collections BEGIN
+  INSERT INTO collections_fts(rowid, name, description)
+  VALUES (new.rowid, new.name, COALESCE(new.description,''));
+END;
+CREATE TRIGGER IF NOT EXISTS collections_ad AFTER DELETE ON collections BEGIN
+  INSERT INTO collections_fts(collections_fts, rowid, name, description)
+  VALUES('delete', old.rowid, old.name, COALESCE(old.description,''));
+END;
+CREATE TRIGGER IF NOT EXISTS collections_au AFTER UPDATE ON collections BEGIN
+  INSERT INTO collections_fts(collections_fts, rowid, name, description)
+  VALUES('delete', old.rowid, old.name, COALESCE(old.description,''));
+  INSERT INTO collections_fts(rowid, name, description)
+  VALUES (new.rowid, new.name, COALESCE(new.description,''));
+END;
+
+CREATE VIRTUAL TABLE IF NOT EXISTS pipelines_fts USING fts5(
+  name, description,
+  content='pipelines', content_rowid='rowid', tokenize='unicode61'
+);
+
+CREATE TRIGGER IF NOT EXISTS pipelines_ai AFTER INSERT ON pipelines BEGIN
+  INSERT INTO pipelines_fts(rowid, name, description)
+  VALUES (new.rowid, new.name, COALESCE(new.description,''));
+END;
+CREATE TRIGGER IF NOT EXISTS pipelines_ad AFTER DELETE ON pipelines BEGIN
+  INSERT INTO pipelines_fts(pipelines_fts, rowid, name, description)
+  VALUES('delete', old.rowid, old.name, COALESCE(old.description,''));
+END;
+CREATE TRIGGER IF NOT EXISTS pipelines_au AFTER UPDATE ON pipelines BEGIN
+  INSERT INTO pipelines_fts(pipelines_fts, rowid, name, description)
+  VALUES('delete', old.rowid, old.name, COALESCE(old.description,''));
+  INSERT INTO pipelines_fts(rowid, name, description)
+  VALUES (new.rowid, new.name, COALESCE(new.description,''));
+END;
 `;
 
 async function execMany(c: Client, sql: string) {
@@ -299,7 +410,7 @@ async function applyAlters(c: Client) {
 
 async function rebuildFts(c: Client) {
   // Cheap and idempotent: only rebuild if FTS tables look out of sync with the source table.
-  for (const name of ['people', 'companies', 'interactions', 'projects']) {
+  for (const name of ['people', 'companies', 'interactions', 'projects', 'collections', 'pipelines']) {
     const src = await c.execute(`SELECT COUNT(*) AS n FROM ${name}`);
     const fts = await c.execute(`SELECT COUNT(*) AS n FROM ${name}_fts`);
     const a = Number(src.rows[0]?.n ?? 0);

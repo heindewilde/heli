@@ -307,6 +307,117 @@ export const projectTags = sqliteTable(
   (t) => [primaryKey({ columns: [t.projectId, t.tagId] })]
 );
 
+export const collections = sqliteTable(
+  'collections',
+  {
+    id: text('id').primaryKey(),
+    userId: text('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    name: text('name').notNull(),
+    description: text('description'),
+    isArchived: integer('is_archived').notNull().default(0),
+    createdAt: integer('created_at').notNull(),
+    updatedAt: integer('updated_at').notNull()
+  },
+  (t) => [
+    index('idx_collections_user_arch').on(t.userId, t.isArchived),
+    index('idx_collections_user_updated').on(t.userId, t.updatedAt)
+  ]
+);
+
+export const collectionItems = sqliteTable(
+  'collection_items',
+  {
+    collectionId: text('collection_id')
+      .notNull()
+      .references(() => collections.id, { onDelete: 'cascade' }),
+    kind: text('kind').notNull(),
+    refId: text('ref_id').notNull(),
+    addedAt: integer('added_at').notNull()
+  },
+  (t) => [
+    primaryKey({ columns: [t.collectionId, t.kind, t.refId] }),
+    index('idx_collection_items_ref').on(t.kind, t.refId)
+  ]
+);
+
+export const pipelines = sqliteTable(
+  'pipelines',
+  {
+    id: text('id').primaryKey(),
+    userId: text('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    name: text('name').notNull(),
+    description: text('description'),
+    defaultView: text('default_view').notNull().default('kanban'),
+    isArchived: integer('is_archived').notNull().default(0),
+    createdAt: integer('created_at').notNull(),
+    updatedAt: integer('updated_at').notNull()
+  },
+  (t) => [
+    index('idx_pipelines_user_arch').on(t.userId, t.isArchived),
+    index('idx_pipelines_user_updated').on(t.userId, t.updatedAt)
+  ]
+);
+
+export const pipelineStages = sqliteTable(
+  'pipeline_stages',
+  {
+    id: text('id').primaryKey(),
+    pipelineId: text('pipeline_id')
+      .notNull()
+      .references(() => pipelines.id, { onDelete: 'cascade' }),
+    name: text('name').notNull(),
+    kind: text('kind').notNull().default('open'),
+    position: integer('position').notNull(),
+    createdAt: integer('created_at').notNull()
+  },
+  (t) => [index('idx_pipeline_stages_pipeline_pos').on(t.pipelineId, t.position)]
+);
+
+export const pipelineItems = sqliteTable(
+  'pipeline_items',
+  {
+    id: text('id').primaryKey(),
+    pipelineId: text('pipeline_id')
+      .notNull()
+      .references(() => pipelines.id, { onDelete: 'cascade' }),
+    kind: text('kind').notNull(),
+    refId: text('ref_id').notNull(),
+    stageId: text('stage_id')
+      .notNull()
+      .references(() => pipelineStages.id),
+    enteredStageAt: integer('entered_stage_at').notNull(),
+    note: text('note'),
+    valueCents: integer('value_cents'),
+    currency: text('currency'),
+    createdAt: integer('created_at').notNull(),
+    updatedAt: integer('updated_at').notNull()
+  },
+  (t) => [
+    uniqueIndex('uq_pipeline_items_pipeline_ref').on(t.pipelineId, t.kind, t.refId),
+    index('idx_pipeline_items_ref').on(t.kind, t.refId),
+    index('idx_pipeline_items_pipeline_stage').on(t.pipelineId, t.stageId)
+  ]
+);
+
+export const pipelineItemEvents = sqliteTable(
+  'pipeline_item_events',
+  {
+    id: text('id').primaryKey(),
+    itemId: text('item_id')
+      .notNull()
+      .references(() => pipelineItems.id, { onDelete: 'cascade' }),
+    fromStageId: text('from_stage_id'),
+    toStageId: text('to_stage_id').notNull(),
+    at: integer('at').notNull(),
+    byUserId: text('by_user_id').notNull()
+  },
+  (t) => [index('idx_pipeline_item_events_item_at').on(t.itemId, t.at)]
+);
+
 export type User = typeof users.$inferSelect;
 export type Session = typeof sessions.$inferSelect;
 export type Person = typeof people.$inferSelect;
@@ -316,6 +427,12 @@ export type Tag = typeof tags.$inferSelect;
 export type Reminder = typeof reminders.$inferSelect;
 export type Project = typeof projects.$inferSelect;
 export type ProjectLink = typeof projectLinks.$inferSelect;
+export type Collection = typeof collections.$inferSelect;
+export type CollectionItem = typeof collectionItems.$inferSelect;
+export type Pipeline = typeof pipelines.$inferSelect;
+export type PipelineStage = typeof pipelineStages.$inferSelect;
+export type PipelineItem = typeof pipelineItems.$inferSelect;
+export type PipelineItemEvent = typeof pipelineItemEvents.$inferSelect;
 
 export const TAG_SCOPES = ['person', 'company', 'interaction', 'project'] as const;
 export type TagScope = (typeof TAG_SCOPES)[number];
@@ -326,3 +443,12 @@ export const PROJECT_STATUSES = ['active', 'paused', 'archived'] as const;
 export type ProjectStatus = (typeof PROJECT_STATUSES)[number];
 export const BILLING_TYPES = ['none', 'hourly', 'fixed'] as const;
 export type BillingType = (typeof BILLING_TYPES)[number];
+
+export const MEMBER_KINDS = ['person', 'company'] as const;
+export type MemberKind = (typeof MEMBER_KINDS)[number];
+
+export const STAGE_KINDS = ['open', 'won', 'lost'] as const;
+export type StageKind = (typeof STAGE_KINDS)[number];
+
+export const PIPELINE_VIEWS = ['kanban', 'list'] as const;
+export type PipelineView = (typeof PIPELINE_VIEWS)[number];

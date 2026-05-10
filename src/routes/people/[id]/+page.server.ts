@@ -6,6 +6,8 @@ import { people, companies } from '$lib/server/schema';
 import { listInteractions } from '$lib/server/interactions-query';
 import { projectsForPerson, projectsTogether } from '$lib/server/projects-query';
 import { getTagsForEntity } from '$lib/server/tags';
+import { listCollectionsForEntity } from '$lib/server/collections';
+import { listPipelinesForEntity } from '$lib/server/pipelines';
 import { domainOf } from '$lib/server/url';
 
 export const load: PageServerLoad = async ({ locals, params, url }) => {
@@ -85,6 +87,11 @@ export const load: PageServerLoad = async ({ locals, params, url }) => {
   // "Other projects" = projects this person is on that the company isn't.
   const projectsOther = projectsAll.filter((p) => !togetherIds.has(p.id));
 
+  const [collections, pipelines] = await Promise.all([
+    listCollectionsForEntity(locals.user.id, locals.user.region, 'person', person.id),
+    listPipelinesForEntity(locals.user.id, locals.user.region, 'person', person.id)
+  ]);
+
   return {
     person,
     company,
@@ -94,6 +101,8 @@ export const load: PageServerLoad = async ({ locals, params, url }) => {
     justSaved,
     dedup,
     projectsTogether: projectsTogetherList,
-    projectsOther
+    projectsOther,
+    collections,
+    pipelines
   };
 };

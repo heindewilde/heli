@@ -5,6 +5,8 @@
   import FieldRow from '$lib/components/FieldRow.svelte';
   import InteractionRow from '$lib/components/InteractionRow.svelte';
   import TagInput from '$lib/components/TagInput.svelte';
+  import CollectionsRibbon from '$lib/components/CollectionsRibbon.svelte';
+  import PipelinesRibbon from '$lib/components/PipelinesRibbon.svelte';
   import AddReminder from '$lib/components/AddReminder.svelte';
   import SaveBanner from '$lib/components/SaveBanner.svelte';
   import StatusChip from '$lib/components/StatusChip.svelte';
@@ -430,6 +432,14 @@
       <div class="flex flex-col gap-2 rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)] p-3">
         <h3 class="text-xs font-medium uppercase tracking-wide text-[var(--color-subtle)]">Tags</h3>
         <TagInput scope="person" entityId={person.id} {tags} suggestions={tagSuggestions} />
+      </div>
+      <div class="flex flex-col gap-2 rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)] p-3">
+        <h3 class="text-xs font-medium uppercase tracking-wide text-[var(--color-subtle)]">Collections</h3>
+        <CollectionsRibbon kind="person" refId={person.id} collections={data.collections} />
+      </div>
+      <div class="flex flex-col gap-2 rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)] p-3">
+        <h3 class="text-xs font-medium uppercase tracking-wide text-[var(--color-subtle)]">Pipelines</h3>
+        <PipelinesRibbon kind="person" refId={person.id} pipelines={data.pipelines} />
       </div>
       <div class="flex flex-col gap-2 rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)] p-3">
         <h3 class="text-xs font-medium uppercase tracking-wide text-[var(--color-subtle)]">Reminder</h3>

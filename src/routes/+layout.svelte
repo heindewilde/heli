@@ -6,7 +6,7 @@
   import CommandPalette from '$lib/components/CommandPalette.svelte';
   import ShortcutHelp from '$lib/components/ShortcutHelp.svelte';
   import RemindersPopover from '$lib/components/RemindersPopover.svelte';
-  import { Users, Building2, MessagesSquare, FolderKanban, LogOut, Search, HelpCircle, Settings, Menu, X } from 'lucide-svelte';
+  import { Users, Building2, MessagesSquare, FolderKanban, FolderOpen, GitBranch, LogOut, Search, HelpCircle, Settings, Menu, X } from 'lucide-svelte';
   import { page } from '$app/state';
   import { onMount } from 'svelte';
   import { bindKeys, isTypingTarget } from '$lib/keyboard.svelte';
@@ -24,7 +24,9 @@
     { href: '/people', label: 'People', icon: Users },
     { href: '/companies', label: 'Companies', icon: Building2 },
     { href: '/interactions', label: 'Interactions', icon: MessagesSquare },
-    { href: '/projects', label: 'Projects', icon: FolderKanban }
+    { href: '/projects', label: 'Projects', icon: FolderKanban },
+    { href: '/collections', label: 'Collections', icon: FolderOpen },
+    { href: '/pipelines', label: 'Pipelines', icon: GitBranch }
   ];
 
   // Close the mobile drawer whenever the route changes (clicking a tab inside

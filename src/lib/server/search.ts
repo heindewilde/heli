@@ -22,33 +22,43 @@ export function ftsQuery(input: string): string | null {
 }
 
 export type CommandHit = {
-  kind: 'person' | 'company' | 'interaction' | 'project';
+  kind: 'person' | 'company' | 'interaction' | 'project' | 'collection' | 'pipeline';
   id: string;
   title: string;
   sub: string | null;
   href: string;
 };
 
-export type CommandScope = 'person' | 'company' | 'interaction' | 'project';
+export type CommandScope =
+  | 'person'
+  | 'company'
+  | 'interaction'
+  | 'project'
+  | 'collection'
+  | 'pipeline';
 
-// `pr:` MUST be checked before `p:` — otherwise "pr:foo" parses as scope=person
-// query="r:foo". Order in the regex's alternation matters because the regex
-// engine tries left-to-right.
-const SCOPE_PREFIX_RE = /^(pr|p|c|i):\s*(.*)$/i;
+// Multi-letter prefixes MUST come before single-letter ones, so the regex
+// engine tries them first when alternating left-to-right. Otherwise "pl:foo"
+// parses as scope=person query="l:foo".
+const SCOPE_PREFIX_RE = /^(col|pl|pr|p|c|i):\s*(.*)$/i;
 
 const SCOPE_FROM_LETTER: Record<string, CommandScope> = {
   p: 'person',
   c: 'company',
   i: 'interaction',
-  pr: 'project'
+  pr: 'project',
+  col: 'collection',
+  pl: 'pipeline'
 };
 
 /**
  * Parse the cmd-K input. Recognised prefixes:
- *   p:foo   → search people only
- *   c:foo   → search companies only
- *   i:foo   → search interactions only
- *   pr:foo  → search projects only
+ *   p:foo    → search people only
+ *   c:foo    → search companies only
+ *   i:foo    → search interactions only
+ *   pr:foo   → search projects only
+ *   col:foo  → search collections only
+ *   pl:foo   → search pipelines only
  *
  * Returns the matched scope (if any) and the remaining query text. The
  * client uses the same regex purely for a visual indicator; the source of
@@ -79,8 +89,10 @@ export async function searchAll(
   const wantCompanies = !scope || scope === 'company';
   const wantInteractions = !scope || scope === 'interaction';
   const wantProjects = !scope || scope === 'project';
+  const wantCollections = !scope || scope === 'collection';
+  const wantPipelines = !scope || scope === 'pipeline';
 
-  const [peopleRows, companyRows, interactionRows, projectRows] = await Promise.all([
+  const [peopleRows, companyRows, interactionRows, projectRows, collectionRows, pipelineRows] = await Promise.all([
     wantPeople
       ? d.all<{ id: string; name: string; role: string | null; domain: string | null }>(sql`
           SELECT p.id, p.name, p.role, p.domain
@@ -122,7 +134,31 @@ export async function searchAll(
           ORDER BY rank
           LIMIT ${scope === 'project' ? SCOPED_LIMIT : perKind}
         `)
-      : Promise.resolve([] as { id: string; name: string; status: string; description: string | null }[])
+      : Promise.resolve([] as { id: string; name: string; status: string; description: string | null }[]),
+    wantCollections
+      ? d.all<{ id: string; name: string; description: string | null }>(sql`
+          SELECT c.id, c.name, c.description
+          FROM collections c
+          JOIN collections_fts f ON f.rowid = c.rowid
+          WHERE c.user_id = ${userId}
+            AND f.collections_fts MATCH ${fts}
+            AND c.is_archived = 0
+          ORDER BY rank
+          LIMIT ${scope === 'collection' ? SCOPED_LIMIT : perKind}
+        `)
+      : Promise.resolve([] as { id: string; name: string; description: string | null }[]),
+    wantPipelines
+      ? d.all<{ id: string; name: string; description: string | null }>(sql`
+          SELECT p.id, p.name, p.description
+          FROM pipelines p
+          JOIN pipelines_fts f ON f.rowid = p.rowid
+          WHERE p.user_id = ${userId}
+            AND f.pipelines_fts MATCH ${fts}
+            AND p.is_archived = 0
+          ORDER BY rank
+          LIMIT ${scope === 'pipeline' ? SCOPED_LIMIT : perKind}
+        `)
+      : Promise.resolve([] as { id: string; name: string; description: string | null }[])
   ]);
 
   const hits: CommandHit[] = [];
@@ -161,6 +197,24 @@ export async function searchAll(
       title: p.name,
       sub: p.status === 'paused' ? 'paused' : p.description,
       href: `/projects/${p.id}`
+    });
+  }
+  for (const c of collectionRows) {
+    hits.push({
+      kind: 'collection',
+      id: c.id,
+      title: c.name,
+      sub: c.description,
+      href: `/collections/${c.id}`
+    });
+  }
+  for (const p of pipelineRows) {
+    hits.push({
+      kind: 'pipeline',
+      id: p.id,
+      title: p.name,
+      sub: p.description,
+      href: `/pipelines/${p.id}`
     });
   }
   return hits;
