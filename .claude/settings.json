@@ -6,7 +6,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "CMD=$(python3 -c \"import json,sys; d=json.load(sys.stdin); print(d.get('tool_input',d).get('command',''))\" 2>/dev/null || true); case \"$CMD\" in *grep*|*rg\\ *|*ripgrep*|*find\\ *|*fd\\ *|*ack\\ *|*ag\\ *)   [ -f graphify-out/graph.json ] &&   echo '{\"hookSpecificOutput\":{\"hookEventName\":\"PreToolUse\",\"additionalContext\":\"graphify: Knowledge graph exists. Read graphify-out/GRAPH_REPORT.md for god nodes and community structure before searching raw files.\"}}'   || true ;; esac"
+            "command": "CMD=$(python3 -c \"import json,sys; d=json.load(sys.stdin); print(d.get('tool_input',d).get('command','').strip())\" 2>/dev/null || true); m=0; case \"$CMD\" in rg|rg\\ *|fd|fd\\ *|ack\\ *|ag\\ *) m=1 ;; find\\ .*|find\\ /*|find\\ ~*) m=1 ;; grep\\ -*r*|grep\\ -*R*|grep\\ --recursive*|grep\\ --include*) m=1 ;; esac; if [ \"$m\" = \"1\" ] && [ -f graphify-out/graph.json ]; then echo '{\"hookSpecificOutput\":{\"hookEventName\":\"PreToolUse\",\"additionalContext\":\"graphify: knowledge graph at graphify-out/. Skim GRAPH_REPORT.md before searching raw files.\"}}'; fi"
           }
         ]
       }
