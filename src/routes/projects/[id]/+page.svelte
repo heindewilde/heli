@@ -1,6 +1,5 @@
 <script lang="ts">
   import { goto, invalidateAll } from '$app/navigation';
-  import { onMount } from 'svelte';
   import {
     Trash2,
     AlertTriangle,
@@ -19,7 +18,6 @@
   import CompanyPicker from '$lib/components/CompanyPicker.svelte';
   import CompanyLogo from '$lib/components/CompanyLogo.svelte';
   import NotesEditor from '$lib/components/NotesEditor.svelte';
-  import TagInput from '$lib/components/TagInput.svelte';
   import AddReminder from '$lib/components/AddReminder.svelte';
   import SaveBanner from '$lib/components/SaveBanner.svelte';
   import { TYPE_META, dayBucket, formatTime, type InteractionType } from '$lib/interactions';
@@ -39,15 +37,6 @@
   let editingNextStep = $state(false);
   // svelte-ignore state_referenced_locally
   let nextStepDraft = $state(project.nextStep ?? '');
-
-  let tagSuggestions = $state<{ id: string; name: string; slug: string; count: number }[]>([]);
-
-  onMount(() => {
-    fetch('/api/tags?scope=project')
-      .then((r) => (r.ok ? r.json() : { items: [] }))
-      .then((d) => (tagSuggestions = d.items ?? []))
-      .catch(() => {});
-  });
 
   async function patch(body: Record<string, unknown>): Promise<boolean> {
     if (nameCommitInFlight) await nameCommitInFlight;
@@ -435,11 +424,6 @@
           <p class="mt-1 text-[10px] text-[var(--color-subtle)]">Recorded for reference; Gusto doesn't track time or invoices.</p>
         </div>
       {/if}
-
-      <div class="flex flex-col gap-2 rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)] p-3">
-        <h3 class="text-xs font-medium uppercase tracking-wide text-[var(--color-subtle)]">Tags</h3>
-        <TagInput scope="project" entityId={project.id} tags={project.tags} suggestions={tagSuggestions} />
-      </div>
 
       <div class="flex flex-col gap-2 rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)] p-3">
         <h3 class="text-xs font-medium uppercase tracking-wide text-[var(--color-subtle)]">Reminder</h3>

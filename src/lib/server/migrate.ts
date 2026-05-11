@@ -121,12 +121,6 @@ CREATE TABLE IF NOT EXISTS company_tags (
   PRIMARY KEY (company_id, tag_id)
 );
 
-CREATE TABLE IF NOT EXISTS interaction_tags (
-  interaction_id TEXT NOT NULL REFERENCES interactions(id) ON DELETE CASCADE,
-  tag_id TEXT NOT NULL REFERENCES tags(id) ON DELETE CASCADE,
-  PRIMARY KEY (interaction_id, tag_id)
-);
-
 CREATE TABLE IF NOT EXISTS reminders (
   id TEXT PRIMARY KEY,
   user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -186,12 +180,6 @@ CREATE TABLE IF NOT EXISTS interaction_projects (
   PRIMARY KEY (interaction_id, project_id)
 );
 CREATE INDEX IF NOT EXISTS idx_ip_project ON interaction_projects(project_id);
-
-CREATE TABLE IF NOT EXISTS project_tags (
-  project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
-  tag_id TEXT NOT NULL REFERENCES tags(id) ON DELETE CASCADE,
-  PRIMARY KEY (project_id, tag_id)
-);
 
 CREATE TABLE IF NOT EXISTS collections (
   id TEXT PRIMARY KEY,

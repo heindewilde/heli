@@ -2,9 +2,8 @@
   import { goto } from '$app/navigation';
   import { page } from '$app/state';
   import { onMount } from 'svelte';
-  import { Search, Plus, Tag, X, ArrowDownUp } from 'lucide-svelte';
+  import { Search, Plus, ArrowDownUp } from 'lucide-svelte';
   import ProjectCard from '$lib/components/ProjectCard.svelte';
-  import RowTagAdder from '$lib/components/RowTagAdder.svelte';
   import { bindKeys } from '$lib/keyboard.svelte';
   import type { ProjectStatus } from '$lib/server/schema';
 
@@ -130,38 +129,12 @@
           : 'border-[var(--color-border)] text-[var(--color-muted)] hover:bg-[var(--color-surface)]'}"
       >{f.label}</a>
     {/each}
-    {#if data.tag}
-      <span class="text-[var(--color-subtle)]">·</span>
-      <a
-        href={buildUrl({ tag: null })}
-        class="inline-flex items-center gap-1 rounded-full border border-[var(--color-highlight-border)] bg-[var(--color-highlight-bg)] px-2.5 py-1 text-[var(--color-text)]"
-      >
-        <Tag size={12} strokeWidth={2} />
-        {data.tag.name}
-        <X size={10} strokeWidth={2} />
-      </a>
-    {:else if data.allTags.length > 0}
-      <span class="text-[var(--color-subtle)]">·</span>
-      {#each data.allTags.slice(0, 8) as t (t.id)}
-        <a
-          href={buildUrl({ tag: t.slug })}
-          class="inline-flex items-center gap-1 rounded-full border border-[var(--color-border)] px-2.5 py-1 text-[var(--color-muted)] hover:bg-[var(--color-surface)]"
-        >
-          <Tag size={12} strokeWidth={2} />
-          {t.name}
-          <span class="text-[var(--color-subtle)]">{t.count}</span>
-        </a>
-      {/each}
-    {/if}
   </div>
 
   {#if rows.length === 0}
     <div class="rounded-[var(--radius-md)] border border-dashed border-[var(--color-border)] bg-[var(--color-surface)] p-10 text-center">
       {#if data.q}
         <p class="text-sm text-[var(--color-muted)]">No projects match &ldquo;{data.q}&rdquo;.</p>
-      {:else if data.tag}
-        <p class="text-sm text-[var(--color-muted)]">No projects tagged <strong>{data.tag.name}</strong>.</p>
-        <a href="/projects" class="mt-3 inline-flex items-center gap-1 rounded-[var(--radius-sm)] border border-[var(--color-border)] px-3 py-1.5 text-sm">Clear tag filter</a>
       {:else if data.status !== 'active'}
         <p class="text-sm text-[var(--color-muted)]">No {data.status} projects.</p>
       {:else}
@@ -175,9 +148,8 @@
   {:else}
     <ul class="grid grid-cols-2 gap-3 sm:grid-cols-3">
       {#each rows as p, i (p.id)}
-        {@const projectTagList = data.itemTags[p.id] ?? []}
         {@const projectCompanies = data.itemCompanies[p.id] ?? []}
-        <li class="flex flex-col gap-1">
+        <li>
           <ProjectCard
             href={`/projects/${p.id}`}
             name={p.name}
@@ -189,20 +161,6 @@
             companies={projectCompanies}
             selected={i === selected}
           />
-          <div class="flex flex-wrap items-center gap-1 px-1">
-            {#each projectTagList as t (t.id)}
-              <a
-                href={buildUrl({ tag: t.slug })}
-                class="rounded-full bg-[var(--color-highlight-bg)] px-1.5 py-0.5 text-[10px] text-[var(--color-text)] hover:underline"
-              >{t.name}</a>
-            {/each}
-            <RowTagAdder
-              scope="project"
-              entityId={p.id}
-              currentTags={projectTagList}
-              suggestions={data.allTags}
-            />
-          </div>
         </li>
       {/each}
     </ul>

@@ -1,10 +1,9 @@
 <script lang="ts">
   import { goto } from '$app/navigation';
   import { page } from '$app/state';
-  import { Plus, Search, Tag, X } from 'lucide-svelte';
+  import { Plus, Search } from 'lucide-svelte';
   import { onMount } from 'svelte';
   import InteractionRow from '$lib/components/InteractionRow.svelte';
-  import RowTagAdder from '$lib/components/RowTagAdder.svelte';
   import { INTERACTION_TYPES, TYPE_META, dayBucket } from '$lib/interactions';
   import { bindKeys } from '$lib/keyboard.svelte';
 
@@ -83,7 +82,7 @@
     })
   );
 
-  const hasFilters = $derived(!!(data.q || data.type || data.from || data.to || data.tag));
+  const hasFilters = $derived(!!(data.q || data.type || data.from || data.to));
 </script>
 
 <div class="flex flex-col gap-4">
@@ -138,30 +137,6 @@
     {/each}
   </div>
 
-  <div class="flex flex-wrap items-center gap-2 text-xs">
-    {#if data.tag}
-      <a
-        href={buildUrl({ tag: null })}
-        class="inline-flex items-center gap-1 rounded-full border border-[var(--color-highlight-border)] bg-[var(--color-highlight-bg)] px-2.5 py-1 text-[var(--color-text)]"
-      >
-        <Tag size={12} strokeWidth={2} />
-        {data.tag.name}
-        <X size={10} strokeWidth={2} />
-      </a>
-    {:else if data.allTags.length > 0}
-      {#each data.allTags.slice(0, 8) as t (t.id)}
-        <a
-          href={buildUrl({ tag: t.slug })}
-          class="inline-flex items-center gap-1 rounded-full border border-[var(--color-border)] px-2.5 py-1 text-[var(--color-muted)] hover:bg-[var(--color-surface)]"
-        >
-          <Tag size={12} strokeWidth={2} />
-          {t.name}
-          <span class="text-[var(--color-subtle)]">{t.count}</span>
-        </a>
-      {/each}
-    {/if}
-  </div>
-
   <div class="flex flex-wrap items-center gap-2 text-xs text-[var(--color-muted)]">
     <label class="inline-flex items-center gap-1">
       From
@@ -207,23 +182,8 @@
           <ul class="flex flex-col gap-0.5">
             {#each g.items as i (i.id)}
               {@const idx = flatIndexById.get(i.id) ?? -1}
-              {@const itags = data.itemTags[i.id] ?? []}
               <li>
                 <InteractionRow {...i} selected={idx === selected} />
-                <div class="ml-12 -mt-0.5 flex flex-wrap items-center gap-1 pb-1">
-                  {#each itags as t (t.id)}
-                    <a
-                      href={buildUrl({ tag: t.slug })}
-                      class="rounded-full bg-[var(--color-highlight-bg)] px-1.5 py-0.5 text-[10px] text-[var(--color-text)] hover:underline"
-                    >{t.name}</a>
-                  {/each}
-                  <RowTagAdder
-                    scope="interaction"
-                    entityId={i.id}
-                    currentTags={itags}
-                    suggestions={data.allTags}
-                  />
-                </div>
               </li>
             {/each}
           </ul>

@@ -7,12 +7,8 @@ import {
   tags,
   personTags,
   companyTags,
-  interactionTags,
-  projectTags,
   people,
-  companies,
-  interactions,
-  projects
+  companies
 } from './schema';
 import { sanitizePlainText } from './sanitize';
 
@@ -33,16 +29,12 @@ export function slugify(name: string): string {
 
 const JOIN_TABLE = {
   person: { table: personTags, ref: personTags.personId },
-  company: { table: companyTags, ref: companyTags.companyId },
-  interaction: { table: interactionTags, ref: interactionTags.interactionId },
-  project: { table: projectTags, ref: projectTags.projectId }
+  company: { table: companyTags, ref: companyTags.companyId }
 } as const;
 
 const ENTITY_TABLE = {
   person: { table: people, idCol: people.id, userCol: people.userId },
-  company: { table: companies, idCol: companies.id, userCol: companies.userId },
-  interaction: { table: interactions, idCol: interactions.id, userCol: interactions.userId },
-  project: { table: projects, idCol: projects.id, userCol: projects.userId }
+  company: { table: companies, idCol: companies.id, userCol: companies.userId }
 } as const;
 
 export type TagWithCount = { id: string; name: string; slug: string; scope: TagScope; count: number };
@@ -118,7 +110,6 @@ export async function attachTag(
 ): Promise<void> {
   const d = db(region);
   if (!(await ensureEntity(userId, region, scope, entityId))) throw new Error('not_found');
-  // Confirm the tag belongs to this user and scope.
   const tag = await d
     .select({ id: tags.id })
     .from(tags)
@@ -127,12 +118,8 @@ export async function attachTag(
   if (!tag) throw new Error('not_found');
   if (scope === 'person') {
     await d.insert(personTags).values({ personId: entityId, tagId }).onConflictDoNothing();
-  } else if (scope === 'company') {
-    await d.insert(companyTags).values({ companyId: entityId, tagId }).onConflictDoNothing();
-  } else if (scope === 'interaction') {
-    await d.insert(interactionTags).values({ interactionId: entityId, tagId }).onConflictDoNothing();
   } else {
-    await d.insert(projectTags).values({ projectId: entityId, tagId }).onConflictDoNothing();
+    await d.insert(companyTags).values({ companyId: entityId, tagId }).onConflictDoNothing();
   }
 }
 
@@ -149,18 +136,10 @@ export async function detachTag(
     await d
       .delete(personTags)
       .where(and(eq(personTags.personId, entityId), eq(personTags.tagId, tagId)));
-  } else if (scope === 'company') {
+  } else {
     await d
       .delete(companyTags)
       .where(and(eq(companyTags.companyId, entityId), eq(companyTags.tagId, tagId)));
-  } else if (scope === 'interaction') {
-    await d
-      .delete(interactionTags)
-      .where(and(eq(interactionTags.interactionId, entityId), eq(interactionTags.tagId, tagId)));
-  } else {
-    await d
-      .delete(projectTags)
-      .where(and(eq(projectTags.projectId, entityId), eq(projectTags.tagId, tagId)));
   }
 }
 
@@ -190,27 +169,11 @@ export async function getTagsForEntity(
       .where(and(eq(personTags.personId, entityId), eq(tags.userId, userId)))
       .orderBy(asc(tags.name));
   }
-  if (scope === 'company') {
-    return d
-      .select({ id: tags.id, name: tags.name, slug: tags.slug })
-      .from(companyTags)
-      .innerJoin(tags, eq(tags.id, companyTags.tagId))
-      .where(and(eq(companyTags.companyId, entityId), eq(tags.userId, userId)))
-      .orderBy(asc(tags.name));
-  }
-  if (scope === 'interaction') {
-    return d
-      .select({ id: tags.id, name: tags.name, slug: tags.slug })
-      .from(interactionTags)
-      .innerJoin(tags, eq(tags.id, interactionTags.tagId))
-      .where(and(eq(interactionTags.interactionId, entityId), eq(tags.userId, userId)))
-      .orderBy(asc(tags.name));
-  }
   return d
     .select({ id: tags.id, name: tags.name, slug: tags.slug })
-    .from(projectTags)
-    .innerJoin(tags, eq(tags.id, projectTags.tagId))
-    .where(and(eq(projectTags.projectId, entityId), eq(tags.userId, userId)))
+    .from(companyTags)
+    .innerJoin(tags, eq(tags.id, companyTags.tagId))
+    .where(and(eq(companyTags.companyId, entityId), eq(tags.userId, userId)))
     .orderBy(asc(tags.name));
 }
 
@@ -235,7 +198,7 @@ export async function getTagsForEntities(
       .from(personTags)
       .innerJoin(tags, eq(tags.id, personTags.tagId))
       .where(and(eq(tags.userId, userId), inArray(personTags.personId, entityIds)));
-  } else if (scope === 'company') {
+  } else {
     rows = await d
       .select({
         entityId: companyTags.companyId,
@@ -246,28 +209,6 @@ export async function getTagsForEntities(
       .from(companyTags)
       .innerJoin(tags, eq(tags.id, companyTags.tagId))
       .where(and(eq(tags.userId, userId), inArray(companyTags.companyId, entityIds)));
-  } else if (scope === 'interaction') {
-    rows = await d
-      .select({
-        entityId: interactionTags.interactionId,
-        id: tags.id,
-        name: tags.name,
-        slug: tags.slug
-      })
-      .from(interactionTags)
-      .innerJoin(tags, eq(tags.id, interactionTags.tagId))
-      .where(and(eq(tags.userId, userId), inArray(interactionTags.interactionId, entityIds)));
-  } else {
-    rows = await d
-      .select({
-        entityId: projectTags.projectId,
-        id: tags.id,
-        name: tags.name,
-        slug: tags.slug
-      })
-      .from(projectTags)
-      .innerJoin(tags, eq(tags.id, projectTags.tagId))
-      .where(and(eq(tags.userId, userId), inArray(projectTags.projectId, entityIds)));
   }
   for (const r of rows) {
     const list = out.get(r.entityId) ?? [];
@@ -308,26 +249,10 @@ export async function entityIdsForTag(
       .where(and(eq(personTags.tagId, tagId), eq(tags.userId, userId)));
     return rows.map((r) => r.id);
   }
-  if (scope === 'company') {
-    const rows = await d
-      .select({ id: companyTags.companyId })
-      .from(companyTags)
-      .innerJoin(tags, eq(tags.id, companyTags.tagId))
-      .where(and(eq(companyTags.tagId, tagId), eq(tags.userId, userId)));
-    return rows.map((r) => r.id);
-  }
-  if (scope === 'interaction') {
-    const rows = await d
-      .select({ id: interactionTags.interactionId })
-      .from(interactionTags)
-      .innerJoin(tags, eq(tags.id, interactionTags.tagId))
-      .where(and(eq(interactionTags.tagId, tagId), eq(tags.userId, userId)));
-    return rows.map((r) => r.id);
-  }
   const rows = await d
-    .select({ id: projectTags.projectId })
-    .from(projectTags)
-    .innerJoin(tags, eq(tags.id, projectTags.tagId))
-    .where(and(eq(projectTags.tagId, tagId), eq(tags.userId, userId)));
+    .select({ id: companyTags.companyId })
+    .from(companyTags)
+    .innerJoin(tags, eq(tags.id, companyTags.tagId))
+    .where(and(eq(companyTags.tagId, tagId), eq(tags.userId, userId)));
   return rows.map((r) => r.id);
 }

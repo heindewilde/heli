@@ -226,19 +226,6 @@ export const companyTags = sqliteTable(
   (t) => [primaryKey({ columns: [t.companyId, t.tagId] })]
 );
 
-export const interactionTags = sqliteTable(
-  'interaction_tags',
-  {
-    interactionId: text('interaction_id')
-      .notNull()
-      .references(() => interactions.id, { onDelete: 'cascade' }),
-    tagId: text('tag_id')
-      .notNull()
-      .references(() => tags.id, { onDelete: 'cascade' })
-  },
-  (t) => [primaryKey({ columns: [t.interactionId, t.tagId] })]
-);
-
 export const reminders = sqliteTable(
   'reminders',
   {
@@ -341,19 +328,6 @@ export const interactionProjects = sqliteTable(
     primaryKey({ columns: [t.interactionId, t.projectId] }),
     index('idx_ip_project').on(t.projectId)
   ]
-);
-
-export const projectTags = sqliteTable(
-  'project_tags',
-  {
-    projectId: text('project_id')
-      .notNull()
-      .references(() => projects.id, { onDelete: 'cascade' }),
-    tagId: text('tag_id')
-      .notNull()
-      .references(() => tags.id, { onDelete: 'cascade' })
-  },
-  (t) => [primaryKey({ columns: [t.projectId, t.tagId] })]
 );
 
 export const collections = sqliteTable(
@@ -484,7 +458,7 @@ export type PipelineStage = typeof pipelineStages.$inferSelect;
 export type PipelineItem = typeof pipelineItems.$inferSelect;
 export type PipelineItemEvent = typeof pipelineItemEvents.$inferSelect;
 
-export const TAG_SCOPES = ['person', 'company', 'interaction', 'project'] as const;
+export const TAG_SCOPES = ['person', 'company'] as const;
 export type TagScope = (typeof TAG_SCOPES)[number];
 export const REMINDER_KINDS = ['person', 'company', 'interaction', 'project'] as const;
 export type ReminderKind = (typeof REMINDER_KINDS)[number];

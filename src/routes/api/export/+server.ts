@@ -125,7 +125,6 @@ export const GET: RequestHandler = async ({ url, locals }) => {
       .select()
       .from(interactions)
       .where(eq(interactions.userId, userId));
-    const tagMap = await getTagsForEntities(userId, region, 'interaction', rows.map((r) => r.id));
     // Person links: one query, group by interactionId.
     const links = rows.length
       ? await d
@@ -150,7 +149,6 @@ export const GET: RequestHandler = async ({ url, locals }) => {
         'body',
         'company_id',
         'person_ids',
-        'tags',
         'created_at',
         'updated_at'
       ],
@@ -163,7 +161,6 @@ export const GET: RequestHandler = async ({ url, locals }) => {
         i.body ?? '',
         i.companyId ?? '',
         (personByInteraction.get(i.id) ?? []).join('|'),
-        (tagMap.get(i.id) ?? []).map((t) => t.name).join('|'),
         isoDate(i.createdAt),
         isoDate(i.updatedAt)
       ]
@@ -175,8 +172,6 @@ export const GET: RequestHandler = async ({ url, locals }) => {
       .from(projects)
       .where(eq(projects.userId, userId));
     const ids = rows.map((r) => r.id);
-    const tagMap = await getTagsForEntities(userId, region, 'project', ids);
-
     // Sub-resources fetched in parallel; the empty-id-array case still works
     // because the IN clause naturally returns nothing.
     const [linkRows, peopleLinks, companyLinks] = ids.length
@@ -230,7 +225,6 @@ export const GET: RequestHandler = async ({ url, locals }) => {
         'person_ids',
         'company_ids',
         'links',
-        'tags',
         'created_at',
         'updated_at'
       ],
@@ -250,7 +244,6 @@ export const GET: RequestHandler = async ({ url, locals }) => {
         (peopleByProject.get(p.id) ?? []).join('|'),
         (companiesByProject.get(p.id) ?? []).join('|'),
         (linksByProject.get(p.id) ?? []).join(';'),
-        (tagMap.get(p.id) ?? []).map((t) => t.name).join('|'),
         isoDate(p.createdAt),
         isoDate(p.updatedAt)
       ]

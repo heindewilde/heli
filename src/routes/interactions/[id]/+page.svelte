@@ -5,7 +5,6 @@
   import CompanyPicker from '$lib/components/CompanyPicker.svelte';
   import ProjectPicker from '$lib/components/ProjectPicker.svelte';
   import StatusChip from '$lib/components/StatusChip.svelte';
-  import TagInput from '$lib/components/TagInput.svelte';
   import AddReminder from '$lib/components/AddReminder.svelte';
   import { FolderKanban } from 'lucide-svelte';
   import type { ProjectStatus } from '$lib/server/schema';
@@ -19,20 +18,9 @@
     type InteractionType
   } from '$lib/interactions';
   import { toast } from '$lib/toasts.svelte';
-  import { onMount } from 'svelte';
 
   let { data } = $props();
   const interaction = $derived(data.interaction);
-  const tags = $derived(data.tags);
-
-  let tagSuggestions = $state<{ id: string; name: string; slug: string; count: number }[]>([]);
-
-  onMount(() => {
-    fetch('/api/tags?scope=interaction')
-      .then((r) => (r.ok ? r.json() : { items: [] }))
-      .then((d) => (tagSuggestions = d.items ?? []))
-      .catch(() => {});
-  });
 
   let editing = $state(false);
   let saving = $state(false);
@@ -274,11 +262,6 @@
             {/each}
           </ul>
         {/if}
-      </div>
-
-      <div>
-        <h2 class="mb-1 text-xs font-medium uppercase tracking-wide text-[var(--color-subtle)]">Tags</h2>
-        <TagInput scope="interaction" entityId={interaction.id} {tags} suggestions={tagSuggestions} />
       </div>
 
       <div>

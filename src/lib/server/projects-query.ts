@@ -13,7 +13,6 @@ import {
   type ProjectStatus
 } from './schema';
 import { ftsQuery } from './search';
-import { getTagsForEntity, getTagsForEntities } from './tags';
 
 export type ProjectListRow = {
   id: string;
@@ -38,7 +37,6 @@ export type ListFilters = {
   status?: ProjectStatus | 'all';
   personId?: string;
   companyId?: string;
-  tagFilterIds?: string[] | null;
   sort?: 'recent' | 'updated' | 'name' | 'endDate' | 'lastInteraction';
   limit?: number;
 };
@@ -61,13 +59,6 @@ export async function listProjects(
   const companyClause = filters.companyId
     ? sql`AND EXISTS (SELECT 1 FROM project_companies pc WHERE pc.project_id = p.id AND pc.company_id = ${filters.companyId})`
     : sql``;
-  const tagFilter =
-    filters.tagFilterIds && filters.tagFilterIds.length > 0
-      ? sql`AND p.id IN (${sql.join(
-          filters.tagFilterIds.map((id) => sql`${id}`),
-          sql`, `
-        )})`
-      : sql``;
   const ftsClause = fts
     ? sql`AND p.id IN (
         SELECT pp.id FROM projects pp
@@ -112,7 +103,6 @@ export async function listProjects(
       ${statusClause}
       ${personClause}
       ${companyClause}
-      ${tagFilter}
       ${ftsClause}
     ${orderClause}
     LIMIT ${limit}
@@ -140,7 +130,6 @@ export type ProjectDetail = Project & {
   people: ProjectMember[];
   companies: ProjectMember[];
   interactions: ProjectInteractionRow[];
-  tags: { id: string; name: string; slug: string }[];
 };
 
 export async function getProject(
@@ -156,7 +145,7 @@ export async function getProject(
     .get();
   if (!project) return null;
 
-  const [links, peopleRows, companyRows, interactionRows, tagList] = await Promise.all([
+  const [links, peopleRows, companyRows, interactionRows] = await Promise.all([
     d
       .select({
         id: projectLinks.id,
@@ -199,11 +188,10 @@ export async function getProject(
       .from(interactionProjects)
       .innerJoin(interactions, eq(interactions.id, interactionProjects.interactionId))
       .where(and(eq(interactionProjects.projectId, id), eq(interactions.userId, userId)))
-      .orderBy(desc(interactions.occurredAt)),
-    getTagsForEntity(userId, region, 'project', id)
+      .orderBy(desc(interactions.occurredAt))
   ]);
 
-  return { ...project, links, people: peopleRows, companies: companyRows, interactions: interactionRows, tags: tagList };
+  return { ...project, links, people: peopleRows, companies: companyRows, interactions: interactionRows };
 }
 
 /** Active projects where this person is a member. */
@@ -389,5 +377,3 @@ export async function getCompaniesForProjects(
   return out;
 }
 
-// Deprecated alias for symmetry with previous naming; kept for tag joins.
-export { getTagsForEntities };
