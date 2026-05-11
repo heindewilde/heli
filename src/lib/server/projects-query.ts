@@ -26,6 +26,7 @@ export type ProjectListRow = {
   fixedFee: number | null;
   currency: string | null;
   nextStep: string | null;
+  icon: string | null;
   createdAt: number;
   updatedAt: number;
   memberCount: number;
@@ -90,7 +91,7 @@ export async function listProjects(
       p.id, p.name, p.description, p.status,
       p.start_date AS startDate, p.end_date AS endDate,
       p.billing_type AS billingType, p.hourly_rate AS hourlyRate,
-      p.fixed_fee AS fixedFee, p.currency, p.next_step AS nextStep,
+      p.fixed_fee AS fixedFee, p.currency, p.next_step AS nextStep, p.icon,
       p.created_at AS createdAt, p.updated_at AS updatedAt,
       (SELECT COUNT(*) FROM project_people WHERE project_id = p.id)
         + (SELECT COUNT(*) FROM project_companies WHERE project_id = p.id) AS memberCount,

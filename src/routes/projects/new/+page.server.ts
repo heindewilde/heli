@@ -37,7 +37,7 @@ export const actions: Actions = {
       endDate: (data.get('endDate') as string | null) || null,
       billingType,
       currency: (data.get('currency') as string | null)?.toUpperCase() || null,
-      nextStep: (data.get('nextStep') as string | null) || null
+      icon: (data.get('icon') as string | null) || null
     };
     if (billingType === 'hourly') {
       const hr = String(data.get('hourlyRate') ?? '');

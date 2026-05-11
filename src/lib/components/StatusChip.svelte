@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { Activity, PauseCircle, Archive, ChevronDown } from 'lucide-svelte';
+  import { Activity, PauseCircle, Archive, CheckCircle2, ChevronDown } from 'lucide-svelte';
   import type { ProjectStatus } from '$lib/server/schema';
 
   type Props = {
@@ -30,6 +30,13 @@
       bg: 'bg-[var(--color-warning-bg)]',
       border: 'border-[var(--color-warning-border)]'
     },
+    completed: {
+      label: 'Completed',
+      icon: CheckCircle2,
+      tone: 'text-[var(--color-info)]',
+      bg: 'bg-[var(--color-info-bg)]',
+      border: 'border-[var(--color-info-border)]'
+    },
     archived: {
       label: 'Archived',
       icon: Archive,
@@ -38,7 +45,7 @@
       border: 'border-[var(--color-border)]'
     }
   };
-  const STATUSES: ProjectStatus[] = ['active', 'paused', 'archived'];
+  const STATUSES: ProjectStatus[] = ['active', 'paused', 'completed', 'archived'];
 
   const meta = $derived(META[status]);
   const sizeClasses = $derived(size === 'md' ? 'px-2.5 py-1 text-sm' : 'px-2 py-0.5 text-[11px]');

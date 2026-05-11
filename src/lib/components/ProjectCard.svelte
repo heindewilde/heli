@@ -2,6 +2,7 @@
   import { Briefcase, AlertTriangle, Users, CalendarClock } from 'lucide-svelte';
   import StatusChip from './StatusChip.svelte';
   import CompanyLogo from './CompanyLogo.svelte';
+  import { COLLECTION_ICON_MAP } from '$lib/collectionIcons';
   import type { ProjectStatus } from '$lib/server/schema';
 
   type Company = { id: string; name: string; domain: string | null; logoUrl: string | null; faviconUrl: string | null };
@@ -15,6 +16,7 @@
     endDate?: number | null;
     memberCount: number;
     companies?: Company[];
+    icon?: string | null;
     selected?: boolean;
   };
 
@@ -27,8 +29,11 @@
     endDate,
     memberCount,
     companies = [],
+    icon = null,
     selected = false
   }: Props = $props();
+
+  const CardIcon = $derived(icon && COLLECTION_ICON_MAP[icon] ? COLLECTION_ICON_MAP[icon] : null);
 
   const overdue = $derived(
     status === 'active' && typeof endDate === 'number' && endDate < Date.now()
@@ -65,7 +70,11 @@
   <!-- Icon + status -->
   <div class="flex items-start justify-between gap-2">
     <span class="flex h-10 w-10 shrink-0 items-center justify-center rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-bg)] text-[var(--color-muted)]">
-      <Briefcase size={20} strokeWidth={1.75} />
+      {#if CardIcon}
+        <CardIcon size={20} strokeWidth={1.75} />
+      {:else}
+        <Briefcase size={20} strokeWidth={1.75} />
+      {/if}
     </span>
     <span class="mt-1">
       <StatusChip {status} size="sm" />

@@ -28,6 +28,7 @@ export type ManualProjectInput = {
   fixedFee?: number | null;
   currency?: string | null;
   nextStep?: string | null;
+  icon?: string | null;
 };
 
 export type UpdateProjectInput = Partial<ManualProjectInput>;
@@ -98,6 +99,9 @@ function coerceFields(input: UpdateProjectInput): Partial<typeof projects.$infer
   if (input.nextStep !== undefined) {
     out.nextStep = input.nextStep == null ? null : sanitizePlainText(String(input.nextStep), 200) || null;
   }
+  if (input.icon !== undefined) {
+    out.icon = input.icon == null ? null : sanitizePlainText(String(input.icon), 50) || null;
+  }
   return out;
 }
 
@@ -134,6 +138,7 @@ export async function createProject(
     fixedFee: fields.fixedFee ?? null,
     currency: fields.currency ?? null,
     nextStep: fields.nextStep ?? null,
+    icon: fields.icon ?? null,
     createdAt: now,
     updatedAt: now
   });

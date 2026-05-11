@@ -2,18 +2,21 @@
   import { enhance } from '$app/forms';
   import PersonPicker from '$lib/components/PersonPicker.svelte';
   import CompanyPicker from '$lib/components/CompanyPicker.svelte';
+  import { COLLECTION_ICON_MAP, COLLECTION_ICON_NAMES } from '$lib/collectionIcons';
   import type { BillingType, ProjectStatus } from '$lib/server/schema';
 
   let { form } = $props();
   let submitting = $state(false);
 
   let billingType = $state<BillingType>('none');
+  let showBilling = $state(false);
   let status = $state<ProjectStatus>('active');
   let hourlyRate = $state('');
   let fixedFee = $state('');
   let currency = $state('USD');
+  let selectedIcon = $state<string | null>(null);
 
-  const STATUSES: ProjectStatus[] = ['active', 'paused', 'archived'];
+  const STATUSES: ProjectStatus[] = ['active', 'paused', 'completed', 'archived'];
   const BILLING_TYPES_UI: BillingType[] = ['none', 'hourly', 'fixed'];
 
   type Person = { id: string; name: string; avatarUrl: string | null; role: string | null };
@@ -21,8 +24,6 @@
 
   let selectedPeople = $state<Person[]>([]);
   let selectedCompany = $state<Company | null>(null);
-  // Quick way to attach more than one company on creation: stash an array
-  // below the picker. The form serialises both arrays as CSVs.
   let extraCompanies = $state<Company[]>([]);
 
   const inputClass =
@@ -43,7 +44,7 @@
   <header>
     <h1 class="text-2xl font-semibold tracking-tight">New project</h1>
     <p class="text-sm text-[var(--color-muted)]">
-      Track a fundraise, a launch, a consulting engagement, or any ongoing collaboration. Members can come from people and companies you've already saved.
+      Track a fundraise, a launch, a consulting engagement, or any ongoing collaboration.
     </p>
   </header>
 
@@ -56,26 +57,54 @@
         submitting = false;
       };
     }}
-    class="flex flex-col gap-3"
+    class="flex flex-col gap-4"
   >
+    {#if selectedIcon}
+      <input type="hidden" name="icon" value={selectedIcon} />
+    {/if}
+
+    <!-- Icon picker -->
+    <div class="flex flex-col gap-2">
+      <span class="text-sm text-[var(--color-muted)]">
+        Icon
+        {#if selectedIcon}
+          <button
+            type="button"
+            onclick={() => (selectedIcon = null)}
+            class="ml-1 text-xs text-[var(--color-subtle)] underline hover:text-[var(--color-text)]"
+          >clear</button>
+        {/if}
+      </span>
+      <div class="flex max-h-40 flex-wrap gap-1 overflow-y-auto rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)] p-2">
+        {#each COLLECTION_ICON_NAMES as name}
+          {@const Ic = COLLECTION_ICON_MAP[name]}
+          <button
+            type="button"
+            title={name}
+            onclick={() => (selectedIcon = selectedIcon === name ? null : name)}
+            class="flex h-8 w-8 items-center justify-center rounded-[var(--radius-sm)] transition-colors {selectedIcon === name
+              ? 'bg-[var(--color-accent)] text-[var(--color-accent-fg)]'
+              : 'text-[var(--color-muted)] hover:bg-[var(--color-bg)] hover:text-[var(--color-text)]'}"
+          >
+            <Ic size={16} strokeWidth={2} />
+          </button>
+        {/each}
+      </div>
+      {#if selectedIcon}
+        <p class="text-xs text-[var(--color-subtle)]">
+          <span class="font-medium text-[var(--color-text)]">{selectedIcon}</span> selected
+        </p>
+      {/if}
+    </div>
+
     <label class="flex flex-col gap-1 text-sm">
       <span class="text-[var(--color-muted)]">Name *</span>
-      <input name="name" required maxlength="200" class={inputClass} />
+      <input name="name" required maxlength="200" class={inputClass} autofocus />
     </label>
 
     <label class="flex flex-col gap-1 text-sm">
       <span class="text-[var(--color-muted)]">Description</span>
       <textarea name="description" rows="3" class={inputClass}></textarea>
-    </label>
-
-    <label class="flex flex-col gap-1 text-sm">
-      <span class="text-[var(--color-muted)]">Next step</span>
-      <input
-        name="nextStep"
-        maxlength="200"
-        placeholder="One line — e.g. 'Send deck to Sequoia by Friday'"
-        class={inputClass}
-      />
     </label>
 
     <fieldset class="flex flex-wrap items-center gap-1.5 text-sm">
@@ -107,65 +136,81 @@
       </label>
     </div>
 
-    <fieldset class="flex flex-col gap-2 rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-surface)] p-3 text-sm">
-      <legend class="px-1 text-xs text-[var(--color-muted)]">Billing</legend>
-      <div class="flex flex-wrap items-center gap-3">
-        {#each BILLING_TYPES_UI as t (t)}
-          <label class="inline-flex items-center gap-1.5">
-            <input
-              type="radio"
-              name="billingType"
-              value={t}
-              bind:group={billingType}
-            />
-            <span>{t}</span>
-          </label>
-        {/each}
-      </div>
-      {#if billingType !== 'none'}
-        <div class="flex flex-wrap items-end gap-3">
-          {#if billingType === 'hourly'}
-            <label class="flex flex-col gap-1 text-sm">
-              <span class="text-[var(--color-muted)]">Hourly rate</span>
-              <input
-                name="hourlyRate"
-                type="number"
-                inputmode="decimal"
-                step="0.01"
-                min="0"
-                bind:value={hourlyRate}
-                placeholder="200.00"
-                class="w-32 rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-bg)] px-3 py-2"
-              />
-            </label>
-          {:else if billingType === 'fixed'}
-            <label class="flex flex-col gap-1 text-sm">
-              <span class="text-[var(--color-muted)]">Fixed fee</span>
-              <input
-                name="fixedFee"
-                type="number"
-                inputmode="decimal"
-                step="0.01"
-                min="0"
-                bind:value={fixedFee}
-                placeholder="10000.00"
-                class="w-40 rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-bg)] px-3 py-2"
-              />
-            </label>
-          {/if}
-          <label class="flex flex-col gap-1 text-sm">
-            <span class="text-[var(--color-muted)]">Currency</span>
-            <input
-              name="currency"
-              maxlength="3"
-              bind:value={currency}
-              placeholder="USD"
-              class="w-20 rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-bg)] px-3 py-2 uppercase"
-            />
-          </label>
+    <!-- Billing (optional) -->
+    {#if !showBilling}
+      <button
+        type="button"
+        onclick={() => (showBilling = true)}
+        class="self-start text-xs text-[var(--color-subtle)] underline hover:text-[var(--color-text)]"
+      >+ Add billing details</button>
+    {:else}
+      <fieldset class="flex flex-col gap-2 rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-surface)] p-3 text-sm">
+        <div class="flex items-center justify-between">
+          <legend class="text-xs text-[var(--color-muted)]">Billing</legend>
+          <button
+            type="button"
+            onclick={() => { showBilling = false; billingType = 'none'; }}
+            class="text-xs text-[var(--color-subtle)] hover:text-[var(--color-text)]"
+          >Remove</button>
         </div>
-      {/if}
-    </fieldset>
+        <div class="flex flex-wrap items-center gap-3">
+          {#each BILLING_TYPES_UI as t (t)}
+            <label class="inline-flex items-center gap-1.5">
+              <input
+                type="radio"
+                name="billingType"
+                value={t}
+                bind:group={billingType}
+              />
+              <span>{t}</span>
+            </label>
+          {/each}
+        </div>
+        {#if billingType !== 'none'}
+          <div class="flex flex-wrap items-end gap-3">
+            {#if billingType === 'hourly'}
+              <label class="flex flex-col gap-1 text-sm">
+                <span class="text-[var(--color-muted)]">Hourly rate</span>
+                <input
+                  name="hourlyRate"
+                  type="number"
+                  inputmode="decimal"
+                  step="0.01"
+                  min="0"
+                  bind:value={hourlyRate}
+                  placeholder="200.00"
+                  class="w-32 rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-bg)] px-3 py-2"
+                />
+              </label>
+            {:else if billingType === 'fixed'}
+              <label class="flex flex-col gap-1 text-sm">
+                <span class="text-[var(--color-muted)]">Fixed fee</span>
+                <input
+                  name="fixedFee"
+                  type="number"
+                  inputmode="decimal"
+                  step="0.01"
+                  min="0"
+                  bind:value={fixedFee}
+                  placeholder="10000.00"
+                  class="w-40 rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-bg)] px-3 py-2"
+                />
+              </label>
+            {/if}
+            <label class="flex flex-col gap-1 text-sm">
+              <span class="text-[var(--color-muted)]">Currency</span>
+              <input
+                name="currency"
+                maxlength="3"
+                bind:value={currency}
+                placeholder="USD"
+                class="w-20 rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-bg)] px-3 py-2 uppercase"
+              />
+            </label>
+          </div>
+        {/if}
+      </fieldset>
+    {/if}
 
     <div class="flex flex-col gap-1 text-sm">
       <span class="text-[var(--color-muted)]">People</span>

@@ -258,6 +258,7 @@ export const projects = sqliteTable(
     fixedFee: integer('fixed_fee'),
     currency: text('currency'),
     nextStep: text('next_step'),
+    icon: text('icon'),
     createdAt: integer('created_at').notNull(),
     updatedAt: integer('updated_at').notNull()
   },
@@ -463,7 +464,7 @@ export type TagScope = (typeof TAG_SCOPES)[number];
 export const REMINDER_KINDS = ['person', 'company', 'interaction', 'project'] as const;
 export type ReminderKind = (typeof REMINDER_KINDS)[number];
 
-export const PROJECT_STATUSES = ['active', 'paused', 'archived'] as const;
+export const PROJECT_STATUSES = ['active', 'paused', 'completed', 'archived'] as const;
 export type ProjectStatus = (typeof PROJECT_STATUSES)[number];
 export const BILLING_TYPES = ['none', 'hourly', 'fixed'] as const;
 export type BillingType = (typeof BILLING_TYPES)[number];

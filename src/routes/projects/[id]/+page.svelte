@@ -1,17 +1,6 @@
 <script lang="ts">
   import { goto, invalidateAll } from '$app/navigation';
-  import {
-    Trash2,
-    AlertTriangle,
-    Calendar,
-    DollarSign,
-    Users,
-    ExternalLink,
-    Plus,
-    Pencil,
-    Check,
-    X
-  } from 'lucide-svelte';
+  import { Trash2, AlertTriangle, Plus, X, Briefcase } from 'lucide-svelte';
   import StatusChip from '$lib/components/StatusChip.svelte';
   import LinksEditor from '$lib/components/LinksEditor.svelte';
   import PersonPicker from '$lib/components/PersonPicker.svelte';
@@ -20,6 +9,7 @@
   import NotesEditor from '$lib/components/NotesEditor.svelte';
   import AddReminder from '$lib/components/AddReminder.svelte';
   import SaveBanner from '$lib/components/SaveBanner.svelte';
+  import { COLLECTION_ICON_MAP, COLLECTION_ICON_NAMES } from '$lib/collectionIcons';
   import { TYPE_META, dayBucket, formatTime, type InteractionType } from '$lib/interactions';
   import { toast } from '$lib/toasts.svelte';
   import type { ProjectStatus } from '$lib/server/schema';
@@ -27,6 +17,7 @@
   let { data } = $props();
   const project = $derived(data.project);
 
+  // Name editing
   let editingName = $state(false);
   // svelte-ignore state_referenced_locally
   let nameDraft = $state(project.name);
@@ -34,9 +25,29 @@
   let nameCommitInFlight: Promise<void> | null = $state(null);
   let deleting = $state(false);
 
-  let editingNextStep = $state(false);
-  // svelte-ignore state_referenced_locally
-  let nextStepDraft = $state(project.nextStep ?? '');
+  // Icon picker
+  let showIconPicker = $state(false);
+  let iconPickerEl = $state<HTMLDivElement | undefined>(undefined);
+  let iconButtonEl = $state<HTMLButtonElement | undefined>(undefined);
+
+  $effect(() => {
+    if (!showIconPicker) return;
+    const onMouseDown = (e: MouseEvent) => {
+      const t = e.target as Node;
+      if (iconPickerEl?.contains(t) || iconButtonEl?.contains(t)) return;
+      showIconPicker = false;
+    };
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') showIconPicker = false; };
+    const t = setTimeout(() => {
+      window.addEventListener('mousedown', onMouseDown);
+      window.addEventListener('keydown', onKey);
+    }, 0);
+    return () => {
+      clearTimeout(t);
+      window.removeEventListener('mousedown', onMouseDown);
+      window.removeEventListener('keydown', onKey);
+    };
+  });
 
   async function patch(body: Record<string, unknown>): Promise<boolean> {
     if (nameCommitInFlight) await nameCommitInFlight;
@@ -59,11 +70,8 @@
     editingName = false;
     if (!next || next === project.name) return;
     nameCommitInFlight = (async () => {
-      try {
-        await patch({ name: next });
-      } finally {
-        nameCommitInFlight = null;
-      }
+      try { await patch({ name: next }); }
+      finally { nameCommitInFlight = null; }
     })();
     await nameCommitInFlight;
   }
@@ -74,15 +82,14 @@
     setTimeout(() => nameInput?.focus(), 0);
   }
 
-  async function commitNextStep() {
-    const next = nextStepDraft.trim();
-    editingNextStep = false;
-    if ((next || null) === (project.nextStep || null)) return;
-    await patch({ nextStep: next || null });
-  }
-
   async function changeStatus(next: ProjectStatus) {
     await patch({ status: next });
+  }
+
+  async function changeIcon(name: string | null) {
+    showIconPicker = false;
+    if ((name || null) === (project.icon || null)) return;
+    await patch({ icon: name || null });
   }
 
   async function del() {
@@ -137,26 +144,25 @@
     else await invalidateAll();
   }
 
-  function fmtDate(ts: number | null): string {
-    if (!ts) return '—';
-    return new Date(ts).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
+  function toDateInput(ts: number | null): string {
+    if (!ts) return '';
+    return new Date(ts).toISOString().slice(0, 10);
   }
 
   function fmtMoney(cents: number | null, currency: string | null): string {
     if (cents == null) return '—';
     const value = cents / 100;
     if (currency) {
-      try {
-        return new Intl.NumberFormat(undefined, { style: 'currency', currency }).format(value);
-      } catch {
-        // fall through
-      }
+      try { return new Intl.NumberFormat(undefined, { style: 'currency', currency }).format(value); }
+      catch { /* fall through */ }
     }
     return value.toFixed(2);
   }
 
   const overdue = $derived(
-    project.status === 'active' && typeof project.endDate === 'number' && project.endDate < Date.now()
+    project.status === 'active' &&
+    typeof project.endDate === 'number' &&
+    project.endDate < Date.now()
   );
 
   const interactionGroups = $derived.by(() => {
@@ -174,8 +180,6 @@
   let pickerPerson = $state<{ id: string; name: string; avatarUrl: string | null; role: string | null }[]>([]);
   let pickerCompany = $state<{ id: string; name: string; logoUrl: string | null; faviconUrl: string | null; domain: string | null } | null>(null);
 
-  // When the picker emits a selection, immediately attach + clear so the
-  // user can chain adds without re-clicking.
   async function onAddPerson(p: { id: string; name: string; avatarUrl: string | null; role: string | null }) {
     pickerPerson = [];
     await attachPerson(p.id);
@@ -184,6 +188,10 @@
     pickerCompany = null;
     if (c) await attachCompany(c.id);
   }
+
+  const ProjectIcon = $derived(project.icon && COLLECTION_ICON_MAP[project.icon] ? COLLECTION_ICON_MAP[project.icon] : null);
+
+  const inputRowClass = 'min-w-0 rounded border border-transparent bg-transparent px-1 py-0.5 text-right text-xs hover:border-[var(--color-border)] focus:border-[var(--color-accent)] focus:outline-none';
 </script>
 
 <article class="flex flex-col gap-6">
@@ -191,7 +199,55 @@
     <SaveBanner variant="just" kind="project" entityId={project.id} entityName={project.name} createdAt={project.createdAt} />
   {/if}
 
-  <header class="flex items-start gap-4">
+  <header class="flex items-start gap-3">
+    <!-- Icon button with popover picker -->
+    <div class="relative shrink-0">
+      <button
+        bind:this={iconButtonEl}
+        type="button"
+        title="Change icon"
+        onclick={() => (showIconPicker = !showIconPicker)}
+        class="flex h-12 w-12 items-center justify-center rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)] text-[var(--color-muted)] transition-colors hover:border-[var(--color-highlight-border)] hover:text-[var(--color-text)]"
+      >
+        {#if ProjectIcon}
+          <ProjectIcon size={22} strokeWidth={1.75} />
+        {:else}
+          <Briefcase size={22} strokeWidth={1.75} />
+        {/if}
+      </button>
+      {#if showIconPicker}
+        <div
+          bind:this={iconPickerEl}
+          class="absolute left-0 top-full z-30 mt-1 w-64 overflow-hidden rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)] shadow-[var(--shadow-md)]"
+        >
+          <div class="max-h-52 overflow-y-auto p-2">
+            <div class="flex flex-wrap gap-1">
+              <button
+                type="button"
+                title="No icon"
+                onclick={() => changeIcon(null)}
+                class="flex h-7 w-7 items-center justify-center rounded text-[10px] text-[var(--color-subtle)] {!project.icon ? 'bg-[var(--color-bg)] ring-1 ring-[var(--color-border-strong)]' : 'hover:bg-[var(--color-bg)]'}"
+              >—</button>
+              {#each COLLECTION_ICON_NAMES as name}
+                {@const Ic = COLLECTION_ICON_MAP[name]}
+                <button
+                  type="button"
+                  title={name}
+                  onclick={() => changeIcon(name)}
+                  class="flex h-7 w-7 items-center justify-center rounded transition-colors {project.icon === name
+                    ? 'bg-[var(--color-accent)] text-[var(--color-accent-fg)]'
+                    : 'text-[var(--color-muted)] hover:bg-[var(--color-bg)] hover:text-[var(--color-text)]'}"
+                >
+                  <Ic size={15} strokeWidth={2} />
+                </button>
+              {/each}
+            </div>
+          </div>
+        </div>
+      {/if}
+    </div>
+
+    <!-- Name + status -->
     <div class="min-w-0 flex-1">
       <div class="flex flex-wrap items-center gap-2">
         {#if editingName}
@@ -209,7 +265,7 @@
           <button
             type="button"
             onclick={startEditingName}
-            class="rounded-[var(--radius-sm)] px-1 -mx-1 text-2xl font-semibold tracking-tight hover:bg-[var(--color-surface)]"
+            class="-mx-1 rounded-[var(--radius-sm)] px-1 text-2xl font-semibold tracking-tight hover:bg-[var(--color-surface)]"
           >{project.name}</button>
         {/if}
         <StatusChip status={project.status as ProjectStatus} size="md" onChange={changeStatus} />
@@ -220,38 +276,20 @@
           </span>
         {/if}
       </div>
-      <p class="mt-1 flex flex-wrap items-center gap-3 text-sm text-[var(--color-muted)]">
-        {#if project.startDate || project.endDate}
-          <span class="inline-flex items-center gap-1">
-            <Calendar size={12} strokeWidth={2} />
-            {fmtDate(project.startDate)} → {fmtDate(project.endDate)}
-          </span>
-        {/if}
-        {#if project.billingType !== 'none'}
-          <span class="inline-flex items-center gap-1">
-            <DollarSign size={12} strokeWidth={2} />
-            {#if project.billingType === 'hourly'}
-              {fmtMoney(project.hourlyRate, project.currency)}/hr
-            {:else}
-              {fmtMoney(project.fixedFee, project.currency)} fixed
-            {/if}
-          </span>
-        {/if}
-      </p>
     </div>
-    <div class="flex items-center gap-1">
-      <button
-        type="button"
-        title="Delete"
-        onclick={del}
-        class="rounded-[var(--radius-sm)] p-2 text-[var(--color-subtle)] hover:bg-[var(--color-danger-bg)] hover:text-[var(--color-danger)]"
-      >
-        <Trash2 size={16} strokeWidth={2} />
-      </button>
-    </div>
+
+    <button
+      type="button"
+      title="Delete"
+      onclick={del}
+      class="shrink-0 rounded-[var(--radius-sm)] p-2 text-[var(--color-subtle)] hover:bg-[var(--color-danger-bg)] hover:text-[var(--color-danger)]"
+    >
+      <Trash2 size={16} strokeWidth={2} />
+    </button>
   </header>
 
   <div class="grid gap-6 md:grid-cols-[1fr_280px]">
+    <!-- Main content -->
     <section class="flex flex-col gap-6">
       <div class="flex flex-col gap-2">
         <h2 class="text-sm font-medium text-[var(--color-muted)]">Description</h2>
@@ -270,7 +308,7 @@
       <div class="flex flex-col gap-2">
         <h2 class="text-sm font-medium text-[var(--color-muted)]">People</h2>
         {#if project.people.length > 0}
-          <ul class="flex flex-col gap-1">
+          <ul class="flex flex-col gap-0.5">
             {#each project.people as p (p.id)}
               <li>
                 <div class="group flex items-center gap-2 rounded-[var(--radius-sm)] px-2 py-1.5 hover:bg-[var(--color-surface)]">
@@ -306,7 +344,7 @@
       <div class="flex flex-col gap-2">
         <h2 class="text-sm font-medium text-[var(--color-muted)]">Companies</h2>
         {#if project.companies.length > 0}
-          <ul class="flex flex-col gap-1">
+          <ul class="flex flex-col gap-0.5">
             {#each project.companies as c (c.id)}
               <li>
                 <div class="group flex items-center gap-2 rounded-[var(--radius-sm)] px-2 py-1.5 hover:bg-[var(--color-surface)]">
@@ -330,7 +368,11 @@
             {/each}
           </ul>
         {/if}
-        <CompanyPicker selected={pickerCompany} onPick={onPickCompany} placeholder={project.companies.length > 0 ? 'Add another company…' : 'Add a company…'} />
+        <CompanyPicker
+          selected={pickerCompany}
+          onPick={onPickCompany}
+          placeholder={project.companies.length > 0 ? 'Add another company…' : 'Add a company…'}
+        />
       </div>
 
       <div class="flex flex-col gap-2">
@@ -376,55 +418,116 @@
       </div>
     </section>
 
+    <!-- Sidebar -->
     <aside class="flex flex-col gap-3">
-      <div class="flex flex-col gap-2 rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)] p-3">
-        <h3 class="text-xs font-medium uppercase tracking-wide text-[var(--color-subtle)]">Next step</h3>
-        {#if editingNextStep}
-          <!-- svelte-ignore a11y_autofocus -->
-          <input
-            bind:value={nextStepDraft}
-            autofocus
-            onblur={commitNextStep}
-            onkeydown={(e) => {
-              if (e.key === 'Enter') { e.preventDefault(); commitNextStep(); }
-              if (e.key === 'Escape') { editingNextStep = false; nextStepDraft = project.nextStep ?? ''; }
-            }}
-            placeholder="One line, e.g. 'Send deck Friday'"
-            class="rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-bg)] px-2 py-1 text-sm"
-          />
-        {:else}
-          <button
-            type="button"
-            onclick={() => { nextStepDraft = project.nextStep ?? ''; editingNextStep = true; }}
-            class="text-left text-sm hover:underline"
-          >
-            {#if project.nextStep}{project.nextStep}{:else}<span class="italic text-[var(--color-subtle)]">Click to set the next step</span>{/if}
-          </button>
-        {/if}
+      <!-- Details card: dates + billing, all editable -->
+      <div class="flex flex-col gap-3 rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)] p-3 text-sm">
+        <h3 class="text-xs font-medium uppercase tracking-wide text-[var(--color-subtle)]">Details</h3>
+
+        <div class="flex flex-col gap-1.5">
+          <label class="flex items-center justify-between gap-2">
+            <span class="shrink-0 text-xs text-[var(--color-muted)]">Start</span>
+            <input
+              type="date"
+              value={toDateInput(project.startDate)}
+              onchange={(e) => patch({ startDate: e.currentTarget.value || null })}
+              class={inputRowClass}
+            />
+          </label>
+          <label class="flex items-center justify-between gap-2">
+            <span class="shrink-0 text-xs text-[var(--color-muted)]">End</span>
+            <input
+              type="date"
+              value={toDateInput(project.endDate)}
+              onchange={(e) => patch({ endDate: e.currentTarget.value || null })}
+              class={inputRowClass}
+            />
+          </label>
+        </div>
+
+        <div class="border-t border-[var(--color-border)]"></div>
+
+        <div class="flex flex-col gap-1.5">
+          <label class="flex items-center justify-between gap-2">
+            <span class="shrink-0 text-xs text-[var(--color-muted)]">Billing</span>
+            <select
+              value={project.billingType}
+              onchange={(e) => patch({ billingType: e.currentTarget.value })}
+              class={inputRowClass}
+            >
+              <option value="none">None</option>
+              <option value="hourly">Hourly</option>
+              <option value="fixed">Fixed</option>
+            </select>
+          </label>
+          {#if project.billingType === 'hourly'}
+            <label class="flex items-center justify-between gap-2">
+              <span class="shrink-0 text-xs text-[var(--color-muted)]">Rate</span>
+              <div class="flex items-center gap-1">
+                <input
+                  type="number"
+                  inputmode="decimal"
+                  step="0.01"
+                  min="0"
+                  value={(project.hourlyRate ?? 0) / 100}
+                  onblur={(e) => {
+                    const cents = Math.round(parseFloat(e.currentTarget.value || '0') * 100);
+                    if (cents !== (project.hourlyRate ?? 0)) patch({ hourlyRate: cents });
+                  }}
+                  class="w-20 {inputRowClass}"
+                />
+                <span class="text-xs text-[var(--color-muted)]">/hr</span>
+              </div>
+            </label>
+            <label class="flex items-center justify-between gap-2">
+              <span class="shrink-0 text-xs text-[var(--color-muted)]">Currency</span>
+              <input
+                type="text"
+                maxlength="3"
+                value={project.currency ?? ''}
+                placeholder="USD"
+                onblur={(e) => {
+                  const val = e.currentTarget.value.trim().toUpperCase() || null;
+                  if (val !== project.currency) patch({ currency: val });
+                }}
+                class="w-14 uppercase {inputRowClass}"
+              />
+            </label>
+          {:else if project.billingType === 'fixed'}
+            <label class="flex items-center justify-between gap-2">
+              <span class="shrink-0 text-xs text-[var(--color-muted)]">Fee</span>
+              <input
+                type="number"
+                inputmode="decimal"
+                step="0.01"
+                min="0"
+                value={(project.fixedFee ?? 0) / 100}
+                onblur={(e) => {
+                  const cents = Math.round(parseFloat(e.currentTarget.value || '0') * 100);
+                  if (cents !== (project.fixedFee ?? 0)) patch({ fixedFee: cents });
+                }}
+                class="w-24 {inputRowClass}"
+              />
+            </label>
+            <label class="flex items-center justify-between gap-2">
+              <span class="shrink-0 text-xs text-[var(--color-muted)]">Currency</span>
+              <input
+                type="text"
+                maxlength="3"
+                value={project.currency ?? ''}
+                placeholder="USD"
+                onblur={(e) => {
+                  const val = e.currentTarget.value.trim().toUpperCase() || null;
+                  if (val !== project.currency) patch({ currency: val });
+                }}
+                class="w-14 uppercase {inputRowClass}"
+              />
+            </label>
+          {/if}
+        </div>
       </div>
 
-      {#if project.billingType !== 'none'}
-        <div class="flex flex-col gap-1 rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)] p-3 text-sm">
-          <h3 class="text-xs font-medium uppercase tracking-wide text-[var(--color-subtle)]">Billing</h3>
-          <div class="flex items-center justify-between">
-            <span class="text-[var(--color-muted)]">Type</span>
-            <span class="font-medium">{project.billingType}</span>
-          </div>
-          {#if project.billingType === 'hourly'}
-            <div class="flex items-center justify-between">
-              <span class="text-[var(--color-muted)]">Rate</span>
-              <span class="font-medium">{fmtMoney(project.hourlyRate, project.currency)}/hr</span>
-            </div>
-          {:else if project.billingType === 'fixed'}
-            <div class="flex items-center justify-between">
-              <span class="text-[var(--color-muted)]">Fee</span>
-              <span class="font-medium">{fmtMoney(project.fixedFee, project.currency)}</span>
-            </div>
-          {/if}
-          <p class="mt-1 text-[10px] text-[var(--color-subtle)]">Recorded for reference; Gusto doesn't track time or invoices.</p>
-        </div>
-      {/if}
-
+      <!-- Reminder -->
       <div class="flex flex-col gap-2 rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)] p-3">
         <h3 class="text-xs font-medium uppercase tracking-wide text-[var(--color-subtle)]">Reminder</h3>
         <AddReminder kind="project" refId={project.id} />

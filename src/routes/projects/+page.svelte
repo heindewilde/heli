@@ -67,6 +67,7 @@
   const STATUS_FILTERS: { value: ProjectStatus | 'all'; label: string }[] = [
     { value: 'active', label: 'Active' },
     { value: 'paused', label: 'Paused' },
+    { value: 'completed', label: 'Completed' },
     { value: 'archived', label: 'Archived' },
     { value: 'all', label: 'All' }
   ];
@@ -159,6 +160,7 @@
             endDate={p.endDate}
             memberCount={p.memberCount}
             companies={projectCompanies}
+            icon={p.icon}
             selected={i === selected}
           />
         </li>
