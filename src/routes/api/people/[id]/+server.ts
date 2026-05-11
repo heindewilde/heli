@@ -4,6 +4,14 @@ import { db } from '$lib/server/db';
 import { people } from '$lib/server/schema';
 import { sanitize, sanitizePlainText } from '$lib/server/sanitize';
 
+// `priority`: null = no priority. 1=high, 2=medium, 3=low. Anything else
+// coerces to null so a malformed client can't poison the column.
+function coercePriority(v: unknown): number | null {
+  if (v == null || v === '') return null;
+  const n = typeof v === 'number' ? v : Number.parseInt(String(v), 10);
+  return n === 1 || n === 2 || n === 3 ? n : null;
+}
+
 const ALLOWED: Record<string, (v: unknown) => unknown> = {
   name: (v) => sanitizePlainText(String(v ?? ''), 200),
   role: (v) => (v == null ? null : sanitizePlainText(String(v), 200) || null),
@@ -14,7 +22,9 @@ const ALLOWED: Record<string, (v: unknown) => unknown> = {
   notes: (v) => (v == null ? null : sanitize(String(v))),
   isFavorite: (v) => (v ? 1 : 0),
   isArchived: (v) => (v ? 1 : 0),
-  avatarUrl: (v) => (v == null ? null : String(v).slice(0, 2048))
+  avatarUrl: (v) => (v == null ? null : String(v).slice(0, 2048)),
+  priority: coercePriority,
+  statusId: (v) => (v == null || v === '' ? null : String(v))
 };
 
 export const PATCH: RequestHandler = async ({ request, params, locals }) => {

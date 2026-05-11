@@ -1,5 +1,5 @@
 import { redirect, type Actions } from '@sveltejs/kit';
-import { and, desc, eq, inArray, sql } from 'drizzle-orm';
+import { and, eq, sql } from 'drizzle-orm';
 import type { PageServerLoad } from './$types';
 import { db } from '$lib/server/db';
 import { people } from '$lib/server/schema';
@@ -10,14 +10,40 @@ import {
   getTagsForEntities,
   listTagsWithCounts
 } from '$lib/server/tags';
+import { listStatuses } from '$lib/server/statuses';
+
+// Allowed sort keys. Anything else falls back to 'recent'.
+const SORTS = new Set(['recent', 'updated', 'name', 'lastInteraction', 'priority', 'status']);
+
+function parsePriorityFilter(raw: string | null): Set<number | null> | null {
+  // Accepts comma-separated subset of "1,2,3,none". Empty/missing = no filter.
+  if (!raw) return null;
+  const set = new Set<number | null>();
+  for (const v of raw.split(',')) {
+    const t = v.trim();
+    if (t === 'none') set.add(null);
+    else if (t === '1' || t === '2' || t === '3') set.add(Number.parseInt(t, 10));
+  }
+  return set.size > 0 ? set : null;
+}
+
+function parseStatusFilter(raw: string | null): Set<string> | null {
+  // Comma-separated status ids, with the sentinel "none" for "no status set".
+  if (!raw) return null;
+  const set = new Set(raw.split(',').map((s) => s.trim()).filter(Boolean));
+  return set.size > 0 ? set : null;
+}
 
 export const load: PageServerLoad = async ({ locals, url }) => {
   if (!locals.user) throw redirect(303, '/auth');
   const q = url.searchParams.get('q')?.trim() ?? '';
   const archived = url.searchParams.get('archived') === '1';
   const favorite = url.searchParams.get('favorite') === '1';
-  const sort = url.searchParams.get('sort') ?? 'recent';
+  const sortParam = url.searchParams.get('sort') ?? 'recent';
+  const sort = SORTS.has(sortParam) ? sortParam : 'recent';
   const tagSlug = url.searchParams.get('tag');
+  const priorityFilter = parsePriorityFilter(url.searchParams.get('priority'));
+  const statusFilter = parseStatusFilter(url.searchParams.get('status'));
 
   const d = db(locals.user.region);
   const fts = ftsQuery(q);
@@ -30,15 +56,18 @@ export const load: PageServerLoad = async ({ locals, url }) => {
       activeTag = { id: t.id, name: t.name, slug: t.slug };
       tagFilterIds = await entityIdsForTag(locals.user.id, locals.user.region, 'person', t.id);
       if (tagFilterIds.length === 0) {
-        // Short-circuit: no rows can match.
         const allTags = await listTagsWithCounts(locals.user.id, locals.user.region, 'person');
+        const statuses = await listStatuses('person', locals.user.id, locals.user.region);
         return {
           q,
           archived,
           favorite,
           sort,
+          priorityFilter: priorityFilter ? [...priorityFilter] : null,
+          statusFilter: statusFilter ? [...statusFilter] : null,
           tag: activeTag,
           allTags,
+          statuses,
           items: [],
           itemTags: {} as Record<string, { id: string; name: string; slug: string }[]>,
           total: 0
@@ -47,92 +76,130 @@ export const load: PageServerLoad = async ({ locals, url }) => {
     }
   }
 
-  let items;
+  type Row = {
+    id: string;
+    name: string;
+    role: string | null;
+    companyId: string | null;
+    companyName: string | null;
+    companyDomain: string | null;
+    companyFaviconUrl: string | null;
+    companyLogoUrl: string | null;
+    url: string | null;
+    domain: string | null;
+    email: string | null;
+    avatarUrl: string | null;
+    faviconUrl: string | null;
+    priority: number | null;
+    statusId: string | null;
+    isFavorite: number;
+    isArchived: number;
+    source: string | null;
+    createdAt: number;
+    updatedAt: number;
+    lastAt: number | null;
+  };
+
+  // Single source of truth for the column projection. The two query branches
+  // (FTS vs structured) both join the same companies left-join and the same
+  // interaction-max subquery so the row shape is identical.
+  const SELECT_COLS = sql`
+    p.id, p.name, p.role, p.company_id AS companyId,
+    co.name AS companyName, co.domain AS companyDomain,
+    co.favicon_url AS companyFaviconUrl, co.logo_url AS companyLogoUrl,
+    p.url, p.domain, p.email,
+    p.avatar_url AS avatarUrl, p.favicon_url AS faviconUrl,
+    p.priority, p.status_id AS statusId,
+    p.is_favorite AS isFavorite, p.is_archived AS isArchived,
+    p.source, p.created_at AS createdAt, p.updated_at AS updatedAt,
+    li.last_at AS lastAt
+  `;
+
+  const userId = locals.user.id;
+  const tagInClause = tagFilterIds
+    ? sql`AND p.id IN (${sql.join(
+        tagFilterIds.map((id) => sql`${id}`),
+        sql`, `
+      )})`
+    : sql``;
+
+  // Priority/status filters are applied in SQL when given.
+  let priorityClause = sql``;
+  if (priorityFilter) {
+    const hasNone = priorityFilter.has(null);
+    const nums = [...priorityFilter].filter((v): v is number => v !== null);
+    const numSql = nums.length > 0
+      ? sql`p.priority IN (${sql.join(nums.map((n) => sql`${n}`), sql`, `)})`
+      : null;
+    if (hasNone && numSql) priorityClause = sql`AND (${numSql} OR p.priority IS NULL)`;
+    else if (hasNone) priorityClause = sql`AND p.priority IS NULL`;
+    else if (numSql) priorityClause = sql`AND ${numSql}`;
+  }
+  let statusClause = sql``;
+  if (statusFilter) {
+    const hasNone = statusFilter.has('none');
+    const ids = [...statusFilter].filter((v) => v !== 'none');
+    const idSql = ids.length > 0
+      ? sql`p.status_id IN (${sql.join(ids.map((id) => sql`${id}`), sql`, `)})`
+      : null;
+    if (hasNone && idSql) statusClause = sql`AND (${idSql} OR p.status_id IS NULL)`;
+    else if (hasNone) statusClause = sql`AND p.status_id IS NULL`;
+    else if (idSql) statusClause = sql`AND ${idSql}`;
+  }
+
+  // The `li` derived table gives us each person's most recent interaction
+  // timestamp via interaction_people. NULLs (never interacted) sort last.
+  const LAST_INTERACTION_JOIN = sql`
+    LEFT JOIN (
+      SELECT ip.person_id AS pid, MAX(i.occurred_at) AS last_at
+      FROM interaction_people ip
+      JOIN interactions i ON i.id = ip.interaction_id AND i.user_id = ${userId}
+      GROUP BY ip.person_id
+    ) li ON li.pid = p.id
+  `;
+
+  // ORDER BY clause built per sort key. NULLs handled inline.
+  let orderClause;
+  if (sort === 'name') orderClause = sql`p.name COLLATE NOCASE ASC`;
+  else if (sort === 'updated') orderClause = sql`p.updated_at DESC`;
+  else if (sort === 'lastInteraction') orderClause = sql`(li.last_at IS NULL), li.last_at DESC, p.created_at DESC`;
+  else if (sort === 'priority') orderClause = sql`(p.priority IS NULL), p.priority ASC, p.created_at DESC`;
+  else if (sort === 'status') orderClause = sql`(p.status_id IS NULL), p.status_id ASC, p.created_at DESC`;
+  else orderClause = sql`p.created_at DESC`;
+
+  let items: Row[];
   if (fts) {
-    items = await d.all<{
-      id: string; name: string; role: string | null; companyId: string | null;
-      url: string | null; domain: string | null; avatarUrl: string | null;
-      faviconUrl: string | null; isFavorite: number; isArchived: number;
-      source: string | null; createdAt: number; updatedAt: number;
-    }>(sql`
-      SELECT p.id, p.name, p.role, p.company_id AS companyId, p.url, p.domain,
-             p.avatar_url AS avatarUrl, p.favicon_url AS faviconUrl,
-             p.is_favorite AS isFavorite, p.is_archived AS isArchived,
-             p.source, p.created_at AS createdAt, p.updated_at AS updatedAt
+    items = await d.all<Row>(sql`
+      SELECT ${SELECT_COLS}
       FROM people p
       JOIN people_fts f ON f.rowid = p.rowid
-      WHERE p.user_id = ${locals.user.id}
+      LEFT JOIN companies co ON co.id = p.company_id
+      ${LAST_INTERACTION_JOIN}
+      WHERE p.user_id = ${userId}
         AND f.people_fts MATCH ${fts}
         ${archived ? sql`` : sql`AND p.is_archived = 0`}
         ${favorite ? sql`AND p.is_favorite = 1` : sql``}
+        ${tagInClause}
+        ${priorityClause}
+        ${statusClause}
       ORDER BY rank
       LIMIT 200
     `);
-    if (tagFilterIds) {
-      const set = new Set(tagFilterIds);
-      items = items.filter((i) => set.has(i.id));
-    }
-  } else if (sort === 'lastInteraction') {
-    // Raw SQL because Drizzle's relational query builder doesn't compose well
-    // with the LEFT JOIN + GROUP BY + MAX(occurred_at) we need here. Push
-    // NULLs (no interactions logged) to the bottom and tie-break by createdAt
-    // so the order is deterministic.
-    const userId = locals.user.id;
-    const tagFilter = tagFilterIds
-      ? sql`AND p.id IN (${sql.join(
-          tagFilterIds.map((id) => sql`${id}`),
-          sql`, `
-        )})`
-      : sql``;
-    items = await d.all<{
-      id: string; name: string; role: string | null; companyId: string | null;
-      url: string | null; domain: string | null; avatarUrl: string | null;
-      faviconUrl: string | null; isFavorite: number; isArchived: number;
-      source: string | null; createdAt: number; updatedAt: number;
-    }>(sql`
-      SELECT p.id, p.name, p.role, p.company_id AS companyId, p.url, p.domain,
-             p.avatar_url AS avatarUrl, p.favicon_url AS faviconUrl,
-             p.is_favorite AS isFavorite, p.is_archived AS isArchived,
-             p.source, p.created_at AS createdAt, p.updated_at AS updatedAt,
-             MAX(i.occurred_at) AS lastAt
+  } else {
+    items = await d.all<Row>(sql`
+      SELECT ${SELECT_COLS}
       FROM people p
-      LEFT JOIN interaction_people ip ON ip.person_id = p.id
-      LEFT JOIN interactions i ON i.id = ip.interaction_id AND i.user_id = ${userId}
+      LEFT JOIN companies co ON co.id = p.company_id
+      ${LAST_INTERACTION_JOIN}
       WHERE p.user_id = ${userId}
         ${archived ? sql`` : sql`AND p.is_archived = 0`}
         ${favorite ? sql`AND p.is_favorite = 1` : sql``}
-        ${tagFilter}
-      GROUP BY p.id
-      ORDER BY (lastAt IS NULL), lastAt DESC, p.created_at DESC
+        ${tagInClause}
+        ${priorityClause}
+        ${statusClause}
+      ORDER BY ${orderClause}
       LIMIT 200
     `);
-  } else {
-    const filters = [eq(people.userId, locals.user.id)];
-    if (!archived) filters.push(eq(people.isArchived, 0));
-    if (favorite) filters.push(eq(people.isFavorite, 1));
-    if (tagFilterIds) filters.push(inArray(people.id, tagFilterIds));
-    const order =
-      sort === 'name' ? people.name : sort === 'updated' ? desc(people.updatedAt) : desc(people.createdAt);
-    items = await d
-      .select({
-        id: people.id,
-        name: people.name,
-        role: people.role,
-        companyId: people.companyId,
-        url: people.url,
-        domain: people.domain,
-        avatarUrl: people.avatarUrl,
-        faviconUrl: people.faviconUrl,
-        isFavorite: people.isFavorite,
-        isArchived: people.isArchived,
-        source: people.source,
-        createdAt: people.createdAt,
-        updatedAt: people.updatedAt
-      })
-      .from(people)
-      .where(and(...filters))
-      .orderBy(order)
-      .limit(200);
   }
 
   const totalRow = await d
@@ -151,14 +218,18 @@ export const load: PageServerLoad = async ({ locals, url }) => {
   for (const [k, v] of tagMap) itemTags[k] = v;
 
   const allTags = await listTagsWithCounts(locals.user.id, locals.user.region, 'person');
+  const statuses = await listStatuses('person', locals.user.id, locals.user.region);
 
   return {
     q,
     archived,
     favorite,
     sort,
+    priorityFilter: priorityFilter ? [...priorityFilter] : null,
+    statusFilter: statusFilter ? [...statusFilter] : null,
     tag: activeTag,
     allTags,
+    statuses,
     items,
     itemTags,
     total: Number(totalRow?.n ?? 0)

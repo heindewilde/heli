@@ -263,6 +263,28 @@ CREATE TABLE IF NOT EXISTS pipeline_item_events (
   by_user_id TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_pipeline_item_events_item_at ON pipeline_item_events(item_id, at);
+
+CREATE TABLE IF NOT EXISTS people_statuses (
+  id TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  name TEXT NOT NULL,
+  tone TEXT NOT NULL,
+  sort_order INTEGER NOT NULL DEFAULT 0,
+  created_at INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_people_statuses_user_sort ON people_statuses(user_id, sort_order);
+CREATE UNIQUE INDEX IF NOT EXISTS uq_people_statuses_user_name ON people_statuses(user_id, name);
+
+CREATE TABLE IF NOT EXISTS company_statuses (
+  id TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  name TEXT NOT NULL,
+  tone TEXT NOT NULL,
+  sort_order INTEGER NOT NULL DEFAULT 0,
+  created_at INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_company_statuses_user_sort ON company_statuses(user_id, sort_order);
+CREATE UNIQUE INDEX IF NOT EXISTS uq_company_statuses_user_name ON company_statuses(user_id, name);
 `;
 
 const FTS = `
@@ -393,7 +415,18 @@ async function execMany(c: Client, sql: string) {
 
 const ALTERS: string[] = [
   `ALTER TABLE people ADD COLUMN suggested_company_name TEXT`,
-  `ALTER TABLE people ADD COLUMN suggested_company_url TEXT`
+  `ALTER TABLE people ADD COLUMN suggested_company_url TEXT`,
+  // Priority + per-user statuses for People & Companies (database-grid redesign)
+  `ALTER TABLE people ADD COLUMN priority INTEGER`,
+  `ALTER TABLE people ADD COLUMN status_id TEXT REFERENCES people_statuses(id) ON DELETE SET NULL`,
+  `ALTER TABLE companies ADD COLUMN priority INTEGER`,
+  `ALTER TABLE companies ADD COLUMN size_band TEXT`,
+  `ALTER TABLE companies ADD COLUMN status_id TEXT REFERENCES company_statuses(id) ON DELETE SET NULL`,
+  // Indexes for the new filters/sorts.
+  `CREATE INDEX IF NOT EXISTS idx_people_user_priority ON people(user_id, priority)`,
+  `CREATE INDEX IF NOT EXISTS idx_people_user_status ON people(user_id, status_id)`,
+  `CREATE INDEX IF NOT EXISTS idx_companies_user_priority ON companies(user_id, priority)`,
+  `CREATE INDEX IF NOT EXISTS idx_companies_user_status ON companies(user_id, status_id)`
 ];
 
 async function applyAlters(c: Client) {

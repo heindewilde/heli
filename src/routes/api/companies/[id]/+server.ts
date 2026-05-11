@@ -4,15 +4,24 @@ import { db } from '$lib/server/db';
 import { companies } from '$lib/server/schema';
 import { sanitize, sanitizePlainText } from '$lib/server/sanitize';
 
+function coercePriority(v: unknown): number | null {
+  if (v == null || v === '') return null;
+  const n = typeof v === 'number' ? v : Number.parseInt(String(v), 10);
+  return n === 1 || n === 2 || n === 3 ? n : null;
+}
+
 const ALLOWED: Record<string, (v: unknown) => unknown> = {
   name: (v) => sanitizePlainText(String(v ?? ''), 200),
   description: (v) => (v == null ? null : sanitize(String(v))),
   industry: (v) => (v == null ? null : sanitizePlainText(String(v), 200) || null),
+  sizeBand: (v) => (v == null ? null : sanitizePlainText(String(v), 64) || null),
   location: (v) => (v == null ? null : sanitizePlainText(String(v), 200) || null),
   notes: (v) => (v == null ? null : sanitize(String(v))),
   isFavorite: (v) => (v ? 1 : 0),
   isArchived: (v) => (v ? 1 : 0),
-  logoUrl: (v) => (v == null ? null : String(v).slice(0, 2048))
+  logoUrl: (v) => (v == null ? null : String(v).slice(0, 2048)),
+  priority: coercePriority,
+  statusId: (v) => (v == null || v === '' ? null : String(v))
 };
 
 export const PATCH: RequestHandler = async ({ request, params, locals }) => {

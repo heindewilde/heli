@@ -2,9 +2,16 @@
   import { goto, invalidateAll } from '$app/navigation';
   import { page } from '$app/state';
   import { onMount } from 'svelte';
-  import { Search, Plus, Star, Archive, Tag, X, ArrowDownUp } from 'lucide-svelte';
-  import EntityRow from '$lib/components/EntityRow.svelte';
+  import { Search, Star, Archive, Tag, X, Rows3, Rows4, Loader2 } from 'lucide-svelte';
   import RowTagAdder from '$lib/components/RowTagAdder.svelte';
+  import PriorityFlag from '$lib/components/PriorityFlag.svelte';
+  import StatusCell from '$lib/components/StatusCell.svelte';
+  import PriorityFilterChip from '$lib/components/PriorityFilterChip.svelte';
+  import StatusFilterChip from '$lib/components/StatusFilterChip.svelte';
+  import SortHeader from '$lib/components/SortHeader.svelte';
+  import InlineCreateRow from '$lib/components/InlineCreateRow.svelte';
+  import type { StatusRow } from '$lib/statuses';
+  import type { Priority } from '$lib/priority';
   import { bindKeys } from '$lib/keyboard.svelte';
   import { toast } from '$lib/toasts.svelte';
 
@@ -14,6 +21,25 @@
   let q = $state(data.q);
   let selected = $state(0);
   let rows = $derived(data.items);
+  // svelte-ignore state_referenced_locally
+  let statuses = $state<StatusRow[]>(data.statuses);
+  // Refresh local statuses when the page data changes (e.g. after a tag
+  // filter swap that re-runs load).
+  $effect(() => {
+    statuses = data.statuses;
+  });
+
+  // Density: 'comfortable' (default, two-line rows) vs 'compact' (single
+  // line, name + role inline). Persisted per-user-agent.
+  const DENSITY_KEY = 'gusto.people.density';
+  let density = $state<'comfortable' | 'compact'>('comfortable');
+  onMount(() => {
+    const stored = localStorage.getItem(DENSITY_KEY);
+    if (stored === 'compact' || stored === 'comfortable') density = stored;
+  });
+  $effect(() => {
+    if (typeof localStorage !== 'undefined') localStorage.setItem(DENSITY_KEY, density);
+  });
 
   $effect(() => {
     if (selected >= rows.length) selected = Math.max(0, rows.length - 1);
@@ -29,34 +55,26 @@
     return s ? `/people?${s}` : '/people';
   }
 
+  function navTo(overrides: Record<string, string | boolean | null>) {
+    goto(buildUrl(overrides), { replaceState: true, keepFocus: true, noScroll: true });
+  }
+
   let searchTimer: ReturnType<typeof setTimeout> | null = null;
   function onSearchInput() {
     if (searchTimer) clearTimeout(searchTimer);
-    searchTimer = setTimeout(() => {
-      goto(buildUrl({ q: q.trim() }), { replaceState: true, keepFocus: true, noScroll: true });
-    }, 200);
+    searchTimer = setTimeout(() => navTo({ q: q.trim() }), 200);
   }
 
-  async function patch(id: string, patch: Record<string, unknown>) {
+  async function patch(id: string, body: Record<string, unknown>) {
     const res = await fetch(`/api/people/${id}`, {
       method: 'PATCH',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify(patch)
+      body: JSON.stringify(body)
     });
     if (!res.ok) {
       toast.danger('Update failed');
       return;
     }
-    await invalidateAll();
-  }
-
-  async function del(id: string, name: string) {
-    const res = await fetch(`/api/people/${id}`, { method: 'DELETE' });
-    if (!res.ok) {
-      toast.danger('Delete failed');
-      return;
-    }
-    toast.success(`Deleted ${name}`);
     await invalidateAll();
   }
 
@@ -97,38 +115,96 @@
       el?.scrollIntoView({ block: 'nearest' });
     }, 0);
   }
+
+  function initials(name: string): string {
+    return name
+      .split(/\s+/)
+      .map((s) => s[0])
+      .filter(Boolean)
+      .slice(0, 2)
+      .join('')
+      .toUpperCase();
+  }
+
+  function formatLastSeen(ts: number | null): string {
+    if (ts == null) return '';
+    const days = Math.floor((Date.now() - ts) / 86_400_000);
+    if (days <= 0) return 'today';
+    if (days < 7) return `${days}d`;
+    if (days < 30) return `${Math.floor(days / 7)}w`;
+    if (days < 365) return `${Math.floor(days / 30)}mo`;
+    return `${Math.floor(days / 365)}y`;
+  }
+
+  // Build sort-href: clicking the same key clears it (reverts to recent).
+  // Clicking a new key sets it.
+  function sortHref(key: string): string {
+    return buildUrl({ sort: key === data.sort ? null : key });
+  }
+
+  // Priority + Status filter URL encoding. The server reads a comma-sep
+  // string; null = no filter at all.
+  function onPriorityFilter(next: (Priority)[] | null) {
+    if (!next) {
+      navTo({ priority: null });
+      return;
+    }
+    const enc = next.map((p) => (p == null ? 'none' : String(p))).join(',');
+    navTo({ priority: enc });
+  }
+  function onStatusFilter(next: string[] | null) {
+    if (!next) {
+      navTo({ status: null });
+      return;
+    }
+    navTo({ status: next.join(',') });
+  }
+
+  const priorityFilter = $derived<Priority[] | null>(
+    data.priorityFilter
+      ? (data.priorityFilter as (number | null)[]).map((v) => (v === 1 || v === 2 || v === 3 ? v : null)) as Priority[]
+      : null
+  );
+
+  // Local optimistic update for status changes so the row reflects
+  // immediately while the PATCH is in flight.
+  let optimisticStatus = $state<Record<string, string | null>>({});
+  async function setStatus(id: string, next: StatusRow | null) {
+    optimisticStatus[id] = next?.id ?? null;
+    await patch(id, { statusId: next?.id ?? null });
+    delete optimisticStatus[id];
+  }
+  async function setPriority(id: string, next: Priority) {
+    await patch(id, { priority: next });
+  }
+
+  // After a newly-created person, just refresh — the list will rehydrate
+  // with the new row up top.
+  async function onCreated(_id: string) {
+    await invalidateAll();
+  }
 </script>
 
 <div class="flex flex-col gap-4">
   <header class="flex flex-wrap items-center gap-3">
     <h1 class="text-2xl font-semibold tracking-tight">People</h1>
-    <span class="rounded-full bg-[var(--color-surface)] px-2 py-0.5 text-xs text-[var(--color-muted)]">
+    <span class="tabular rounded-full border border-[var(--color-border)] bg-[var(--color-surface)] px-2 py-0.5 text-xs text-[var(--color-muted)]">
       {data.total}
     </span>
-    <div class="ml-auto flex items-center gap-2">
-      <label class="inline-flex items-center gap-1 rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-surface)] pl-2 pr-1 text-xs text-[var(--color-muted)]">
-        <ArrowDownUp size={12} strokeWidth={2} class="text-[var(--color-subtle)]" />
-        <span class="sr-only">Sort by</span>
-        <select
-          value={data.sort}
-          onchange={(e) => goto(buildUrl({ sort: (e.currentTarget as HTMLSelectElement).value }), { replaceState: true, keepFocus: true, noScroll: true })}
-          disabled={!!data.q}
-          class="bg-transparent py-1 pl-1 pr-1 text-xs outline-none disabled:opacity-60"
-          title={data.q ? 'Sort is fixed to relevance while searching' : 'Sort by'}
-        >
-          <option value="recent">Recently added</option>
-          <option value="updated">Recently updated</option>
-          <option value="name">Name</option>
-          <option value="lastInteraction">Last interaction</option>
-        </select>
-      </label>
-      <a
-        href="/people/new"
-        class="inline-flex items-center gap-1 rounded-[var(--radius-sm)] border border-[var(--color-border)] px-3 py-1.5 text-sm hover:bg-[var(--color-surface)]"
+    <div class="ml-auto flex items-center gap-1.5">
+      <button
+        type="button"
+        title={density === 'compact' ? 'Comfortable density' : 'Compact density'}
+        aria-label="Toggle density"
+        onclick={() => (density = density === 'compact' ? 'comfortable' : 'compact')}
+        class="inline-flex items-center justify-center rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-surface)] p-1.5 text-[var(--color-subtle)] transition-colors hover:border-[var(--color-border-strong)] hover:text-[var(--color-text)]"
       >
-        <Plus size={14} strokeWidth={2} />
-        <span>New</span>
-      </a>
+        {#if density === 'compact'}
+          <Rows3 size={14} strokeWidth={2} />
+        {:else}
+          <Rows4 size={14} strokeWidth={2} />
+        {/if}
+      </button>
     </div>
   </header>
 
@@ -142,16 +218,18 @@
       oninput={onSearchInput}
       type="search"
       placeholder="Search people…"
-      class="h-9 w-full rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)] pl-9 pr-3 text-sm"
+      class="h-9 w-full rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)] pl-9 pr-3 text-sm shadow-[var(--shadow-xs)] transition-[border-color,box-shadow] focus:border-[var(--color-border-strong)] focus:shadow-[var(--shadow-sm)] focus:outline-none"
     />
   </div>
 
+  <!-- Filter chip row. Keeping the legacy structure (favorites/archived/tags)
+       and adding the two new chips between Archived and Tags. -->
   <div class="flex flex-wrap items-center gap-2 text-xs">
     <a
       href={buildUrl({ favorite: !data.favorite, archived: data.archived, tag: data.tag?.slug ?? null })}
-      class="inline-flex items-center gap-1 rounded-full border px-2.5 py-1 {data.favorite
+      class="inline-flex items-center gap-1 rounded-full border px-2.5 py-1 transition-colors {data.favorite
         ? 'border-[var(--color-warning-border)] bg-[var(--color-warning-bg)] text-[var(--color-warning)]'
-        : 'border-[var(--color-border)] text-[var(--color-muted)]'}"
+        : 'border-[var(--color-border)] text-[var(--color-muted)] hover:text-[var(--color-text)]'}"
     >
       <Star size={12} strokeWidth={2} fill={data.favorite ? 'currentColor' : 'none'} />
       Favorites
@@ -165,6 +243,8 @@
       <Archive size={12} strokeWidth={2} />
       Archived
     </a>
+    <PriorityFilterChip selected={priorityFilter} onChange={onPriorityFilter} />
+    <StatusFilterChip {statuses} selected={data.statusFilter} onChange={onStatusFilter} />
     {#if data.tag}
       <a
         href={buildUrl({ tag: null })}
@@ -176,7 +256,7 @@
       </a>
     {:else if data.allTags.length > 0}
       <span class="text-[var(--color-subtle)]">·</span>
-      {#each data.allTags.slice(0, 8) as t (t.id)}
+      {#each data.allTags.slice(0, 6) as t (t.id)}
         <a
           href={buildUrl({ tag: t.slug })}
           class="inline-flex items-center gap-1 rounded-full border border-[var(--color-border)] px-2.5 py-1 text-[var(--color-muted)] hover:bg-[var(--color-surface)]"
@@ -189,6 +269,9 @@
     {/if}
   </div>
 
+  <!-- Inline create row: persistent, lives at top of table. -->
+  <InlineCreateRow placeholder="Add a person…" endpoint="/api/people" onCreated={onCreated} />
+
   {#if rows.length === 0}
     <div class="rounded-[var(--radius-md)] border border-dashed border-[var(--color-border)] bg-[var(--color-surface)] p-10 text-center">
       {#if data.q}
@@ -196,51 +279,143 @@
       {:else if data.tag}
         <p class="text-sm text-[var(--color-muted)]">No people tagged <strong>{data.tag.name}</strong> yet.</p>
         <a href="/people" class="mt-3 inline-flex items-center gap-1 rounded-[var(--radius-sm)] border border-[var(--color-border)] px-3 py-1.5 text-sm">Clear tag filter</a>
-      {:else if data.favorite || data.archived}
+      {:else if data.favorite || data.archived || data.priorityFilter || data.statusFilter}
         <p class="text-sm text-[var(--color-muted)]">No people in this filter.</p>
       {:else}
-        <p class="text-sm text-[var(--color-muted)]">Paste a profile link in the topbar to save your first person.</p>
-        <a
-          href="/people/new"
-          class="mt-3 inline-flex items-center gap-1 rounded-[var(--radius-sm)] bg-[var(--color-accent)] transition-colors hover:bg-[var(--color-accent-hover)] px-3 py-1.5 text-sm font-medium text-[var(--color-accent-fg)]"
-        ><Plus size={14} strokeWidth={2} /> Add manually</a>
+        <p class="text-sm text-[var(--color-muted)]">Paste a link in the topbar, or type a name above to add someone.</p>
       {/if}
     </div>
   {:else}
-    <ul class="flex flex-col gap-1">
-      {#each rows as person, i (person.id)}
-        {@const personTags = data.itemTags[person.id] ?? []}
-        <li>
-          <EntityRow
-            href={`/people/${person.id}`}
-            name={person.name}
-            sub={person.role || person.domain || ''}
-            avatarUrl={person.avatarUrl}
-            domain={person.domain}
-            isFavorite={!!person.isFavorite}
-            isArchived={!!person.isArchived}
-            parsing={person.source === 'parsing'}
-            selected={i === selected}
-            onFavorite={() => patch(person.id, { isFavorite: !person.isFavorite })}
-            onArchive={() => patch(person.id, { isArchived: !person.isArchived })}
-            onDelete={() => del(person.id, person.name)}
-          />
-          <div class="ml-12 -mt-0.5 flex flex-wrap items-center gap-1 pb-1">
-            {#each personTags as t (t.id)}
-              <a
-                href={buildUrl({ tag: t.slug })}
-                class="rounded-full border border-[var(--color-border)] bg-[var(--color-surface-2)] px-1.5 py-0.5 text-[10px] text-[var(--color-muted)] transition-colors hover:border-[var(--color-border-strong)] hover:text-[var(--color-text)]"
-              >{t.name}</a>
-            {/each}
-            <RowTagAdder
-              scope="person"
-              entityId={person.id}
-              currentTags={personTags}
-              suggestions={data.allTags}
-            />
-          </div>
-        </li>
-      {/each}
-    </ul>
+    <!-- Database table. We use a CSS grid so columns align without the
+         overhead of a real <table> (which makes inline editing harder). -->
+    <div class="overflow-hidden rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)] shadow-[var(--shadow-xs)]">
+      <!-- Header row -->
+      <div
+        class="grid items-center gap-2 border-b border-[var(--color-border)] bg-[var(--color-surface-2)] px-2 py-2 text-[var(--color-subtle)]"
+        style="grid-template-columns: 28px minmax(0,1.6fr) minmax(0,1.2fr) 84px minmax(0,140px) minmax(0,1fr);"
+      >
+        <span class="cap-label">·</span>
+        <SortHeader label="Name" sortKey="name" current={data.sort} href={sortHref} direction="asc" />
+        <SortHeader label="Company" sortKey="company" current={data.sort} href={sortHref} sortable={false} />
+        <SortHeader label="Last seen" sortKey="lastInteraction" current={data.sort} href={sortHref} align="right" />
+        <SortHeader label="Status" sortKey="status" current={data.sort} href={sortHref} />
+        <SortHeader label="Tags" sortKey="tags" current={data.sort} href={sortHref} sortable={false} />
+      </div>
+
+      <ul role="list">
+        {#each rows as person, i (person.id)}
+          {@const tags = data.itemTags[person.id] ?? []}
+          {@const currentStatusId = optimisticStatus[person.id] !== undefined ? optimisticStatus[person.id] : person.statusId}
+          {@const sel = i === selected}
+          <li>
+            <div
+              data-entity-row
+              class="group grid items-center gap-2 border-b border-[var(--color-border)] px-2 transition-colors last:border-b-0 hover:bg-[var(--color-surface-2)] {sel ? 'bg-[var(--color-highlight-bg)]' : ''} {person.isArchived ? 'opacity-60' : ''}"
+              style="grid-template-columns: 28px minmax(0,1.6fr) minmax(0,1.2fr) 84px minmax(0,140px) minmax(0,1fr); {density === 'compact' ? 'min-height: 36px; padding-top: 2px; padding-bottom: 2px;' : 'min-height: 52px; padding-top: 6px; padding-bottom: 6px;'}"
+            >
+              <!-- Priority gutter -->
+              <div class="flex justify-center">
+                <PriorityFlag
+                  value={(person.priority as Priority) ?? null}
+                  onChange={(p) => setPriority(person.id, p)}
+                />
+              </div>
+
+              <!-- Identity cell (avatar + name + role) -->
+              <a href={`/people/${person.id}`} class="flex min-w-0 items-center gap-3">
+                <span class="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-full border border-[var(--color-border)] bg-[var(--color-surface)] text-xs font-medium text-[var(--color-muted)]">
+                  {#if person.avatarUrl}
+                    <img src={person.avatarUrl} alt="" loading="lazy" class="h-full w-full object-cover" />
+                  {:else}
+                    {initials(person.name) || '·'}
+                  {/if}
+                </span>
+                <span class="min-w-0 flex-1">
+                  <span class="flex items-center gap-2">
+                    <span class="truncate text-sm font-medium text-[var(--color-text)]">{person.name}</span>
+                    {#if person.source === 'parsing'}
+                      <Loader2 size={11} strokeWidth={2} class="animate-spin text-[var(--color-subtle)]" />
+                    {/if}
+                    {#if person.isFavorite}
+                      <Star size={11} strokeWidth={2} fill="currentColor" class="text-[var(--color-warning)]" />
+                    {/if}
+                  </span>
+                  {#if density === 'comfortable' && (person.role || person.email)}
+                    <span class="block truncate text-xs text-[var(--color-muted)]">
+                      {person.role || person.email}
+                    </span>
+                  {/if}
+                </span>
+              </a>
+
+              <!-- Company cell -->
+              <div class="min-w-0">
+                {#if person.companyId && person.companyName}
+                  <a
+                    href={`/companies/${person.companyId}`}
+                    class="inline-flex max-w-full items-center gap-1.5 truncate text-sm text-[var(--color-text)] hover:underline"
+                  >
+                    {#if person.companyLogoUrl || person.companyFaviconUrl}
+                      <img
+                        src={person.companyLogoUrl ?? person.companyFaviconUrl ?? ''}
+                        alt=""
+                        loading="lazy"
+                        class="h-4 w-4 shrink-0 rounded-[3px] object-cover"
+                      />
+                    {:else}
+                      <span class="h-4 w-4 shrink-0 rounded-[3px] border border-[var(--color-border)] bg-[var(--color-surface-2)]"></span>
+                    {/if}
+                    <span class="truncate">{person.companyName}</span>
+                  </a>
+                {:else}
+                  <span class="text-xs text-[var(--color-subtle)]">—</span>
+                {/if}
+              </div>
+
+              <!-- Last seen cell -->
+              <div class="tabular text-right text-xs text-[var(--color-muted)]">
+                {formatLastSeen(person.lastAt)}
+              </div>
+
+              <!-- Status cell -->
+              <div class="min-w-0">
+                <StatusCell
+                  value={currentStatusId}
+                  statuses={statuses}
+                  scope="person"
+                  onChange={(s) => setStatus(person.id, s)}
+                  onStatusesChange={(next) => (statuses = next)}
+                />
+              </div>
+
+              <!-- Tags cell -->
+              <div class="flex min-w-0 flex-wrap items-center gap-1">
+                {#each tags as t (t.id)}
+                  <a
+                    href={buildUrl({ tag: t.slug })}
+                    class="rounded-full border border-[var(--color-border)] bg-[var(--color-surface-2)] px-1.5 py-0.5 text-[10px] text-[var(--color-muted)] transition-colors hover:text-[var(--color-text)]"
+                  >{t.name}</a>
+                {/each}
+                <RowTagAdder
+                  scope="person"
+                  entityId={person.id}
+                  currentTags={tags}
+                  suggestions={data.allTags}
+                />
+              </div>
+            </div>
+          </li>
+        {/each}
+      </ul>
+    </div>
   {/if}
+
+  <!-- Row actions reachable via the detail page; we keep the list dense and
+       defer favorite/archive/delete to the keyboard (* / # / del prompt). -->
+  <p class="text-[11px] text-[var(--color-subtle)]">
+    Tip: <kbd class="rounded border border-[var(--color-border)] bg-[var(--color-surface)] px-1">j/k</kbd> navigate ·
+    <kbd class="rounded border border-[var(--color-border)] bg-[var(--color-surface)] px-1">↵</kbd> open ·
+    <kbd class="rounded border border-[var(--color-border)] bg-[var(--color-surface)] px-1">*</kbd> favorite ·
+    <kbd class="rounded border border-[var(--color-border)] bg-[var(--color-surface)] px-1">#</kbd> archive
+  </p>
 </div>

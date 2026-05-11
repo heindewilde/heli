@@ -48,8 +48,11 @@ export const companies = sqliteTable(
     logoUrl: text('logo_url'),
     faviconUrl: text('favicon_url'),
     industry: text('industry'),
+    sizeBand: text('size_band'),
     location: text('location'),
     notes: text('notes'),
+    priority: integer('priority'),
+    statusId: text('status_id').references(() => companyStatuses.id, { onDelete: 'set null' }),
     isFavorite: integer('is_favorite').notNull().default(0),
     isArchived: integer('is_archived').notNull().default(0),
     source: text('source'),
@@ -60,7 +63,27 @@ export const companies = sqliteTable(
     index('idx_companies_user_arch').on(t.userId, t.isArchived),
     index('idx_companies_user_fav').on(t.userId, t.isFavorite),
     index('idx_companies_user_domain').on(t.userId, t.domain),
+    index('idx_companies_user_priority').on(t.userId, t.priority),
+    index('idx_companies_user_status').on(t.userId, t.statusId),
     uniqueIndex('uq_companies_user_url').on(t.userId, t.url)
+  ]
+);
+
+export const companyStatuses = sqliteTable(
+  'company_statuses',
+  {
+    id: text('id').primaryKey(),
+    userId: text('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    name: text('name').notNull(),
+    tone: text('tone').notNull(),
+    sortOrder: integer('sort_order').notNull().default(0),
+    createdAt: integer('created_at').notNull()
+  },
+  (t) => [
+    index('idx_company_statuses_user_sort').on(t.userId, t.sortOrder),
+    uniqueIndex('uq_company_statuses_user_name').on(t.userId, t.name)
   ]
 );
 
@@ -85,6 +108,8 @@ export const people = sqliteTable(
     notes: text('notes'),
     suggestedCompanyName: text('suggested_company_name'),
     suggestedCompanyUrl: text('suggested_company_url'),
+    priority: integer('priority'),
+    statusId: text('status_id').references(() => peopleStatuses.id, { onDelete: 'set null' }),
     isFavorite: integer('is_favorite').notNull().default(0),
     isArchived: integer('is_archived').notNull().default(0),
     source: text('source'),
@@ -96,7 +121,27 @@ export const people = sqliteTable(
     index('idx_people_user_fav').on(t.userId, t.isFavorite),
     index('idx_people_user_company').on(t.userId, t.companyId),
     index('idx_people_user_domain').on(t.userId, t.domain),
+    index('idx_people_user_priority').on(t.userId, t.priority),
+    index('idx_people_user_status').on(t.userId, t.statusId),
     uniqueIndex('uq_people_user_url').on(t.userId, t.url)
+  ]
+);
+
+export const peopleStatuses = sqliteTable(
+  'people_statuses',
+  {
+    id: text('id').primaryKey(),
+    userId: text('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    name: text('name').notNull(),
+    tone: text('tone').notNull(),
+    sortOrder: integer('sort_order').notNull().default(0),
+    createdAt: integer('created_at').notNull()
+  },
+  (t) => [
+    index('idx_people_statuses_user_sort').on(t.userId, t.sortOrder),
+    uniqueIndex('uq_people_statuses_user_name').on(t.userId, t.name)
   ]
 );
 
