@@ -1,5 +1,6 @@
 <script lang="ts">
-  import { X } from 'lucide-svelte';
+  import { X, Plus, Loader2 } from 'lucide-svelte';
+  import { toast } from '$lib/toasts.svelte';
 
   type Person = { id: string; name: string; avatarUrl: string | null; role: string | null; companyId?: string | null };
 
@@ -16,6 +17,7 @@
   let results = $state<Person[]>([]);
   let open = $state(false);
   let highlight = $state(0);
+  let creating = $state(false);
   let inputEl = $state<HTMLInputElement | undefined>(undefined);
 
   let timer: ReturnType<typeof setTimeout> | null = null;
@@ -34,7 +36,7 @@
         if (!res.ok) return;
         const data = (await res.json()) as { items: Person[] };
         results = data.items.filter((p) => !selected.some((s) => s.id === p.id));
-        open = results.length > 0;
+        open = true;
         highlight = 0;
       } catch {
         // ignore
@@ -50,6 +52,26 @@
     inputEl?.focus();
   }
 
+  async function createAndPick() {
+    const name = q.trim();
+    if (!name || creating) return;
+    creating = true;
+    try {
+      const res = await fetch('/api/people', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ name })
+      });
+      if (!res.ok) { toast.danger('Could not create person'); return; }
+      const data = (await res.json()) as { id: string };
+      pick({ id: data.id, name, avatarUrl: null, role: null, companyId: null });
+    } catch {
+      toast.danger('Could not create person');
+    } finally {
+      creating = false;
+    }
+  }
+
   function onKey(e: KeyboardEvent) {
     if (!open) {
       if (e.key === 'Backspace' && q === '' && selected.length > 0) {
@@ -58,16 +80,19 @@
       }
       return;
     }
+    const total = results.length + 1; // +1 for create option
     if (e.key === 'ArrowDown') {
-      highlight = Math.min(results.length - 1, highlight + 1);
+      highlight = Math.min(total - 1, highlight + 1);
       e.preventDefault();
     } else if (e.key === 'ArrowUp') {
       highlight = Math.max(0, highlight - 1);
       e.preventDefault();
     } else if (e.key === 'Enter') {
-      const p = results[highlight];
-      if (p) {
-        pick(p);
+      if (highlight < results.length) {
+        const p = results[highlight];
+        if (p) { pick(p); e.preventDefault(); }
+      } else {
+        createAndPick();
         e.preventDefault();
       }
     } else if (e.key === 'Escape') {
@@ -102,7 +127,7 @@
       bind:value={q}
       oninput={onInput}
       onkeydown={onKey}
-      onfocus={() => (open = results.length > 0)}
+      onfocus={() => (open = q.trim().length > 0)}
       onblur={() => setTimeout(() => (open = false), 150)}
       type="text"
       {placeholder}
@@ -134,6 +159,19 @@
             </span>
           </button>
         {/each}
+        <button
+          type="button"
+          onmousedown={(e) => { e.preventDefault(); createAndPick(); }}
+          disabled={creating}
+          class="flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm {highlight === results.length ? 'bg-[var(--color-highlight-bg)]' : 'hover:bg-[var(--color-bg)]'} text-[var(--color-muted)]"
+        >
+          {#if creating}
+            <Loader2 size={14} strokeWidth={2} class="animate-spin" />
+          {:else}
+            <Plus size={14} strokeWidth={2} />
+          {/if}
+          <span>Add "<span class="font-medium text-[var(--color-text)]">{q.trim()}</span>"</span>
+        </button>
       </div>
     </ul>
   {/if}
