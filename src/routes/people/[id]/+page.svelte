@@ -11,6 +11,7 @@
   import SaveBanner from '$lib/components/SaveBanner.svelte';
   import StatusChip from '$lib/components/StatusChip.svelte';
   import CompanyLogo from '$lib/components/CompanyLogo.svelte';
+  import CompanyPicker from '$lib/components/CompanyPicker.svelte';
   import SocialLinks from '$lib/components/SocialLinks.svelte';
   import { FolderKanban } from 'lucide-svelte';
   import type { ProjectStatus } from '$lib/server/schema';
@@ -399,28 +400,20 @@
         <FieldRow label="Role" icon={Building2} value={person.role} field="role" id={person.id} endpoint="people" />
         <FieldRow label="LinkedIn" icon={Linkedin} value={person.linkedinUrl} field="linkedinUrl" id={person.id} endpoint="people" />
         <FieldRow label="X" icon={Twitter} value={person.xUrl} field="xUrl" id={person.id} endpoint="people" />
-        {#if company}
-          <div class="mt-2 rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-bg)] p-3">
-            <p class="text-xs text-[var(--color-muted)]">Linked company</p>
-            <a
-              href={`/companies/${company.id}`}
-              class="mt-1 flex items-center gap-2 hover:underline"
-            >
-              <CompanyLogo
-                domain={company.domain}
-                fallbackUrl={company.logoUrl ?? company.faviconUrl}
-                name={company.name}
-                size={28}
-              />
-              <span class="min-w-0 flex-1">
-                <span class="block truncate text-sm font-medium">{company.name}</span>
-                {#if company.domain}
-                  <span class="block truncate text-xs text-[var(--color-muted)]">{company.domain}</span>
-                {/if}
-              </span>
-            </a>
-          </div>
-        {/if}
+        <div class="mt-2">
+          <p class="mb-1 text-xs text-[var(--color-muted)]">Company</p>
+          <CompanyPicker
+            selected={company ?? null}
+            onPick={async (c) => {
+              if (c) {
+                await patch({ companyId: c.id, suggestedCompanyName: null, suggestedCompanyUrl: null });
+              } else {
+                await patch({ companyId: null });
+              }
+            }}
+            placeholder="Link a company…"
+          />
+        </div>
       </div>
       <div class="flex flex-col gap-2 rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)] p-3">
         <h3 class="text-xs font-medium uppercase tracking-wide text-[var(--color-subtle)]">Tags</h3>

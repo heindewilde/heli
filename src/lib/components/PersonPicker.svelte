@@ -1,7 +1,7 @@
 <script lang="ts">
   import { X } from 'lucide-svelte';
 
-  type Person = { id: string; name: string; avatarUrl: string | null; role: string | null };
+  type Person = { id: string; name: string; avatarUrl: string | null; role: string | null; companyId?: string | null };
 
   type Props = {
     selected: Person[];

@@ -1,6 +1,7 @@
 <script lang="ts">
   import { goto, invalidateAll } from '$app/navigation';
-  import { Star, Archive, Trash2, Loader2, MapPin, Building2, Linkedin, Twitter } from 'lucide-svelte';
+  import { Star, Archive, Trash2, Loader2, MapPin, Building2, Linkedin, Twitter, X } from 'lucide-svelte';
+  import PersonPicker from '$lib/components/PersonPicker.svelte';
   import NotesEditor from '$lib/components/NotesEditor.svelte';
   import FieldRow from '$lib/components/FieldRow.svelte';
   import InteractionRow from '$lib/components/InteractionRow.svelte';
@@ -73,6 +74,30 @@
       return;
     }
     if (!deleting) await invalidateAll();
+  }
+
+  let pickerPeople = $state<{ id: string; name: string; avatarUrl: string | null; role: string | null; companyId?: string | null }[]>([]);
+
+  async function patchPerson(personId: string, updates: Record<string, unknown>) {
+    const res = await fetch(`/api/people/${personId}`, {
+      method: 'PATCH',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(updates)
+    });
+    if (!res.ok) { toast.danger('Could not update person'); return; }
+    await invalidateAll();
+  }
+
+  async function linkPerson(p: { id: string; name: string; companyId?: string | null }) {
+    if (p.companyId && p.companyId !== company.id) {
+      if (!confirm(`${p.name} is already linked to a different company. Replace that link?`)) return;
+    }
+    await patchPerson(p.id, { companyId: company.id });
+    pickerPeople = [];
+  }
+
+  async function unlinkPerson(p: { id: string; name: string }) {
+    await patchPerson(p.id, { companyId: null });
   }
 
   async function commitName() {
@@ -218,33 +243,46 @@
         onSave={(next) => patch({ notes: next })}
       />
 
-      {#if linkedPeople.length > 0}
-        <h2 class="mt-4 text-sm font-medium text-[var(--color-muted)]">People at this company</h2>
-        <ul class="flex flex-col gap-1">
-          {#each linkedPeople as p (p.id)}
-            <li>
-              <a
-                href={`/people/${p.id}`}
-                class="flex items-center gap-3 rounded-[var(--radius-sm)] px-2 py-1.5 hover:bg-[var(--color-surface)]"
-              >
-                <span class="flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-full border border-[var(--color-border)] bg-[var(--color-surface)] text-xs text-[var(--color-muted)]">
-                  {#if p.avatarUrl}
-                    <img src={p.avatarUrl} alt="" class="h-full w-full object-cover" />
-                  {:else}
-                    {(p.name[0] ?? '·').toUpperCase()}
-                  {/if}
-                </span>
-                <span class="min-w-0 flex-1">
-                  <span class="block truncate text-sm font-medium">{p.name}</span>
-                  {#if p.role}
-                    <span class="block truncate text-xs text-[var(--color-muted)]">{p.role}</span>
-                  {/if}
-                </span>
-              </a>
-            </li>
-          {/each}
-        </ul>
-      {/if}
+      <div class="mt-4 flex flex-col gap-2">
+        <h2 class="text-sm font-medium text-[var(--color-muted)]">People at this company</h2>
+        {#if linkedPeople.length > 0}
+          <ul class="flex flex-col gap-0.5">
+            {#each linkedPeople as p (p.id)}
+              <li>
+                <div class="group flex items-center gap-2 rounded-[var(--radius-sm)] px-2 py-1.5 hover:bg-[var(--color-surface)]">
+                  <a href={`/people/${p.id}`} class="flex min-w-0 flex-1 items-center gap-3">
+                    <span class="flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-full border border-[var(--color-border)] bg-[var(--color-surface)] text-xs text-[var(--color-muted)]">
+                      {#if p.avatarUrl}
+                        <img src={p.avatarUrl} alt="" class="h-full w-full object-cover" />
+                      {:else}
+                        {(p.name[0] ?? '·').toUpperCase()}
+                      {/if}
+                    </span>
+                    <span class="min-w-0 flex-1">
+                      <span class="block truncate text-sm font-medium">{p.name}</span>
+                      {#if p.role}
+                        <span class="block truncate text-xs text-[var(--color-muted)]">{p.role}</span>
+                      {/if}
+                    </span>
+                  </a>
+                  <button
+                    type="button"
+                    onclick={() => unlinkPerson(p)}
+                    aria-label="Unlink {p.name}"
+                    class="rounded-[var(--radius-sm)] p-1 text-[var(--color-subtle)] opacity-0 hover:bg-[var(--color-bg)] group-hover:opacity-100"
+                  ><X size={12} strokeWidth={2} /></button>
+                </div>
+              </li>
+            {/each}
+          </ul>
+        {/if}
+        <PersonPicker
+          selected={pickerPeople}
+          onAdd={(p) => linkPerson(p)}
+          onRemove={() => {}}
+          placeholder={linkedPeople.length > 0 ? 'Add another person…' : 'Add a person…'}
+        />
+      </div>
 
       <div class="mt-4 flex items-center justify-between">
         <h2 class="text-sm font-medium text-[var(--color-muted)]">Interactions</h2>
