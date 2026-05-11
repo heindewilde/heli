@@ -52,7 +52,7 @@
     <input
       bind:this={inputEl}
       bind:value
-      type="url"
+      type="text"
       inputmode="url"
       autocomplete="off"
       spellcheck="false"

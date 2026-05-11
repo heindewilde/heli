@@ -2,7 +2,7 @@
   import { goto, invalidateAll } from '$app/navigation';
   import { page } from '$app/state';
   import { onMount } from 'svelte';
-  import { Search, Star, Archive, Tag, X, Rows3, Rows4, Loader2 } from 'lucide-svelte';
+  import { Search, Star, Archive, Tag, X, Plus, Loader2 } from 'lucide-svelte';
   import RowTagAdder from '$lib/components/RowTagAdder.svelte';
   import RowContactCell from '$lib/components/RowContactCell.svelte';
   import PriorityFlag from '$lib/components/PriorityFlag.svelte';
@@ -10,7 +10,6 @@
   import PriorityFilterChip from '$lib/components/PriorityFilterChip.svelte';
   import StatusFilterChip from '$lib/components/StatusFilterChip.svelte';
   import SortHeader from '$lib/components/SortHeader.svelte';
-  import InlineCreateRow from '$lib/components/InlineCreateRow.svelte';
   import CompanyLogo from '$lib/components/CompanyLogo.svelte';
   import type { StatusRow } from '$lib/statuses';
   import type { Priority } from '$lib/priority';
@@ -29,15 +28,36 @@
   // invalidateAll so the next render reflects the new option.
   let statuses = $derived<StatusRow[]>(data.statuses);
 
-  const DENSITY_KEY = 'gusto.people.density';
-  let density = $state<'comfortable' | 'compact'>('comfortable');
-  onMount(() => {
-    const stored = localStorage.getItem(DENSITY_KEY);
-    if (stored === 'compact' || stored === 'comfortable') density = stored;
-  });
-  $effect(() => {
-    if (typeof localStorage !== 'undefined') localStorage.setItem(DENSITY_KEY, density);
-  });
+  let showAdd = $state(false);
+  let addName = $state('');
+  let addBusy = $state(false);
+  let addInputEl = $state<HTMLInputElement | undefined>(undefined);
+
+  function openAdd() {
+    showAdd = true;
+    setTimeout(() => addInputEl?.focus(), 0);
+  }
+
+  async function submitAdd() {
+    const name = addName.trim();
+    if (!name || addBusy) return;
+    addBusy = true;
+    try {
+      const res = await fetch('/api/people', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ name })
+      });
+      if (!res.ok) { toast.danger('Could not create'); return; }
+      addName = '';
+      showAdd = false;
+      await invalidateAll();
+    } catch {
+      toast.danger('Could not create');
+    } finally {
+      addBusy = false;
+    }
+  }
 
   $effect(() => {
     if (selected >= rows.length) selected = Math.max(0, rows.length - 1);
@@ -156,9 +176,6 @@
     await patch(id, { priority: next });
   }
 
-  async function onCreated(_id: string) {
-    await invalidateAll();
-  }
 </script>
 
 <div class="flex flex-col gap-4">
@@ -168,19 +185,30 @@
       {data.total}
     </span>
     <div class="ml-auto flex items-center gap-1.5">
-      <button
-        type="button"
-        title={density === 'compact' ? 'Comfortable density' : 'Compact density'}
-        aria-label="Toggle density"
-        onclick={() => (density = density === 'compact' ? 'comfortable' : 'compact')}
-        class="inline-flex items-center justify-center rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-surface)] p-1.5 text-[var(--color-subtle)] transition-colors hover:border-[var(--color-border-strong)] hover:text-[var(--color-text)]"
-      >
-        {#if density === 'compact'}
-          <Rows3 size={14} strokeWidth={2} />
-        {:else}
-          <Rows4 size={14} strokeWidth={2} />
-        {/if}
-      </button>
+      {#if showAdd}
+        <input
+          bind:this={addInputEl}
+          bind:value={addName}
+          type="text"
+          placeholder="Name…"
+          onkeydown={(e) => {
+            if (e.key === 'Enter') { e.preventDefault(); submitAdd(); }
+            if (e.key === 'Escape') { showAdd = false; addName = ''; }
+          }}
+          onblur={() => { if (!addName.trim()) showAdd = false; }}
+          disabled={addBusy}
+          class="h-7 w-36 rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-surface)] px-2 text-sm outline-none focus:border-[var(--color-border-strong)]"
+        />
+      {:else}
+        <button
+          type="button"
+          onclick={openAdd}
+          class="inline-flex items-center gap-1 rounded-[var(--radius-sm)] bg-[var(--color-accent)] px-3 py-1.5 text-sm font-medium text-[var(--color-accent-fg)] transition-colors hover:bg-[var(--color-accent-hover)]"
+        >
+          <Plus size={14} strokeWidth={2} />
+          Add person
+        </button>
+      {/if}
     </div>
   </header>
 
@@ -243,8 +271,6 @@
     {/if}
   </div>
 
-  <InlineCreateRow placeholder="Add a person…" endpoint="/api/people" {onCreated} />
-
   {#if rows.length === 0}
     <div class="rounded-[var(--radius-md)] border border-dashed border-[var(--color-border)] bg-[var(--color-surface)] p-10 text-center">
       {#if data.q}
@@ -255,7 +281,7 @@
       {:else if data.favorite || data.archived || data.priorityFilter || data.statusFilter}
         <p class="text-sm text-[var(--color-muted)]">No people in this filter.</p>
       {:else}
-        <p class="text-sm text-[var(--color-muted)]">Paste a link in the topbar, or type a name above to add someone.</p>
+        <p class="text-sm text-[var(--color-muted)]">Paste a link in the topbar, or use <strong>Add person</strong> above to add someone.</p>
       {/if}
     </div>
   {:else}
@@ -283,7 +309,7 @@
             <div
               data-entity-row
               class="group relative grid items-center gap-3 border-b border-[var(--color-border)] px-3 transition-colors last:border-b-0 {sel ? 'bg-[var(--color-highlight-bg)]' : 'hover:bg-[var(--color-row-hover)]'} {person.isArchived ? 'opacity-60' : ''}"
-              style="grid-template-columns: 24px minmax(0,1.5fr) minmax(0,1.1fr) minmax(0,0.9fr) 150px minmax(0,1fr); {density === 'compact' ? 'min-height: 36px; padding-top: 2px; padding-bottom: 2px;' : 'min-height: 56px; padding-top: 8px; padding-bottom: 8px;'}"
+              style="grid-template-columns: 24px minmax(0,1.5fr) minmax(0,1.1fr) minmax(0,0.9fr) 150px minmax(0,1fr); min-height: 56px; padding-top: 8px; padding-bottom: 8px;"
             >
               <PriorityFlag
                 value={(person.priority as Priority) ?? null}
@@ -308,7 +334,7 @@
                       <Star size={11} strokeWidth={2} fill="currentColor" class="text-[var(--color-warning)]" />
                     {/if}
                   </span>
-                  {#if density === 'comfortable' && person.role}
+                  {#if person.role}
                     <span class="block truncate text-xs text-[var(--color-muted)]">{person.role}</span>
                   {/if}
                 </span>

@@ -120,9 +120,11 @@ html, body {
   -moz-osx-font-smoothing: grayscale;
   text-rendering: optimizeLegibility;
 }
-button, input, select, textarea {
-  font: inherit;
-  color: inherit;
+@layer base {
+  button, input, select, textarea {
+    font: inherit;
+    color: inherit;
+  }
 }
 
 /* Numerics that need to align in tables/dashboards. */
