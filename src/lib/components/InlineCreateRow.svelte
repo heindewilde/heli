@@ -2,16 +2,11 @@
   import { Plus, Loader2 } from 'lucide-svelte';
   import { toast } from '$lib/toasts.svelte';
 
-  // A single, always-visible row at the top of the table for quick manual
-  // creation. Type a name, press Enter → POST → focus stays on the input so
-  // the user can keep adding. Esc clears the field. No company picker, no
-  // role field — those are inline-editable on the new row immediately after.
-
+  // Only `name` is captured here; everything else is filled in inline on
+  // the new row after creation, so the input flow stays one-key.
   type Props = {
     placeholder: string;
-    /** 'person' or 'company' — drives the POST endpoint. */
     endpoint: '/api/people' | '/api/companies';
-    /** Called after the new entity is created so the list refreshes. */
     onCreated: (id: string) => void;
   };
   let { placeholder, endpoint, onCreated }: Props = $props();

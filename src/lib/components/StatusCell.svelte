@@ -1,8 +1,9 @@
 <script lang="ts">
-  import { onMount } from 'svelte';
   import { Check, Plus, X } from 'lucide-svelte';
   import { STATUS_TONE_LIST, TONE_STYLES, type StatusRow, type StatusTone } from '$lib/statuses';
+  import type { Kind } from '$lib/server/classify';
   import { toast } from '$lib/toasts.svelte';
+  import { dismiss } from '$lib/dismiss.svelte';
   import StatusPill from './StatusPill.svelte';
 
   type Props = {
@@ -10,8 +11,7 @@
     value: string | null;
     /** Full list of statuses available for this entity scope. */
     statuses: StatusRow[];
-    /** 'person' or 'company' — drives the inline-create endpoint scope. */
-    scope: 'person' | 'company';
+    scope: Kind;
     /** Called after the status is persisted (id or null on clear). */
     onChange: (next: StatusRow | null) => void;
     /** Called when a new status is created so the parent can refresh the list. */
@@ -120,21 +120,9 @@
     }
   }
 
-  // Close on outside click — the inert button scrim below handles this.
-  // We also close on Escape from the trigger when the menu isn't open.
-  onMount(() => {
-    const onDocKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape' && open) {
-        e.preventDefault();
-        closeMenu();
-      }
-    };
-    window.addEventListener('keydown', onDocKey);
-    return () => window.removeEventListener('keydown', onDocKey);
-  });
 </script>
 
-<div class="relative inline-flex min-w-0 max-w-full">
+<div use:dismiss={open ? closeMenu : null} class="relative inline-flex min-w-0 max-w-full">
   <button
     bind:this={triggerEl}
     type="button"
@@ -151,19 +139,11 @@
     {#if current}
       <StatusPill status={current} />
     {:else}
-      <!-- Empty by design. A faint "—" appears on hover so the cell is
-           discoverable without shouting at the user. -->
       <span class="invisible text-xs text-[var(--color-subtle)] group-hover:visible">— set status</span>
     {/if}
   </button>
 
   {#if open}
-    <button
-      type="button"
-      class="fixed inset-0 z-40 cursor-default"
-      aria-label="Close status menu"
-      onclick={closeMenu}
-    ></button>
     <div
       role="dialog"
       aria-label="Status"

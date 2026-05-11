@@ -1,6 +1,7 @@
 <script lang="ts">
   import { Circle, Check } from 'lucide-svelte';
   import { TONE_STYLES, type StatusRow } from '$lib/statuses';
+  import { dismiss } from '$lib/dismiss.svelte';
 
   // Filter chip for the Status column. Multi-select; "(no status)" is a
   // pseudo-row represented by the sentinel string 'none' in the URL.
@@ -49,7 +50,7 @@
   }
 </script>
 
-<div class="relative inline-flex">
+<div use:dismiss={open ? commit : null} class="relative inline-flex">
   <button
     type="button"
     onclick={() => (open = !open)}
@@ -63,12 +64,6 @@
   </button>
 
   {#if open}
-    <button
-      type="button"
-      class="fixed inset-0 z-40 cursor-default"
-      aria-label="Close status filter"
-      onclick={() => commit()}
-    ></button>
     <div
       role="dialog"
       aria-label="Status filter"

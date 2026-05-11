@@ -60,6 +60,16 @@ export function formatTime(ts: number): string {
   return new Date(ts).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
 }
 
+export function formatLastSeen(ts: number | null): string {
+  if (ts == null) return '';
+  const days = Math.floor((Date.now() - ts) / 86_400_000);
+  if (days <= 0) return 'today';
+  if (days < 7) return `${days}d`;
+  if (days < 30) return `${Math.floor(days / 7)}w`;
+  if (days < 365) return `${Math.floor(days / 30)}mo`;
+  return `${Math.floor(days / 365)}y`;
+}
+
 export function toLocalDatetimeInput(ts: number): string {
   const d = new Date(ts);
   const pad = (n: number) => String(n).padStart(2, '0');

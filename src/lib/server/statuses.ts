@@ -3,12 +3,7 @@ import { and, asc, eq, max } from 'drizzle-orm';
 import { db } from './db';
 import { peopleStatuses, companyStatuses } from './schema';
 import { sanitizePlainText } from './sanitize';
-
-// User-defined status table for an entity scope. People and Companies each
-// have their own (Lead/Customer for people, Prospect/Customer for companies
-// usually). Keeping them separate avoids one user's "Active customer" status
-// applying to the wrong kind of record.
-export type StatusScope = 'person' | 'company';
+import type { Kind } from './classify';
 
 // Limited palette so the table reads coherently. The render side maps each
 // tone to a semantic color token (info, success, warning, danger, neutral).
@@ -32,7 +27,7 @@ export type StatusRow = {
 };
 
 export async function listStatuses(
-  scope: StatusScope,
+  scope: Kind,
   userId: string,
   region: string
 ): Promise<StatusRow[]> {
@@ -54,7 +49,7 @@ export async function listStatuses(
 }
 
 export async function createStatus(
-  scope: StatusScope,
+  scope: Kind,
   userId: string,
   region: string,
   input: { name: string; tone: string }
@@ -65,8 +60,7 @@ export async function createStatus(
   const t = TABLE[scope];
   const d = db(region);
 
-  // Sort-order auto-appends to keep the user's picker order stable. We
-  // don't try to reuse gaps; new statuses just go to the end.
+  // Sort-order auto-appends; we don't reuse gaps. New statuses go to the end.
   const top = await d
     .select({ v: max(t.sortOrder) })
     .from(t)
@@ -102,7 +96,7 @@ export async function createStatus(
 }
 
 export async function deleteStatus(
-  scope: StatusScope,
+  scope: Kind,
   userId: string,
   region: string,
   id: string

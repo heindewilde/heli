@@ -14,6 +14,8 @@
   import type { Priority } from '$lib/priority';
   import { bindKeys } from '$lib/keyboard.svelte';
   import { toast } from '$lib/toasts.svelte';
+  import { buildUrl as buildUrlBase } from '$lib/url';
+  import { formatLastSeen } from '$lib/interactions';
 
   let { data } = $props();
 
@@ -21,16 +23,10 @@
   let q = $state(data.q);
   let selected = $state(0);
   let rows = $derived(data.items);
-  // svelte-ignore state_referenced_locally
-  let statuses = $state<StatusRow[]>(data.statuses);
-  // Refresh local statuses when the page data changes (e.g. after a tag
-  // filter swap that re-runs load).
-  $effect(() => {
-    statuses = data.statuses;
-  });
+  // Statuses are read from `data` directly; inline-create triggers an
+  // invalidateAll so the next render reflects the new option.
+  let statuses = $derived<StatusRow[]>(data.statuses);
 
-  // Density: 'comfortable' (default, two-line rows) vs 'compact' (single
-  // line, name + role inline). Persisted per-user-agent.
   const DENSITY_KEY = 'gusto.people.density';
   let density = $state<'comfortable' | 'compact'>('comfortable');
   onMount(() => {
@@ -46,13 +42,7 @@
   });
 
   function buildUrl(overrides: Record<string, string | boolean | null>): string {
-    const params = new URLSearchParams(page.url.searchParams);
-    for (const [k, v] of Object.entries(overrides)) {
-      if (v === null || v === false || v === '') params.delete(k);
-      else params.set(k, v === true ? '1' : v);
-    }
-    const s = params.toString();
-    return s ? `/people?${s}` : '/people';
+    return buildUrlBase('/people', page.url.searchParams, overrides);
   }
 
   function navTo(overrides: Record<string, string | boolean | null>) {
@@ -126,24 +116,11 @@
       .toUpperCase();
   }
 
-  function formatLastSeen(ts: number | null): string {
-    if (ts == null) return '';
-    const days = Math.floor((Date.now() - ts) / 86_400_000);
-    if (days <= 0) return 'today';
-    if (days < 7) return `${days}d`;
-    if (days < 30) return `${Math.floor(days / 7)}w`;
-    if (days < 365) return `${Math.floor(days / 30)}mo`;
-    return `${Math.floor(days / 365)}y`;
-  }
-
-  // Build sort-href: clicking the same key clears it (reverts to recent).
-  // Clicking a new key sets it.
+  // Clicking the active sort key clears it (reverts to default).
   function sortHref(key: string): string {
     return buildUrl({ sort: key === data.sort ? null : key });
   }
 
-  // Priority + Status filter URL encoding. The server reads a comma-sep
-  // string; null = no filter at all.
   function onPriorityFilter(next: (Priority)[] | null) {
     if (!next) {
       navTo({ priority: null });
@@ -160,26 +137,23 @@
     navTo({ status: next.join(',') });
   }
 
-  const priorityFilter = $derived<Priority[] | null>(
-    data.priorityFilter
-      ? (data.priorityFilter as (number | null)[]).map((v) => (v === 1 || v === 2 || v === 3 ? v : null)) as Priority[]
-      : null
-  );
+  const priorityFilter = $derived<Priority[] | null>(data.priorityFilter as Priority[] | null);
 
-  // Local optimistic update for status changes so the row reflects
+  // Optimistic mirror of the status assignment so the cell reflects
   // immediately while the PATCH is in flight.
   let optimisticStatus = $state<Record<string, string | null>>({});
   async function setStatus(id: string, next: StatusRow | null) {
     optimisticStatus[id] = next?.id ?? null;
-    await patch(id, { statusId: next?.id ?? null });
-    delete optimisticStatus[id];
+    try {
+      await patch(id, { statusId: next?.id ?? null });
+    } finally {
+      delete optimisticStatus[id];
+    }
   }
   async function setPriority(id: string, next: Priority) {
     await patch(id, { priority: next });
   }
 
-  // After a newly-created person, just refresh — the list will rehydrate
-  // with the new row up top.
   async function onCreated(_id: string) {
     await invalidateAll();
   }
@@ -222,8 +196,6 @@
     />
   </div>
 
-  <!-- Filter chip row. Keeping the legacy structure (favorites/archived/tags)
-       and adding the two new chips between Archived and Tags. -->
   <div class="flex flex-wrap items-center gap-2 text-xs">
     <a
       href={buildUrl({ favorite: !data.favorite, archived: data.archived, tag: data.tag?.slug ?? null })}
@@ -269,8 +241,7 @@
     {/if}
   </div>
 
-  <!-- Inline create row: persistent, lives at top of table. -->
-  <InlineCreateRow placeholder="Add a person…" endpoint="/api/people" onCreated={onCreated} />
+  <InlineCreateRow placeholder="Add a person…" endpoint="/api/people" {onCreated} />
 
   {#if rows.length === 0}
     <div class="rounded-[var(--radius-md)] border border-dashed border-[var(--color-border)] bg-[var(--color-surface)] p-10 text-center">
@@ -286,10 +257,9 @@
       {/if}
     </div>
   {:else}
-    <!-- Database table. We use a CSS grid so columns align without the
-         overhead of a real <table> (which makes inline editing harder). -->
+    <!-- CSS grid rather than a real <table> so each cell can host a button/
+         popover for inline editing without table-cell layout quirks. -->
     <div class="overflow-hidden rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)] shadow-[var(--shadow-xs)]">
-      <!-- Header row -->
       <div
         class="grid items-center gap-2 border-b border-[var(--color-border)] bg-[var(--color-surface-2)] px-2 py-2 text-[var(--color-subtle)]"
         style="grid-template-columns: 28px minmax(0,1.6fr) minmax(0,1.2fr) 84px minmax(0,140px) minmax(0,1fr);"
@@ -313,15 +283,11 @@
               class="group grid items-center gap-2 border-b border-[var(--color-border)] px-2 transition-colors last:border-b-0 hover:bg-[var(--color-surface-2)] {sel ? 'bg-[var(--color-highlight-bg)]' : ''} {person.isArchived ? 'opacity-60' : ''}"
               style="grid-template-columns: 28px minmax(0,1.6fr) minmax(0,1.2fr) 84px minmax(0,140px) minmax(0,1fr); {density === 'compact' ? 'min-height: 36px; padding-top: 2px; padding-bottom: 2px;' : 'min-height: 52px; padding-top: 6px; padding-bottom: 6px;'}"
             >
-              <!-- Priority gutter -->
-              <div class="flex justify-center">
-                <PriorityFlag
-                  value={(person.priority as Priority) ?? null}
-                  onChange={(p) => setPriority(person.id, p)}
-                />
-              </div>
+              <PriorityFlag
+                value={(person.priority as Priority) ?? null}
+                onChange={(p) => setPriority(person.id, p)}
+              />
 
-              <!-- Identity cell (avatar + name + role) -->
               <a href={`/people/${person.id}`} class="flex min-w-0 items-center gap-3">
                 <span class="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-full border border-[var(--color-border)] bg-[var(--color-surface)] text-xs font-medium text-[var(--color-muted)]">
                   {#if person.avatarUrl}
@@ -348,7 +314,6 @@
                 </span>
               </a>
 
-              <!-- Company cell -->
               <div class="min-w-0">
                 {#if person.companyId && person.companyName}
                   <a
@@ -372,12 +337,10 @@
                 {/if}
               </div>
 
-              <!-- Last seen cell -->
               <div class="tabular text-right text-xs text-[var(--color-muted)]">
                 {formatLastSeen(person.lastAt)}
               </div>
 
-              <!-- Status cell -->
               <div class="min-w-0">
                 <StatusCell
                   value={currentStatusId}
@@ -388,7 +351,6 @@
                 />
               </div>
 
-              <!-- Tags cell -->
               <div class="flex min-w-0 flex-wrap items-center gap-1">
                 {#each tags as t (t.id)}
                   <a

@@ -1,9 +1,9 @@
 import { error, json, type RequestHandler } from '@sveltejs/kit';
-import { createStatus, deleteStatus, listStatuses, type StatusScope } from '$lib/server/statuses';
+import { createStatus, deleteStatus, listStatuses } from '$lib/server/statuses';
+import type { Kind } from '$lib/server/classify';
 
-// One endpoint serves both scopes via `?scope=person|company`. Keeps the
-// client simple and avoids two near-identical route files.
-function parseScope(v: string | null): StatusScope {
+// One endpoint serves both scopes via `?scope=person|company`.
+function parseScope(v: string | null): Kind {
   if (v === 'person' || v === 'company') return v;
   throw error(400, 'bad_scope');
 }

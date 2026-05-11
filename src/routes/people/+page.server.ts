@@ -11,6 +11,7 @@ import {
   listTagsWithCounts
 } from '$lib/server/tags';
 import { listStatuses } from '$lib/server/statuses';
+import { sqlOr } from '$lib/server/sql-helpers';
 
 // Allowed sort keys. Anything else falls back to 'recent'.
 const SORTS = new Set(['recent', 'updated', 'name', 'lastInteraction', 'priority', 'status']);
@@ -56,8 +57,10 @@ export const load: PageServerLoad = async ({ locals, url }) => {
       activeTag = { id: t.id, name: t.name, slug: t.slug };
       tagFilterIds = await entityIdsForTag(locals.user.id, locals.user.region, 'person', t.id);
       if (tagFilterIds.length === 0) {
-        const allTags = await listTagsWithCounts(locals.user.id, locals.user.region, 'person');
-        const statuses = await listStatuses('person', locals.user.id, locals.user.region);
+        const [allTags, statuses] = await Promise.all([
+          listTagsWithCounts(locals.user.id, locals.user.region, 'person'),
+          listStatuses('person', locals.user.id, locals.user.region)
+        ]);
         return {
           q,
           archived,
@@ -123,32 +126,21 @@ export const load: PageServerLoad = async ({ locals, url }) => {
       )})`
     : sql``;
 
-  // Priority/status filters are applied in SQL when given.
-  let priorityClause = sql``;
-  if (priorityFilter) {
-    const hasNone = priorityFilter.has(null);
-    const nums = [...priorityFilter].filter((v): v is number => v !== null);
-    const numSql = nums.length > 0
-      ? sql`p.priority IN (${sql.join(nums.map((n) => sql`${n}`), sql`, `)})`
-      : null;
-    if (hasNone && numSql) priorityClause = sql`AND (${numSql} OR p.priority IS NULL)`;
-    else if (hasNone) priorityClause = sql`AND p.priority IS NULL`;
-    else if (numSql) priorityClause = sql`AND ${numSql}`;
-  }
-  let statusClause = sql``;
-  if (statusFilter) {
-    const hasNone = statusFilter.has('none');
-    const ids = [...statusFilter].filter((v) => v !== 'none');
-    const idSql = ids.length > 0
-      ? sql`p.status_id IN (${sql.join(ids.map((id) => sql`${id}`), sql`, `)})`
-      : null;
-    if (hasNone && idSql) statusClause = sql`AND (${idSql} OR p.status_id IS NULL)`;
-    else if (hasNone) statusClause = sql`AND p.status_id IS NULL`;
-    else if (idSql) statusClause = sql`AND ${idSql}`;
-  }
+  const priorityClause = priorityFilter
+    ? sqlOr([
+        priorityFilter.has(null) ? sql`p.priority IS NULL` : null,
+        ...[...priorityFilter]
+          .filter((v): v is number => v !== null)
+          .map((n) => sql`p.priority = ${n}`)
+      ])
+    : sql``;
+  const statusClause = statusFilter
+    ? sqlOr([
+        statusFilter.has('none') ? sql`p.status_id IS NULL` : null,
+        ...[...statusFilter].filter((v) => v !== 'none').map((id) => sql`p.status_id = ${id}`)
+      ])
+    : sql``;
 
-  // The `li` derived table gives us each person's most recent interaction
-  // timestamp via interaction_people. NULLs (never interacted) sort last.
   const LAST_INTERACTION_JOIN = sql`
     LEFT JOIN (
       SELECT ip.person_id AS pid, MAX(i.occurred_at) AS last_at
@@ -202,23 +194,19 @@ export const load: PageServerLoad = async ({ locals, url }) => {
     `);
   }
 
-  const totalRow = await d
-    .select({ n: sql<number>`COUNT(*)` })
-    .from(people)
-    .where(and(eq(people.userId, locals.user.id), eq(people.isArchived, 0)))
-    .get();
-
-  const tagMap = await getTagsForEntities(
-    locals.user.id,
-    locals.user.region,
-    'person',
-    items.map((i) => i.id)
-  );
+  // Four independent reads; fan out to cut libSQL round-trips.
+  const [totalRow, tagMap, allTags, statuses] = await Promise.all([
+    d
+      .select({ n: sql<number>`COUNT(*)` })
+      .from(people)
+      .where(and(eq(people.userId, locals.user.id), eq(people.isArchived, 0)))
+      .get(),
+    getTagsForEntities(locals.user.id, locals.user.region, 'person', items.map((i) => i.id)),
+    listTagsWithCounts(locals.user.id, locals.user.region, 'person'),
+    listStatuses('person', locals.user.id, locals.user.region)
+  ]);
   const itemTags: Record<string, { id: string; name: string; slug: string }[]> = {};
   for (const [k, v] of tagMap) itemTags[k] = v;
-
-  const allTags = await listTagsWithCounts(locals.user.id, locals.user.region, 'person');
-  const statuses = await listStatuses('person', locals.user.id, locals.user.region);
 
   return {
     q,

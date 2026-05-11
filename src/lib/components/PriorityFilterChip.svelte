@@ -1,22 +1,18 @@
 <script lang="ts">
   import { Flag, Check } from 'lucide-svelte';
-  import { PRIORITIES, type Priority } from '$lib/priority';
-
-  // Chip that lives in the filter row. Click to open a popover with the
-  // four levels as checkboxes. Multi-select; commits via a callback that
-  // writes the URL params on the host page.
+  import { PRIORITIES, toneColor, type Priority } from '$lib/priority';
+  import { dismiss } from '$lib/dismiss.svelte';
 
   type Props = {
-    /** Currently-active priority filter (null = no filter). */
-    selected: (Priority)[] | null;
-    onChange: (next: (Priority)[] | null) => void;
+    selected: Priority[] | null;
+    onChange: (next: Priority[] | null) => void;
   };
   let { selected, onChange }: Props = $props();
 
   let open = $state(false);
-  // Local working set; flushed on apply / close.
+  // Local buffer flushed on Apply; mirrors `selected` between opens.
   // svelte-ignore state_referenced_locally
-  let working = $state<(Priority)[]>(selected ?? []);
+  let working = $state<Priority[]>(selected ?? []);
 
   $effect(() => {
     working = selected ?? [];
@@ -50,7 +46,7 @@
   }
 </script>
 
-<div class="relative inline-flex">
+<div use:dismiss={open ? commit : null} class="relative inline-flex">
   <button
     type="button"
     onclick={() => (open = !open)}
@@ -64,12 +60,6 @@
   </button>
 
   {#if open}
-    <button
-      type="button"
-      class="fixed inset-0 z-40 cursor-default"
-      aria-label="Close priority filter"
-      onclick={() => commit()}
-    ></button>
     <div
       role="dialog"
       aria-label="Priority filter"
@@ -77,6 +67,7 @@
     >
       {#each PRIORITIES as p (p.label)}
         {@const checked = working.some((x) => x === p.value)}
+        {@const color = toneColor(p.tone)}
         <button
           type="button"
           onclick={(e) => {
@@ -89,9 +80,9 @@
             {#if checked}<Check size={9} strokeWidth={3} class="text-[var(--color-accent-fg)]" />{/if}
           </span>
           {#if p.value == null}
-            <span class="h-1.5 w-1.5 rounded-full" style="background: {p.cssColor}"></span>
+            <span class="h-1.5 w-1.5 rounded-full" style="background: {color}"></span>
           {:else}
-            <Flag size={11} strokeWidth={2} fill="currentColor" style="color: {p.cssColor}" />
+            <Flag size={11} strokeWidth={2} fill="currentColor" style="color: {color}" />
           {/if}
           <span class="flex-1">{p.label}</span>
         </button>
