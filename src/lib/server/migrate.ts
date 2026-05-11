@@ -431,7 +431,9 @@ const ALTERS: string[] = [
   `ALTER TABLE people ADD COLUMN linkedin_url TEXT`,
   `ALTER TABLE people ADD COLUMN x_url TEXT`,
   `ALTER TABLE companies ADD COLUMN linkedin_url TEXT`,
-  `ALTER TABLE companies ADD COLUMN x_url TEXT`
+  `ALTER TABLE companies ADD COLUMN x_url TEXT`,
+  // Icon picker for collections.
+  `ALTER TABLE collections ADD COLUMN icon TEXT`
 ];
 
 async function applyAlters(c: Client) {

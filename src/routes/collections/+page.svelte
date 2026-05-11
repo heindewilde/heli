@@ -3,7 +3,7 @@
   import { page } from '$app/state';
   import { onMount } from 'svelte';
   import { Search, Plus, ArrowDownUp } from 'lucide-svelte';
-  import CollectionRow from '$lib/components/CollectionRow.svelte';
+  import CollectionCard from '$lib/components/CollectionCard.svelte';
   import { bindKeys } from '$lib/keyboard.svelte';
   import { toast } from '$lib/toasts.svelte';
 
@@ -64,16 +64,6 @@
   onMount(() =>
     bindKeys((e) => {
       if (rows.length === 0) return;
-      if (e.key === 'j' || e.key === 'ArrowDown') {
-        selected = Math.min(rows.length - 1, selected + 1);
-        scrollSelectedIntoView();
-        return true;
-      }
-      if (e.key === 'k' || e.key === 'ArrowUp') {
-        selected = Math.max(0, selected - 1);
-        scrollSelectedIntoView();
-        return true;
-      }
       if (e.key === 'Enter' || e.key === 'e') {
         const r = rows[selected];
         if (r) goto(`/collections/${r.id}`);
@@ -86,13 +76,6 @@
       }
     })
   );
-
-  function scrollSelectedIntoView() {
-    setTimeout(() => {
-      const el = document.querySelectorAll('[data-collection-row]')[selected] as HTMLElement | undefined;
-      el?.scrollIntoView({ block: 'nearest' });
-    }, 0);
-  }
 
   const ARCHIVED_FILTERS = [
     { value: 'active', label: 'Active' },
@@ -171,17 +154,17 @@
       {/if}
     </div>
   {:else}
-    <ul class="flex flex-col gap-1">
+    <ul class="grid grid-cols-2 gap-3 sm:grid-cols-3">
       {#each rows as c, i (c.id)}
         <li>
-          <CollectionRow
+          <CollectionCard
             href={`/collections/${c.id}`}
             name={c.name}
             description={c.description}
+            icon={c.icon}
             isArchived={!!c.isArchived}
             peopleCount={c.peopleCount}
             companyCount={c.companyCount}
-            selected={i === selected}
             onArchive={() => archive(c.id, c.name, c.isArchived)}
             onDelete={() => del(c.id, c.name)}
           />

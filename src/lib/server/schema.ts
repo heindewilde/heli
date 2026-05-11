@@ -365,6 +365,7 @@ export const collections = sqliteTable(
       .references(() => users.id, { onDelete: 'cascade' }),
     name: text('name').notNull(),
     description: text('description'),
+    icon: text('icon'),
     isArchived: integer('is_archived').notNull().default(0),
     createdAt: integer('created_at').notNull(),
     updatedAt: integer('updated_at').notNull()

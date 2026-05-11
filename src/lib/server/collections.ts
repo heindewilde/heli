@@ -16,6 +16,7 @@ export type CollectionListRow = {
   id: string;
   name: string;
   description: string | null;
+  icon: string | null;
   isArchived: number;
   createdAt: number;
   updatedAt: number;
@@ -66,7 +67,7 @@ export async function listCollections(
 
   const rows = await d.all<CollectionListRow>(sql`
     SELECT
-      c.id, c.name, c.description,
+      c.id, c.name, c.description, c.icon,
       c.is_archived AS isArchived,
       c.created_at AS createdAt, c.updated_at AS updatedAt,
       (SELECT COUNT(*) FROM collection_items WHERE collection_id = c.id) AS memberCount,
@@ -82,6 +83,7 @@ export async function listCollections(
 
   return rows.map((r) => ({
     ...r,
+    icon: r.icon ?? null,
     isArchived: Number(r.isArchived ?? 0),
     memberCount: Number(r.memberCount ?? 0),
     peopleCount: Number(r.peopleCount ?? 0),
@@ -196,6 +198,7 @@ export async function getCollection(
 export type ManualCollectionInput = {
   name: string;
   description?: string | null;
+  icon?: string | null;
 };
 
 export async function createCollection(
@@ -207,6 +210,7 @@ export async function createCollection(
   const name = sanitizePlainText(input.name, 200);
   if (!name) throw new Error('missing_name');
   const description = input.description ? sanitizePlainText(input.description, 1000) : null;
+  const icon = input.icon ? sanitizePlainText(input.icon, 50) : null;
   const id = createId();
   const now = Date.now();
   await d.insert(collections).values({
@@ -214,6 +218,7 @@ export async function createCollection(
     userId,
     name,
     description: description || null,
+    icon: icon || null,
     isArchived: 0,
     createdAt: now,
     updatedAt: now
@@ -224,6 +229,7 @@ export async function createCollection(
 export type UpdateCollectionInput = {
   name?: string;
   description?: string | null;
+  icon?: string | null;
   isArchived?: boolean | 0 | 1;
 };
 
@@ -244,6 +250,9 @@ export async function updateCollection(
     updates.description = input.description
       ? sanitizePlainText(input.description, 1000) || null
       : null;
+  }
+  if (input.icon !== undefined) {
+    updates.icon = input.icon ? sanitizePlainText(input.icon, 50) || null : null;
   }
   if (input.isArchived !== undefined) {
     updates.isArchived = input.isArchived ? 1 : 0;
