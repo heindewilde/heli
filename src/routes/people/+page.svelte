@@ -11,6 +11,7 @@
   import StatusFilterChip from '$lib/components/StatusFilterChip.svelte';
   import SortHeader from '$lib/components/SortHeader.svelte';
   import InlineCreateRow from '$lib/components/InlineCreateRow.svelte';
+  import CompanyLogo from '$lib/components/CompanyLogo.svelte';
   import type { StatusRow } from '$lib/statuses';
   import type { Priority } from '$lib/priority';
   import { bindKeys } from '$lib/keyboard.svelte';
@@ -319,16 +320,13 @@
                     href={`/companies/${person.companyId}`}
                     class="inline-flex max-w-full items-center gap-1.5 truncate text-sm text-[var(--color-text)] hover:underline"
                   >
-                    {#if person.companyLogoUrl || person.companyFaviconUrl}
-                      <img
-                        src={person.companyLogoUrl ?? person.companyFaviconUrl ?? ''}
-                        alt=""
-                        loading="lazy"
-                        class="h-4 w-4 shrink-0 rounded-[3px] object-cover"
-                      />
-                    {:else}
-                      <span class="h-4 w-4 shrink-0 rounded-[3px] border border-[var(--color-border)] bg-[var(--color-surface-2)]"></span>
-                    {/if}
+                    <CompanyLogo
+                      domain={person.companyDomain}
+                      fallbackUrl={person.companyLogoUrl ?? person.companyFaviconUrl}
+                      name={person.companyName}
+                      size={16}
+                      class="shrink-0 text-[8px]"
+                    />
                     <span class="truncate">{person.companyName}</span>
                   </a>
                 {:else}
