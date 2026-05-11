@@ -2,6 +2,7 @@
   import Landing from '$lib/components/Landing.svelte';
   import EmptyDashboard from '$lib/components/EmptyDashboard.svelte';
   import InteractionRow from '$lib/components/InteractionRow.svelte';
+  import CompanyLogo from '$lib/components/CompanyLogo.svelte';
   import { Users, Building2, MessagesSquare, FolderKanban, Loader2, AlertTriangle, Calendar } from 'lucide-svelte';
   import { invalidateAll } from '$app/navigation';
   import { pollWhile } from '$lib/polling';
@@ -95,52 +96,62 @@
       </section>
     {/if}
 
-    {#if data.recentInteractions && data.recentInteractions.length > 0}
-      <section class="flex flex-col gap-2">
-        <h2 class="text-sm font-medium text-[var(--color-muted)]">Recent interactions</h2>
-        <ul class="flex flex-col gap-0.5">
-          {#each data.recentInteractions as i (i.id)}
-            <li>
-              <InteractionRow {...i} />
-            </li>
-          {/each}
-        </ul>
-      </section>
-    {/if}
-
-    {#if data.recent && data.recent.length > 0}
-      <section class="flex flex-col gap-2">
-        <h2 class="text-sm font-medium text-[var(--color-muted)]">Recently saved</h2>
-        <ul class="flex flex-col gap-1">
-          {#each data.recent as r (r.kind + r.id)}
-            <li>
-              <a
-                href={r.kind === 'person' ? `/people/${r.id}` : `/companies/${r.id}`}
-                class="flex items-center gap-3 rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 hover:border-[var(--color-border-strong)]"
-              >
-                <span class="flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden border border-[var(--color-border)] bg-[var(--color-bg)] text-xs text-[var(--color-muted)] {r.kind === 'person' ? 'rounded-full' : 'rounded-[var(--radius-sm)]'}">
-                  {#if r.avatarUrl}
-                    <img src={r.avatarUrl} alt="" class="h-full w-full object-cover" />
-                  {:else}
-                    {(r.name[0] ?? '·').toUpperCase()}
-                  {/if}
-                </span>
-                <span class="min-w-0 flex-1">
-                  <span class="flex items-center gap-2">
-                    <span class="truncate text-sm font-medium">{r.name}</span>
-                    {#if r.source === 'parsing'}
-                      <Loader2 size={12} strokeWidth={2} class="animate-spin text-[var(--color-subtle)]" />
+    {#if (data.recent && data.recent.length > 0) || (data.recentInteractions && data.recentInteractions.length > 0)}
+      <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
+        <!-- Recently saved -->
+        {#if data.recent && data.recent.length > 0}
+          <section class="flex flex-col gap-1 rounded-[var(--radius-lg)] border border-[var(--color-border)] bg-[var(--color-bg)] p-4">
+            <h2 class="mb-2 text-sm font-medium text-[var(--color-muted)]">Recently saved</h2>
+            <ul class="flex flex-col">
+              {#each data.recent as r (r.kind + r.id)}
+                <li>
+                  <a
+                    href={r.kind === 'person' ? `/people/${r.id}` : `/companies/${r.id}`}
+                    class="flex items-center gap-3 rounded-[var(--radius-sm)] px-2 py-2 transition-colors hover:bg-[var(--color-surface)]"
+                  >
+                    {#if r.kind === 'company'}
+                      <CompanyLogo domain={r.domain} name={r.name} size={32} rounded="sm" />
+                    {:else}
+                      <span class="flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-full border border-[var(--color-border)] bg-[var(--color-surface)] text-xs text-[var(--color-muted)]">
+                        {#if r.avatarUrl}
+                          <img src={r.avatarUrl} alt="" class="h-full w-full object-cover" />
+                        {:else}
+                          {(r.name[0] ?? '·').toUpperCase()}
+                        {/if}
+                      </span>
                     {/if}
-                  </span>
-                  <span class="block truncate text-xs text-[var(--color-muted)]">
-                    {r.kind === 'person' ? 'Person' : 'Company'} · {r.sub ?? ''}
-                  </span>
-                </span>
-              </a>
-            </li>
-          {/each}
-        </ul>
-      </section>
+                    <span class="min-w-0 flex-1">
+                      <span class="flex items-center gap-2">
+                        <span class="truncate text-sm font-medium">{r.name}</span>
+                        {#if r.source === 'parsing'}
+                          <Loader2 size={12} strokeWidth={2} class="animate-spin text-[var(--color-subtle)]" />
+                        {/if}
+                      </span>
+                      <span class="block truncate text-xs text-[var(--color-muted)]">
+                        {r.kind === 'person' ? 'Person' : 'Company'} · {r.sub ?? ''}
+                      </span>
+                    </span>
+                  </a>
+                </li>
+              {/each}
+            </ul>
+          </section>
+        {/if}
+
+        <!-- Recent interactions -->
+        {#if data.recentInteractions && data.recentInteractions.length > 0}
+          <section class="flex flex-col gap-1 rounded-[var(--radius-lg)] border border-[var(--color-border)] bg-[var(--color-bg)] p-4">
+            <h2 class="mb-2 text-sm font-medium text-[var(--color-muted)]">Recent interactions</h2>
+            <ul class="flex flex-col gap-0.5">
+              {#each data.recentInteractions as i (i.id)}
+                <li>
+                  <InteractionRow {...i} />
+                </li>
+              {/each}
+            </ul>
+          </section>
+        {/if}
+      </div>
     {/if}
   </section>
   {/if}

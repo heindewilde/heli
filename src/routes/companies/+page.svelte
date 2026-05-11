@@ -5,6 +5,7 @@
   import { Search, Star, Archive, Tag, X, Rows3, Rows4, Loader2 } from 'lucide-svelte';
   import CompanyLogo from '$lib/components/CompanyLogo.svelte';
   import RowTagAdder from '$lib/components/RowTagAdder.svelte';
+  import CompanyDetailsCell from '$lib/components/CompanyDetailsCell.svelte';
   import PriorityFlag from '$lib/components/PriorityFlag.svelte';
   import StatusCell from '$lib/components/StatusCell.svelte';
   import PriorityFilterChip from '$lib/components/PriorityFilterChip.svelte';
@@ -140,17 +141,8 @@
     await patch(id, { priority: next });
   }
 
-  // Stop-gap inline editor for size/sector: a browser prompt. Replace with
-  // a proper popover when we tackle inline cell editing in earnest.
-  async function editSize(id: string, current: string | null) {
-    const next = window.prompt('Company size (e.g. 1-10, 10-50, 50-200, 200-1000, 1000+)', current ?? '');
-    if (next === null) return;
-    await patch(id, { sizeBand: next.trim() || null });
-  }
-  async function editSector(id: string, current: string | null) {
-    const next = window.prompt('Sector / industry', current ?? '');
-    if (next === null) return;
-    await patch(id, { industry: next.trim() || null });
+  async function saveDetails(id: string, next: { sector: string | null; size: string | null }) {
+    await patch(id, { industry: next.sector, sizeBand: next.size });
   }
 
   async function onCreated(_id: string) {
@@ -258,15 +250,13 @@
   {:else}
     <div class="overflow-hidden rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)] shadow-[var(--shadow-xs)]">
       <div
-        class="grid items-center gap-2 border-b border-[var(--color-border)] bg-[var(--color-surface-2)] px-2 py-2 text-[var(--color-subtle)]"
-        style="grid-template-columns: 28px minmax(0,1.4fr) minmax(0,1fr) 96px 84px minmax(0,140px) minmax(0,1fr);"
+        class="grid items-center gap-4 border-b border-[var(--color-border)] bg-[var(--color-surface-2)] px-3 py-2 text-[var(--color-subtle)]"
+        style="grid-template-columns: 24px minmax(0,2fr) minmax(0,1.3fr) 160px minmax(0,1.2fr);"
       >
         <span class="cap-label">·</span>
         <SortHeader label="Name" sortKey="name" current={data.sort} href={sortHref} direction="asc" />
-        <SortHeader label="Sector" sortKey="sector" current={data.sort} href={sortHref} sortable={false} />
-        <SortHeader label="Size" sortKey="size" current={data.sort} href={sortHref} sortable={false} align="right" />
-        <SortHeader label="Last seen" sortKey="lastInteraction" current={data.sort} href={sortHref} align="right" />
-        <SortHeader label="Status" sortKey="status" current={data.sort} href={sortHref} />
+        <SortHeader label="Details" sortKey="details" current={data.sort} href={sortHref} sortable={false} />
+        <SortHeader label="Activity" sortKey="lastInteraction" current={data.sort} href={sortHref} />
         <SortHeader label="Tags" sortKey="tags" current={data.sort} href={sortHref} sortable={false} />
       </div>
 
@@ -278,8 +268,8 @@
           <li>
             <div
               data-entity-row
-              class="group grid items-center gap-2 border-b border-[var(--color-border)] px-2 transition-colors last:border-b-0 hover:bg-[var(--color-surface-2)] {sel ? 'bg-[var(--color-highlight-bg)]' : ''} {company.isArchived ? 'opacity-60' : ''}"
-              style="grid-template-columns: 28px minmax(0,1.4fr) minmax(0,1fr) 96px 84px minmax(0,140px) minmax(0,1fr); {density === 'compact' ? 'min-height: 36px; padding-top: 2px; padding-bottom: 2px;' : 'min-height: 52px; padding-top: 6px; padding-bottom: 6px;'}"
+              class="group relative grid items-center gap-4 border-b border-[var(--color-border)] px-3 transition-colors last:border-b-0 {sel ? 'bg-[var(--color-highlight-bg)]' : 'hover:bg-[var(--color-row-hover)]'} {company.isArchived ? 'opacity-60' : ''}"
+              style="grid-template-columns: 24px minmax(0,2fr) minmax(0,1.3fr) 160px minmax(0,1.2fr); {density === 'compact' ? 'min-height: 36px; padding-top: 2px; padding-bottom: 2px;' : 'min-height: 56px; padding-top: 8px; padding-bottom: 8px;'}"
             >
               <PriorityFlag
                 value={(company.priority as Priority) ?? null}
@@ -309,35 +299,13 @@
                 </span>
               </a>
 
-              <button
-                type="button"
-                onclick={() => editSector(company.id, company.industry)}
-                class="min-w-0 cursor-pointer truncate rounded-[var(--radius-sm)] px-1 py-0.5 text-left text-xs text-[var(--color-muted)] transition-colors hover:bg-[var(--color-surface)] hover:text-[var(--color-text)]"
-              >
-                {#if company.industry}
-                  <span class="inline-flex max-w-full items-center gap-1 truncate rounded-full border border-[var(--color-border)] bg-[var(--color-surface-2)] px-2 py-0.5 text-[11px]">{company.industry}</span>
-                {:else}
-                  <span class="invisible text-[var(--color-subtle)] group-hover:visible">— sector</span>
-                {/if}
-              </button>
+              <CompanyDetailsCell
+                sector={company.industry}
+                size={company.sizeBand}
+                onSave={(next) => saveDetails(company.id, next)}
+              />
 
-              <button
-                type="button"
-                onclick={() => editSize(company.id, company.sizeBand)}
-                class="tabular cursor-pointer rounded-[var(--radius-sm)] px-1 py-0.5 text-right text-xs text-[var(--color-muted)] transition-colors hover:bg-[var(--color-surface)] hover:text-[var(--color-text)]"
-              >
-                {#if company.sizeBand}
-                  {company.sizeBand}
-                {:else}
-                  <span class="invisible text-[var(--color-subtle)] group-hover:visible">—</span>
-                {/if}
-              </button>
-
-              <div class="tabular text-right text-xs text-[var(--color-muted)]">
-                {formatLastSeen(company.lastAt)}
-              </div>
-
-              <div class="min-w-0">
+              <div class="flex min-w-0 flex-col gap-0.5">
                 <StatusCell
                   value={currentStatusId}
                   statuses={statuses}
@@ -345,6 +313,9 @@
                   onChange={(s) => setStatus(company.id, s)}
                   onStatusesChange={(next) => (statuses = next)}
                 />
+                {#if company.lastAt}
+                  <span class="tabular pl-1 text-[11px] text-[var(--color-subtle)]">{formatLastSeen(company.lastAt)}</span>
+                {/if}
               </div>
 
               <div class="flex min-w-0 flex-wrap items-center gap-1">
@@ -359,6 +330,7 @@
                   entityId={company.id}
                   currentTags={tags}
                   suggestions={data.allTags}
+                  revealOnHover
                 />
               </div>
             </div>

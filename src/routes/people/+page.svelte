@@ -4,6 +4,7 @@
   import { onMount } from 'svelte';
   import { Search, Star, Archive, Tag, X, Rows3, Rows4, Loader2 } from 'lucide-svelte';
   import RowTagAdder from '$lib/components/RowTagAdder.svelte';
+  import RowContactCell from '$lib/components/RowContactCell.svelte';
   import PriorityFlag from '$lib/components/PriorityFlag.svelte';
   import StatusCell from '$lib/components/StatusCell.svelte';
   import PriorityFilterChip from '$lib/components/PriorityFilterChip.svelte';
@@ -261,14 +262,14 @@
          popover for inline editing without table-cell layout quirks. -->
     <div class="overflow-hidden rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)] shadow-[var(--shadow-xs)]">
       <div
-        class="grid items-center gap-2 border-b border-[var(--color-border)] bg-[var(--color-surface-2)] px-2 py-2 text-[var(--color-subtle)]"
-        style="grid-template-columns: 28px minmax(0,1.6fr) minmax(0,1.2fr) 84px minmax(0,140px) minmax(0,1fr);"
+        class="grid items-center gap-3 border-b border-[var(--color-border)] bg-[var(--color-surface-2)] px-3 py-2 text-[var(--color-subtle)]"
+        style="grid-template-columns: 24px minmax(0,1.5fr) minmax(0,1.1fr) minmax(0,0.9fr) 150px minmax(0,1fr);"
       >
         <span class="cap-label">·</span>
         <SortHeader label="Name" sortKey="name" current={data.sort} href={sortHref} direction="asc" />
         <SortHeader label="Company" sortKey="company" current={data.sort} href={sortHref} sortable={false} />
-        <SortHeader label="Last seen" sortKey="lastInteraction" current={data.sort} href={sortHref} align="right" />
-        <SortHeader label="Status" sortKey="status" current={data.sort} href={sortHref} />
+        <SortHeader label="Contact" sortKey="contact" current={data.sort} href={sortHref} sortable={false} />
+        <SortHeader label="Activity" sortKey="lastInteraction" current={data.sort} href={sortHref} />
         <SortHeader label="Tags" sortKey="tags" current={data.sort} href={sortHref} sortable={false} />
       </div>
 
@@ -280,8 +281,8 @@
           <li>
             <div
               data-entity-row
-              class="group grid items-center gap-2 border-b border-[var(--color-border)] px-2 transition-colors last:border-b-0 hover:bg-[var(--color-surface-2)] {sel ? 'bg-[var(--color-highlight-bg)]' : ''} {person.isArchived ? 'opacity-60' : ''}"
-              style="grid-template-columns: 28px minmax(0,1.6fr) minmax(0,1.2fr) 84px minmax(0,140px) minmax(0,1fr); {density === 'compact' ? 'min-height: 36px; padding-top: 2px; padding-bottom: 2px;' : 'min-height: 52px; padding-top: 6px; padding-bottom: 6px;'}"
+              class="group relative grid items-center gap-3 border-b border-[var(--color-border)] px-3 transition-colors last:border-b-0 {sel ? 'bg-[var(--color-highlight-bg)]' : 'hover:bg-[var(--color-row-hover)]'} {person.isArchived ? 'opacity-60' : ''}"
+              style="grid-template-columns: 24px minmax(0,1.5fr) minmax(0,1.1fr) minmax(0,0.9fr) 150px minmax(0,1fr); {density === 'compact' ? 'min-height: 36px; padding-top: 2px; padding-bottom: 2px;' : 'min-height: 56px; padding-top: 8px; padding-bottom: 8px;'}"
             >
               <PriorityFlag
                 value={(person.priority as Priority) ?? null}
@@ -306,10 +307,8 @@
                       <Star size={11} strokeWidth={2} fill="currentColor" class="text-[var(--color-warning)]" />
                     {/if}
                   </span>
-                  {#if density === 'comfortable' && (person.role || person.email)}
-                    <span class="block truncate text-xs text-[var(--color-muted)]">
-                      {person.role || person.email}
-                    </span>
+                  {#if density === 'comfortable' && person.role}
+                    <span class="block truncate text-xs text-[var(--color-muted)]">{person.role}</span>
                   {/if}
                 </span>
               </a>
@@ -333,15 +332,15 @@
                     <span class="truncate">{person.companyName}</span>
                   </a>
                 {:else}
-                  <span class="text-xs text-[var(--color-subtle)]">—</span>
+                  <span class="text-[var(--color-subtle)]">·</span>
                 {/if}
               </div>
 
-              <div class="tabular text-right text-xs text-[var(--color-muted)]">
-                {formatLastSeen(person.lastAt)}
+              <div class="min-w-0">
+                <RowContactCell url={person.url} domain={person.domain} email={person.email} />
               </div>
 
-              <div class="min-w-0">
+              <div class="flex min-w-0 flex-col gap-0.5">
                 <StatusCell
                   value={currentStatusId}
                   statuses={statuses}
@@ -349,6 +348,9 @@
                   onChange={(s) => setStatus(person.id, s)}
                   onStatusesChange={(next) => (statuses = next)}
                 />
+                {#if person.lastAt}
+                  <span class="tabular pl-1 text-[11px] text-[var(--color-subtle)]">{formatLastSeen(person.lastAt)}</span>
+                {/if}
               </div>
 
               <div class="flex min-w-0 flex-wrap items-center gap-1">
@@ -363,6 +365,7 @@
                   entityId={person.id}
                   currentTags={tags}
                   suggestions={data.allTags}
+                  revealOnHover
                 />
               </div>
             </div>

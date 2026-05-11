@@ -1,5 +1,5 @@
 import type { PageServerLoad } from './$types';
-import { listProjects } from '$lib/server/projects-query';
+import { listProjects, getCompaniesForProjects, type ProjectCompany } from '$lib/server/projects-query';
 import { entityIdsForTag, findTagBySlug, getTagsForEntities, listTagsWithCounts } from '$lib/server/tags';
 import { PROJECT_STATUSES, type ProjectStatus } from '$lib/server/schema';
 
@@ -9,7 +9,7 @@ function isStatusFilter(v: string | null): v is ProjectStatus | 'all' {
 
 export const load: PageServerLoad = async ({ locals, url }) => {
   // hooks.server.ts already redirects logged-out users for /projects/*.
-  if (!locals.user) return { items: [], allTags: [], tag: null, q: '', status: 'active' as const, sort: 'updated' as const, itemTags: {}, total: 0 };
+  if (!locals.user) return { items: [], allTags: [], tag: null, q: '', status: 'active' as const, sort: 'updated' as const, itemTags: {}, itemCompanies: {}, total: 0 };
 
   const q = url.searchParams.get('q')?.trim() ?? '';
   const statusParam = url.searchParams.get('status');
@@ -38,6 +38,7 @@ export const load: PageServerLoad = async ({ locals, url }) => {
           status,
           sort,
           itemTags: {} as Record<string, { id: string; name: string; slug: string }[]>,
+          itemCompanies: {} as Record<string, ProjectCompany[]>,
           total: 0
         };
       }
@@ -52,14 +53,18 @@ export const load: PageServerLoad = async ({ locals, url }) => {
     limit: 200
   });
 
-  const tagMap = await getTagsForEntities(
-    locals.user.id,
-    locals.user.region,
-    'project',
-    items.map((i) => i.id)
-  );
+  const projectIds = items.map((i) => i.id);
+
+  const [tagMap, companyMap] = await Promise.all([
+    getTagsForEntities(locals.user.id, locals.user.region, 'project', projectIds),
+    getCompaniesForProjects(locals.user.id, locals.user.region, projectIds)
+  ]);
+
   const itemTags: Record<string, { id: string; name: string; slug: string }[]> = {};
   for (const [k, v] of tagMap) itemTags[k] = v;
+
+  const itemCompanies: Record<string, ProjectCompany[]> = {};
+  for (const [k, v] of companyMap) itemCompanies[k] = v;
 
   const allTags = await listTagsWithCounts(locals.user.id, locals.user.region, 'project');
 
@@ -78,6 +83,7 @@ export const load: PageServerLoad = async ({ locals, url }) => {
     status,
     sort,
     itemTags,
+    itemCompanies,
     total: totalActive.length
   };
 };

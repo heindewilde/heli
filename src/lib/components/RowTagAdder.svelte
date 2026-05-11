@@ -11,9 +11,10 @@
     entityId: string;
     currentTags: AttachedTag[];
     suggestions: SuggestionTag[];
+    revealOnHover?: boolean;
   };
 
-  let { scope, entityId, currentTags, suggestions }: Props = $props();
+  let { scope, entityId, currentTags, suggestions, revealOnHover = false }: Props = $props();
 
   let open = $state(false);
   let q = $state('');
@@ -119,14 +120,14 @@
   }
 </script>
 
-<div class="relative inline-block">
+<div class="relative inline-block {revealOnHover ? 'row-tag-adder' : ''}" data-open={open}>
   <button
     bind:this={chipEl}
     type="button"
     aria-label="Add tag"
     aria-expanded={open}
     onclick={() => (open = !open)}
-    class="inline-flex items-center gap-0.5 rounded-full border border-dashed border-[var(--color-border)] bg-transparent px-1.5 py-0.5 text-[10px] text-[var(--color-muted)] transition-colors hover:border-[var(--color-highlight-border)] hover:bg-[var(--color-highlight-bg)] hover:text-[var(--color-text)]"
+    class="inline-flex items-center gap-0.5 rounded-full border border-dashed border-[var(--color-border)] bg-transparent px-1.5 py-0.5 text-[10px] text-[var(--color-muted)] transition-[color,border-color,background-color,opacity] hover:border-[var(--color-highlight-border)] hover:bg-[var(--color-highlight-bg)] hover:text-[var(--color-text)]"
   >
     <Plus size={10} strokeWidth={2} />
     tag
@@ -137,7 +138,7 @@
       bind:this={panelEl}
       role="dialog"
       aria-label="Tag {scope}"
-      class="absolute left-0 top-full z-20 mt-1 w-56 overflow-hidden rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)] shadow-[var(--shadow-md)]"
+      class="absolute left-0 top-full z-20 mt-1 w-52 overflow-hidden rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)] shadow-[var(--shadow-md)]"
     >
       <input
         bind:this={inputEl}
@@ -185,9 +186,22 @@
           </li>
         {/if}
         {#if filtered.length === 0 && !q.trim()}
-          <li class="px-3 py-2 text-[10px] italic text-[var(--color-subtle)]">No tags yet — type to create one.</li>
+          <li class="px-3 py-2 text-[10px] italic text-[var(--color-subtle)]">No tags yet. Type to create one.</li>
         {/if}
       </ul>
     </div>
   {/if}
 </div>
+
+<style>
+  /* When mounted inside a `.group` row with revealOnHover, keep the chip
+     hidden until the row is interacted with or the popover is open. */
+  :global(.group) .row-tag-adder > button {
+    opacity: 0;
+  }
+  :global(.group:hover) .row-tag-adder > button,
+  :global(.group:focus-within) .row-tag-adder > button,
+  .row-tag-adder[data-open='true'] > button {
+    opacity: 1;
+  }
+</style>

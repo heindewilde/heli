@@ -1,12 +1,11 @@
 <script lang="ts">
-  import { goto, invalidateAll } from '$app/navigation';
+  import { goto } from '$app/navigation';
   import { page } from '$app/state';
   import { onMount } from 'svelte';
   import { Search, Plus, Tag, X, ArrowDownUp } from 'lucide-svelte';
-  import ProjectRow from '$lib/components/ProjectRow.svelte';
+  import ProjectCard from '$lib/components/ProjectCard.svelte';
   import RowTagAdder from '$lib/components/RowTagAdder.svelte';
   import { bindKeys } from '$lib/keyboard.svelte';
-  import { toast } from '$lib/toasts.svelte';
   import type { ProjectStatus } from '$lib/server/schema';
 
   let { data } = $props();
@@ -36,17 +35,6 @@
     searchTimer = setTimeout(() => {
       goto(buildUrl({ q: q.trim() || null }), { replaceState: true, keepFocus: true, noScroll: true });
     }, 200);
-  }
-
-  async function del(id: string, name: string) {
-    if (!confirm(`Delete project "${name}"? Member links and interactions stay; only the project itself goes away.`)) return;
-    const res = await fetch(`/api/projects/${id}`, { method: 'DELETE' });
-    if (!res.ok) {
-      toast.danger('Delete failed');
-      return;
-    }
-    toast.success(`Deleted ${name}`);
-    await invalidateAll();
   }
 
   onMount(() =>
@@ -185,21 +173,23 @@
       {/if}
     </div>
   {:else}
-    <ul class="flex flex-col gap-1">
+    <ul class="grid grid-cols-2 gap-3 sm:grid-cols-3">
       {#each rows as p, i (p.id)}
         {@const projectTagList = data.itemTags[p.id] ?? []}
-        <li>
-          <ProjectRow
+        {@const projectCompanies = data.itemCompanies[p.id] ?? []}
+        <li class="flex flex-col gap-1">
+          <ProjectCard
             href={`/projects/${p.id}`}
             name={p.name}
             description={p.description}
             status={p.status}
+            startDate={p.startDate}
             endDate={p.endDate}
             memberCount={p.memberCount}
+            companies={projectCompanies}
             selected={i === selected}
-            onDelete={() => del(p.id, p.name)}
           />
-          <div class="ml-3 -mt-0.5 flex flex-wrap items-center gap-1 pb-1">
+          <div class="flex flex-wrap items-center gap-1 px-1">
             {#each projectTagList as t (t.id)}
               <a
                 href={buildUrl({ tag: t.slug })}

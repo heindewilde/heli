@@ -8,7 +8,7 @@
   import RemindersPopover from '$lib/components/RemindersPopover.svelte';
   import BrandMark from '$lib/components/BrandMark.svelte';
   import ThemeToggle from '$lib/components/ThemeToggle.svelte';
-  import { Users, Building2, MessagesSquare, FolderKanban, FolderOpen, GitBranch, LogOut, Search, HelpCircle, Settings, Menu, X } from 'lucide-svelte';
+  import { LayoutDashboard, Users, Building2, MessagesSquare, FolderKanban, FolderOpen, GitBranch, LogOut, Search, HelpCircle, Settings, Menu, X } from 'lucide-svelte';
   import { page } from '$app/state';
   import { onMount } from 'svelte';
   import { invalidateAll, goto } from '$app/navigation';
@@ -26,6 +26,7 @@
   let sidebarOpen = $state(false);
 
   const tabs = [
+    { href: '/', label: 'Dashboard', icon: LayoutDashboard },
     { href: '/people', label: 'People', icon: Users },
     { href: '/companies', label: 'Companies', icon: Building2 },
     { href: '/interactions', label: 'Interactions', icon: MessagesSquare },
@@ -157,16 +158,16 @@
         {#if sidebarOpen}<X size={18} strokeWidth={2} />{:else}<Menu size={18} strokeWidth={2} />{/if}
       </button>
     {/if}
-    <a href="/" class="flex items-center gap-2 font-semibold tracking-tight">
+    <a href="/" class="flex shrink-0 items-center gap-2 text-[var(--color-text)]">
       <BrandMark size={22} />
-      <span class="hidden sm:inline">{APP_NAME}</span>
+      <span class="hidden text-sm font-semibold tracking-tight sm:inline">{APP_NAME}</span>
     </a>
     {#if user}
-      <div class="ml-2 min-w-0 flex-1">
+      <div class="min-w-0 flex-1">
         <SaveBar bind:this={saveBar} />
       </div>
     {/if}
-    <div class="ml-auto flex items-center gap-1 sm:gap-2">
+    <div class="ml-auto flex items-center gap-0.5">
       {#if !user}
         <ThemeToggle />
       {/if}
@@ -176,10 +177,10 @@
           onclick={() => (paletteOpen = true)}
           title="Search (⌘K)"
           aria-label="Search"
-          class="hidden items-center gap-1.5 rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-surface)] px-2 py-1 text-xs text-[var(--color-muted)] shadow-[var(--shadow-xs)] transition-colors hover:border-[var(--color-border-strong)] hover:text-[var(--color-text)] sm:inline-flex"
+          class="hidden items-center gap-1.5 rounded-[var(--radius-sm)] border border-[var(--color-border)] px-2 py-1.5 text-[var(--color-subtle)] transition-colors hover:border-[var(--color-border-strong)] hover:text-[var(--color-text)] sm:inline-flex"
         >
-          <Search size={12} strokeWidth={2} />
-          <kbd class="rounded border border-[var(--color-border)] bg-[var(--color-bg)] px-1 font-sans text-[10px] leading-none">⌘K</kbd>
+          <Search size={14} strokeWidth={2} />
+          <kbd class="rounded border border-[var(--color-border)] bg-[var(--color-bg)] px-1 font-sans text-[10px] leading-none text-[var(--color-subtle)]">⌘K</kbd>
         </button>
         <button
           type="button"
@@ -195,15 +196,15 @@
           aria-label="Settings"
           class="rounded-[var(--radius-sm)] p-1.5 text-[var(--color-subtle)] transition-colors hover:bg-[var(--color-surface)] hover:text-[var(--color-text)]"
         ><Settings size={14} strokeWidth={2} /></a>
-        <span aria-hidden="true" class="mx-1 hidden h-5 w-px bg-[var(--color-border)] sm:inline-block"></span>
-        <span class="hidden max-w-[12rem] truncate text-sm text-[var(--color-muted)] md:inline">{user.username ?? user.email}</span>
+        <span aria-hidden="true" class="mx-1 hidden h-4 w-px bg-[var(--color-border)] sm:inline-block"></span>
         <form method="POST" action="/auth/logout" class="contents">
           <button
             type="submit"
             title="Sign out"
             aria-label="Sign out"
-            class="inline-flex items-center gap-1 rounded-[var(--radius-sm)] p-1.5 text-[var(--color-subtle)] transition-colors hover:bg-[var(--color-surface)] hover:text-[var(--color-text)]"
+            class="group flex items-center gap-1.5 rounded-[var(--radius-sm)] border border-transparent px-2 py-1.5 text-[var(--color-subtle)] transition-colors hover:border-[var(--color-border)] hover:bg-[var(--color-surface)] hover:text-[var(--color-text)]"
           >
+            <span class="hidden max-w-[8rem] truncate text-xs group-hover:text-[var(--color-text)] md:inline">{user.username ?? user.email}</span>
             <LogOut size={14} strokeWidth={2} />
           </button>
         </form>
@@ -234,7 +235,7 @@
       >
         <nav class="flex flex-col gap-0.5">
           {#each tabs as tab (tab.href)}
-            {@const active = page.url.pathname === tab.href || page.url.pathname.startsWith(tab.href + '/')}
+            {@const active = tab.href === '/' ? page.url.pathname === '/' : page.url.pathname === tab.href || page.url.pathname.startsWith(tab.href + '/')}
             <a
               href={tab.href}
               aria-current={active ? 'page' : undefined}

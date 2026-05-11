@@ -139,7 +139,7 @@
     {#if current}
       <StatusPill status={current} />
     {:else}
-      <span class="invisible text-xs text-[var(--color-subtle)] group-hover:visible">— set status</span>
+      <span class="text-xs text-[var(--color-subtle)]">·</span>
     {/if}
   </button>
 
@@ -147,7 +147,7 @@
     <div
       role="dialog"
       aria-label="Status"
-      class="absolute left-0 top-7 z-50 w-[220px] overflow-hidden rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)] shadow-[var(--shadow-lg)]"
+      class="absolute left-0 top-7 z-50 w-[200px] overflow-hidden rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)] shadow-[var(--shadow-md)]"
     >
       {#if !creating}
         <div class="border-b border-[var(--color-border)] px-2 py-1.5">
@@ -245,7 +245,7 @@
             <button
               type="button"
               onclick={createAndPick}
-              class="rounded-[var(--radius-sm)] bg-[var(--color-accent)] px-2 py-1 text-[11px] font-medium text-[var(--color-accent-fg)] shadow-[var(--shadow-sm)] transition-colors hover:bg-[var(--color-accent-hover)]"
+              class="rounded-[var(--radius-sm)] bg-[var(--color-accent)] px-2.5 py-1 text-[11px] font-medium text-[var(--color-accent-fg)] transition-colors hover:bg-[var(--color-accent-hover)]"
             >Create</button>
           </div>
         </div>

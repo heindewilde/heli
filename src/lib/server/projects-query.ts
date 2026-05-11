@@ -358,5 +358,36 @@ export async function searchProjects(
   return rows.map((r) => ({ id: r.id, name: r.name, status: r.status as ProjectStatus }));
 }
 
+export type ProjectCompany = { id: string; name: string; domain: string | null; logoUrl: string | null; faviconUrl: string | null };
+
+/** Returns a map of projectId → companies for a batch of project ids. */
+export async function getCompaniesForProjects(
+  userId: string,
+  region: string,
+  projectIds: string[]
+): Promise<Map<string, ProjectCompany[]>> {
+  const out = new Map<string, ProjectCompany[]>();
+  if (projectIds.length === 0) return out;
+  const d = db(region);
+  const rows = await d
+    .select({
+      projectId: projectCompanies.projectId,
+      id: companies.id,
+      name: companies.name,
+      domain: companies.domain,
+      logoUrl: companies.logoUrl,
+      faviconUrl: companies.faviconUrl
+    })
+    .from(projectCompanies)
+    .innerJoin(companies, eq(companies.id, projectCompanies.companyId))
+    .where(and(eq(companies.userId, userId), inArray(projectCompanies.projectId, projectIds)));
+  for (const r of rows) {
+    const list = out.get(r.projectId) ?? [];
+    list.push({ id: r.id, name: r.name, domain: r.domain, logoUrl: r.logoUrl, faviconUrl: r.faviconUrl });
+    out.set(r.projectId, list);
+  }
+  return out;
+}
+
 // Deprecated alias for symmetry with previous naming; kept for tag joins.
 export { getTagsForEntities };
