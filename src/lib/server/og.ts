@@ -1,4 +1,4 @@
-import { JSDOM } from 'jsdom';
+import { parse, type HTMLElement } from 'node-html-parser';
 import { assertPublicUrl, UrlError } from './url';
 
 const TIMEOUT_MS = 10_000;
@@ -72,7 +72,7 @@ async function readCappedText(res: Response): Promise<string> {
   return out;
 }
 
-function pickMeta(doc: Document, name: string): string | undefined {
+function pickMeta(doc: HTMLElement, name: string): string | undefined {
   const el =
     doc.querySelector(`meta[property="${name}"]`) ||
     doc.querySelector(`meta[name="${name}"]`);
@@ -80,10 +80,18 @@ function pickMeta(doc: Document, name: string): string | undefined {
   return v || undefined;
 }
 
-function pickLink(doc: Document, rel: string): string | undefined {
-  const el = doc.querySelector(`link[rel~="${rel}"]`);
-  const v = el?.getAttribute('href')?.trim();
-  return v || undefined;
+function pickLink(doc: HTMLElement, rel: string): string | undefined {
+  // node-html-parser doesn't support [rel~="x"]; match exact or whitespace-separated.
+  const links = doc.querySelectorAll('link[rel]');
+  for (const el of links) {
+    const r = el.getAttribute('rel');
+    if (!r) continue;
+    if (r === rel || r.split(/\s+/).includes(rel)) {
+      const v = el.getAttribute('href')?.trim();
+      if (v) return v;
+    }
+  }
+  return undefined;
 }
 
 function resolveAbs(base: URL, href: string | undefined): string | undefined {
@@ -91,7 +99,7 @@ function resolveAbs(base: URL, href: string | undefined): string | undefined {
   try { return new URL(href, base).toString(); } catch { return undefined; }
 }
 
-function parseJsonLd(doc: Document): Record<string, unknown> | null {
+function parseJsonLd(doc: HTMLElement): Record<string, unknown> | null {
   const blocks = doc.querySelectorAll('script[type="application/ld+json"]');
   for (const b of blocks) {
     const raw = b.textContent?.trim();
@@ -135,8 +143,9 @@ export async function fetchOg(url: URL | string): Promise<OgData> {
       };
     }
     const html = await readCappedText(res);
-    const dom = new JSDOM(html, { url: finalUrl.toString() });
-    const doc = dom.window.document;
+    const doc = parse(html, {
+      blockTextElements: { script: true, style: true, pre: false }
+    });
 
     const title =
       pickMeta(doc, 'og:title') ||

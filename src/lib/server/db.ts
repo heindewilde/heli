@@ -11,7 +11,25 @@ type Bundle = { client: Client; db: DB; isFile: boolean };
 const cache = new Map<string, Bundle>();
 
 const DEFAULT_REGION = 'local';
-const PRIMARY_REGION = process.env.PRIMARY_REGION ?? 'EU';
+// PRIMARY_REGION only matters when remote replicas are configured. On a single-host
+// self-host (no DATABASE_URL_* set) treat the local file as primary so labels and
+// health output match reality.
+const HAS_REMOTE_REPLICAS = ['EU', 'US', 'APAC'].some(
+  (r) => process.env[`DATABASE_URL_${r}`]
+);
+const PRIMARY_REGION =
+  process.env.PRIMARY_REGION ?? (HAS_REMOTE_REPLICAS ? 'EU' : DEFAULT_REGION);
+
+function envInt(name: string, fallback: number): number {
+  const v = process.env[name];
+  if (!v) return fallback;
+  const n = Number.parseInt(v, 10);
+  return Number.isFinite(n) ? n : fallback;
+}
+
+// Memory-tunable for cheap servers. Defaults: 16 MB page cache, 64 MB mmap.
+const SQLITE_CACHE_MB = envInt('SQLITE_CACHE_MB', 16);
+const SQLITE_MMAP_MB = envInt('SQLITE_MMAP_MB', 64);
 
 function regionUrl(region: string): { url: string; authToken?: string } {
   const upper = region.toUpperCase();
@@ -37,8 +55,8 @@ function buildBundle(url: string, authToken: string | undefined): Bundle {
 async function applyPragmas(client: Client) {
   await client.execute('PRAGMA journal_mode = WAL');
   await client.execute('PRAGMA synchronous = NORMAL');
-  await client.execute('PRAGMA cache_size = -64000');
-  await client.execute('PRAGMA mmap_size = 268435456');
+  await client.execute(`PRAGMA cache_size = -${SQLITE_CACHE_MB * 1024}`);
+  await client.execute(`PRAGMA mmap_size = ${SQLITE_MMAP_MB * 1024 * 1024}`);
   await client.execute('PRAGMA temp_store = MEMORY');
   await client.execute('PRAGMA foreign_keys = ON');
 }
