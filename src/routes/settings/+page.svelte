@@ -18,12 +18,12 @@
   let deletePwd = $state('');
   let saving = $state<null | string>(null);
 
-  // Bookmarklet: navigates the current tab to /save?url=… on this Gusto
-  // instance. Same-origin /api/save requires the cookie, which arbitrary
-  // websites cannot send — so we redirect to Gusto where the cookie *is*
-  // present. The /save route classifies and lands on the new entity page.
+  // Bookmarklet: opens /save?url=… in a new tab on this Gusto instance.
+  // Same-origin /api/save requires the cookie, which arbitrary websites cannot
+  // send — so we navigate to Gusto where the cookie *is* present. The /save
+  // route classifies and lands on the new entity page.
   const bookmarkletJs = $derived(
-    `javascript:void(window.location='${data.origin}/save?url='+encodeURIComponent(location.href))`
+    `javascript:void(window.open('${data.origin}/save?url='+encodeURIComponent(location.href),'_blank'))`
   );
 
   let copied = $state(false);
@@ -158,10 +158,10 @@
   <section class="flex flex-col gap-3 rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)] p-5">
     <h2 class="flex items-center gap-2 text-sm font-medium"><Bookmark size={14} strokeWidth={2} /> Bookmarklet</h2>
     <p class="text-sm text-[var(--color-muted)]">
-      Drag this button to your bookmarks bar. Clicking it from any page navigates to {APP_NAME} with the page's URL queued for save.
+      Drag this button to your bookmarks bar. Clicking it from any page opens {APP_NAME} in a new tab with the page's URL queued for save.
     </p>
     <p class="rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-bg)] px-3 py-2 text-xs text-[var(--color-muted)]">
-      Heads up: the bookmarklet redirects the tab to {data.origin} so the saved cookie can authenticate the request — it's a tab navigation, not an inline fetch.
+      Heads up: the bookmarklet opens a new tab pointing to {data.origin} so the saved cookie can authenticate the request — it's a tab navigation, not an inline fetch.
     </p>
     <div class="flex flex-wrap items-center gap-3">
       <a
