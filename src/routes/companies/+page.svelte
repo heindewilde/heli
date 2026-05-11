@@ -2,7 +2,8 @@
   import { goto, invalidateAll } from '$app/navigation';
   import { page } from '$app/state';
   import { onMount } from 'svelte';
-  import { Search, Star, Archive, Tag, X, Rows3, Rows4, Loader2, Building2 } from 'lucide-svelte';
+  import { Search, Star, Archive, Tag, X, Rows3, Rows4, Loader2 } from 'lucide-svelte';
+  import CompanyLogo from '$lib/components/CompanyLogo.svelte';
   import RowTagAdder from '$lib/components/RowTagAdder.svelte';
   import PriorityFlag from '$lib/components/PriorityFlag.svelte';
   import StatusCell from '$lib/components/StatusCell.svelte';
@@ -286,13 +287,12 @@
               />
 
               <a href={`/companies/${company.id}`} class="flex min-w-0 items-center gap-3">
-                <span class="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-surface)] text-xs text-[var(--color-muted)]">
-                  {#if company.logoUrl || company.faviconUrl}
-                    <img src={company.logoUrl ?? company.faviconUrl ?? ''} alt="" loading="lazy" class="h-full w-full object-cover" />
-                  {:else}
-                    <Building2 size={14} strokeWidth={2} />
-                  {/if}
-                </span>
+                <CompanyLogo
+                  domain={company.domain}
+                  fallbackUrl={company.logoUrl ?? company.faviconUrl}
+                  name={company.name}
+                  size={36}
+                />
                 <span class="min-w-0 flex-1">
                   <span class="flex items-center gap-2">
                     <span class="truncate text-sm font-medium text-[var(--color-text)]">{company.name}</span>

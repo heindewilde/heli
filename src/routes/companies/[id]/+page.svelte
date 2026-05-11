@@ -10,6 +10,7 @@
   import PipelinesRibbon from '$lib/components/PipelinesRibbon.svelte';
   import SaveBanner from '$lib/components/SaveBanner.svelte';
   import StatusChip from '$lib/components/StatusChip.svelte';
+  import CompanyLogo from '$lib/components/CompanyLogo.svelte';
   import { FolderKanban } from 'lucide-svelte';
   import type { ProjectStatus } from '$lib/server/schema';
   import { Plus } from 'lucide-svelte';
@@ -127,13 +128,14 @@
     <SaveBanner variant="dedup" kind="company" entityId={company.id} entityName={company.name} createdAt={company.createdAt} />
   {/if}
   <header class="flex items-start gap-4">
-    <span class="flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)] text-base font-medium text-[var(--color-muted)]">
-      {#if company.logoUrl || company.faviconUrl}
-        <img src={company.logoUrl ?? company.faviconUrl ?? ''} alt="" class="h-full w-full object-cover" />
-      {:else}
-        {initials || '·'}
-      {/if}
-    </span>
+    <CompanyLogo
+      domain={company.domain}
+      fallbackUrl={company.logoUrl ?? company.faviconUrl}
+      name={company.name}
+      size={56}
+      rounded="md"
+      class="text-base"
+    />
     <div class="min-w-0 flex-1">
       <div class="flex items-center gap-2">
         {#if editingName}

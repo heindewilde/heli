@@ -1,5 +1,6 @@
 <script lang="ts">
-  import { X, Building2 } from 'lucide-svelte';
+  import { X } from 'lucide-svelte';
+  import CompanyLogo from './CompanyLogo.svelte';
 
   type Company = { id: string; name: string; logoUrl: string | null; faviconUrl: string | null; domain: string | null };
 
@@ -74,13 +75,13 @@
 <div class="flex flex-col gap-2">
   {#if selected}
     <div class="flex items-center gap-2 rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-surface)] px-2 py-1.5 text-sm">
-      <span class="flex h-6 w-6 items-center justify-center overflow-hidden rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-bg)] text-[10px]">
-        {#if selected.logoUrl || selected.faviconUrl}
-          <img src={selected.logoUrl ?? selected.faviconUrl ?? ''} alt="" class="h-full w-full object-cover" />
-        {:else}
-          <Building2 size={12} strokeWidth={2} />
-        {/if}
-      </span>
+      <CompanyLogo
+        domain={selected.domain}
+        fallbackUrl={selected.logoUrl ?? selected.faviconUrl}
+        name={selected.name}
+        size={24}
+        class="text-[10px]"
+      />
       <span class="min-w-0 flex-1 truncate font-medium">{selected.name}</span>
       <button
         type="button"
@@ -111,13 +112,13 @@
               onmousedown={(e) => { e.preventDefault(); pick(c); }}
               class="flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm {i === highlight ? 'bg-[var(--color-highlight-bg)]' : 'hover:bg-[var(--color-bg)]'}"
             >
-              <span class="flex h-6 w-6 items-center justify-center overflow-hidden rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-bg)] text-[10px]">
-                {#if c.logoUrl || c.faviconUrl}
-                  <img src={c.logoUrl ?? c.faviconUrl ?? ''} alt="" class="h-full w-full object-cover" />
-                {:else}
-                  <Building2 size={12} strokeWidth={2} />
-                {/if}
-              </span>
+              <CompanyLogo
+                domain={c.domain}
+                fallbackUrl={c.logoUrl ?? c.faviconUrl}
+                name={c.name}
+                size={24}
+                class="text-[10px]"
+              />
               <span class="flex min-w-0 flex-1 flex-col">
                 <span class="truncate font-medium">{c.name}</span>
                 {#if c.domain}

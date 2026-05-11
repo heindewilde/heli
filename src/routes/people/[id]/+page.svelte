@@ -10,6 +10,7 @@
   import AddReminder from '$lib/components/AddReminder.svelte';
   import SaveBanner from '$lib/components/SaveBanner.svelte';
   import StatusChip from '$lib/components/StatusChip.svelte';
+  import CompanyLogo from '$lib/components/CompanyLogo.svelte';
   import { FolderKanban } from 'lucide-svelte';
   import type { ProjectStatus } from '$lib/server/schema';
   import { Plus } from 'lucide-svelte';
@@ -225,14 +226,12 @@
               class="inline-flex items-center gap-1.5 hover:underline"
               href={`/companies/${company.id}`}
             >
-              {#if company.logoUrl || company.faviconUrl}
-                <img
-                  src={company.logoUrl ?? company.faviconUrl ?? ''}
-                  alt=""
-                  loading="lazy"
-                  class="h-4 w-4 rounded-[var(--radius-sm)] object-cover"
-                />
-              {/if}
+              <CompanyLogo
+                domain={company.domain}
+                fallbackUrl={company.logoUrl ?? company.faviconUrl}
+                name={company.name}
+                size={16}
+              />
               <span>{company.name}</span>
             </a>
           {/if}
@@ -407,18 +406,12 @@
               href={`/companies/${company.id}`}
               class="mt-1 flex items-center gap-2 hover:underline"
             >
-              <span class="flex h-7 w-7 shrink-0 items-center justify-center overflow-hidden rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-surface)] text-xs text-[var(--color-muted)]">
-                {#if company.logoUrl || company.faviconUrl}
-                  <img
-                    src={company.logoUrl ?? company.faviconUrl ?? ''}
-                    alt=""
-                    loading="lazy"
-                    class="h-full w-full object-cover"
-                  />
-                {:else}
-                  {(company.name[0] ?? '·').toUpperCase()}
-                {/if}
-              </span>
+              <CompanyLogo
+                domain={company.domain}
+                fallbackUrl={company.logoUrl ?? company.faviconUrl}
+                name={company.name}
+                size={28}
+              />
               <span class="min-w-0 flex-1">
                 <span class="block truncate text-sm font-medium">{company.name}</span>
                 {#if company.domain}

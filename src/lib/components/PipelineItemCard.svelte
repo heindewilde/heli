@@ -1,5 +1,6 @@
 <script lang="ts">
-  import { Building2, X, GripVertical } from 'lucide-svelte';
+  import { X, GripVertical } from 'lucide-svelte';
+  import CompanyLogo from './CompanyLogo.svelte';
   import type { PipelineItemRow } from '$lib/server/pipelines';
 
   type Props = {
@@ -80,19 +81,22 @@
     {#if draggable}
       <span class="mt-0.5 cursor-grab text-[var(--color-subtle)] active:cursor-grabbing"><GripVertical size={12} strokeWidth={2} /></span>
     {/if}
-    <span class="flex h-7 w-7 shrink-0 items-center justify-center overflow-hidden {item.kind === 'person' ? 'rounded-full' : 'rounded-[var(--radius-sm)]'} border border-[var(--color-border)] bg-[var(--color-surface)] text-[10px] text-[var(--color-muted)]">
-      {#if item.kind === 'person'}
+    {#if item.kind === 'person'}
+      <span class="flex h-7 w-7 shrink-0 items-center justify-center overflow-hidden rounded-full border border-[var(--color-border)] bg-[var(--color-surface)] text-[10px] text-[var(--color-muted)]">
         {#if item.member?.avatarUrl}
           <img src={item.member.avatarUrl} alt="" class="h-full w-full object-cover" />
         {:else}
           {initials || '·'}
         {/if}
-      {:else if item.member?.logoUrl || item.member?.faviconUrl}
-        <img src={item.member.logoUrl ?? item.member.faviconUrl ?? ''} alt="" class="h-full w-full object-cover" />
-      {:else}
-        <Building2 size={12} strokeWidth={2} />
-      {/if}
-    </span>
+      </span>
+    {:else}
+      <CompanyLogo
+        domain={item.member?.domain}
+        fallbackUrl={item.member?.logoUrl ?? item.member?.faviconUrl}
+        name={item.member?.name}
+        size={28}
+      />
+    {/if}
     <div class="min-w-0 flex-1">
       <div class="flex items-center justify-between gap-2">
         <a

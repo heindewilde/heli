@@ -1,6 +1,7 @@
 <script lang="ts">
   import { goto, invalidateAll } from '$app/navigation';
-  import { Trash2, Archive, Building2, X, FolderOpen } from 'lucide-svelte';
+  import { Trash2, Archive, X, FolderOpen } from 'lucide-svelte';
+  import CompanyLogo from '$lib/components/CompanyLogo.svelte';
   import PersonPicker from '$lib/components/PersonPicker.svelte';
   import CompanyPicker from '$lib/components/CompanyPicker.svelte';
   import NotesEditor from '$lib/components/NotesEditor.svelte';
@@ -227,13 +228,12 @@
               <li>
                 <div class="group flex items-center gap-2 rounded-[var(--radius-sm)] px-2 py-1.5 hover:bg-[var(--color-surface)]">
                   <a href={`/companies/${c.id}`} class="flex min-w-0 flex-1 items-center gap-2">
-                    <span class="flex h-7 w-7 shrink-0 items-center justify-center overflow-hidden rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-surface)] text-xs text-[var(--color-muted)]">
-                      {#if c.logoUrl || c.faviconUrl}
-                        <img src={c.logoUrl ?? c.faviconUrl ?? ''} alt="" class="h-full w-full object-cover" />
-                      {:else}
-                        <Building2 size={12} strokeWidth={2} />
-                      {/if}
-                    </span>
+                    <CompanyLogo
+                      domain={c.domain}
+                      fallbackUrl={c.logoUrl ?? c.faviconUrl}
+                      name={c.name}
+                      size={28}
+                    />
                     <span class="min-w-0 flex-1">
                       <span class="block truncate text-sm">{c.name}</span>
                       {#if c.domain}

@@ -1,5 +1,6 @@
 <script lang="ts">
   import { Star, Archive, Trash2, Loader2 } from 'lucide-svelte';
+  import CompanyLogo from './CompanyLogo.svelte';
 
   type Props = {
     href: string;
@@ -40,6 +41,8 @@
       .join('')
       .toUpperCase()
   );
+
+  const useLogoDev = $derived(!avatarUrl && !!domain);
 </script>
 
 <a
@@ -49,13 +52,17 @@
     ? 'border-[var(--color-highlight-border)] bg-[var(--color-highlight-bg)]'
     : ''} {isArchived ? 'opacity-60' : ''}"
 >
-  <span class="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-full border border-[var(--color-border)] bg-[var(--color-surface)] text-xs font-medium text-[var(--color-muted)]">
-    {#if avatarUrl}
-      <img src={avatarUrl} alt="" loading="lazy" class="h-full w-full object-cover" />
-    {:else}
-      {initials || '·'}
-    {/if}
-  </span>
+  {#if useLogoDev}
+    <CompanyLogo domain={domain} {name} size={36} rounded="full" />
+  {:else}
+    <span class="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-full border border-[var(--color-border)] bg-[var(--color-surface)] text-xs font-medium text-[var(--color-muted)]">
+      {#if avatarUrl}
+        <img src={avatarUrl} alt="" loading="lazy" class="h-full w-full object-cover" />
+      {:else}
+        {initials || '·'}
+      {/if}
+    </span>
+  {/if}
   <span class="min-w-0 flex-1">
     <span class="flex items-center gap-2">
       <span class="truncate text-sm font-medium text-[var(--color-text)]">{name}</span>
