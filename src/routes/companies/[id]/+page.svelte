@@ -1,6 +1,6 @@
 <script lang="ts">
   import { goto, invalidateAll } from '$app/navigation';
-  import { Star, Archive, Trash2, ExternalLink, Loader2, MapPin, Building2 } from 'lucide-svelte';
+  import { Star, Archive, Trash2, Loader2, MapPin, Building2, Linkedin, Twitter } from 'lucide-svelte';
   import NotesEditor from '$lib/components/NotesEditor.svelte';
   import FieldRow from '$lib/components/FieldRow.svelte';
   import InteractionRow from '$lib/components/InteractionRow.svelte';
@@ -11,6 +11,7 @@
   import SaveBanner from '$lib/components/SaveBanner.svelte';
   import StatusChip from '$lib/components/StatusChip.svelte';
   import CompanyLogo from '$lib/components/CompanyLogo.svelte';
+  import SocialLinks from '$lib/components/SocialLinks.svelte';
   import { FolderKanban } from 'lucide-svelte';
   import type { ProjectStatus } from '$lib/server/schema';
   import { Plus } from 'lucide-svelte';
@@ -168,17 +169,14 @@
           {company.industry ?? ''}{company.industry && company.location ? ' · ' : ''}{company.location ?? ''}
         </p>
       {/if}
-      {#if company.url}
-        <a
-          href={company.url}
-          target="_blank"
-          rel="nofollow noopener noreferrer"
-          class="mt-1 inline-flex items-center gap-1 text-xs text-[var(--color-muted)] hover:underline"
-        >
-          <ExternalLink size={12} strokeWidth={2} />
-          {company.domain ?? company.url}
-        </a>
-      {/if}
+      <div class="mt-2">
+        <SocialLinks
+          url={company.url}
+          linkedinUrl={company.linkedinUrl}
+          xUrl={company.xUrl}
+          primaryFallback="website"
+        />
+      </div>
     </div>
     <div class="flex items-center gap-1">
       <button
@@ -304,6 +302,8 @@
       <div class="flex flex-col gap-1 rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)] p-2 text-sm">
         <FieldRow label="Industry" icon={Building2} value={company.industry} field="industry" id={company.id} endpoint="companies" />
         <FieldRow label="Location" icon={MapPin} value={company.location} field="location" id={company.id} endpoint="companies" />
+        <FieldRow label="LinkedIn" icon={Linkedin} value={company.linkedinUrl} field="linkedinUrl" id={company.id} endpoint="companies" />
+        <FieldRow label="X" icon={Twitter} value={company.xUrl} field="xUrl" id={company.id} endpoint="companies" />
       </div>
       <div class="flex flex-col gap-2 rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)] p-3">
         <h3 class="text-xs font-medium uppercase tracking-wide text-[var(--color-subtle)]">Tags</h3>

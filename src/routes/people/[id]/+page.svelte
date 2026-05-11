@@ -1,6 +1,6 @@
 <script lang="ts">
   import { goto, invalidateAll } from '$app/navigation';
-  import { Star, Archive, Trash2, ExternalLink, Loader2, Mail, Phone, MapPin, Building2, Sparkles } from 'lucide-svelte';
+  import { Star, Archive, Trash2, Loader2, Mail, Phone, MapPin, Building2, Sparkles, Linkedin, Twitter } from 'lucide-svelte';
   import NotesEditor from '$lib/components/NotesEditor.svelte';
   import FieldRow from '$lib/components/FieldRow.svelte';
   import InteractionRow from '$lib/components/InteractionRow.svelte';
@@ -11,6 +11,7 @@
   import SaveBanner from '$lib/components/SaveBanner.svelte';
   import StatusChip from '$lib/components/StatusChip.svelte';
   import CompanyLogo from '$lib/components/CompanyLogo.svelte';
+  import SocialLinks from '$lib/components/SocialLinks.svelte';
   import { FolderKanban } from 'lucide-svelte';
   import type { ProjectStatus } from '$lib/server/schema';
   import { Plus } from 'lucide-svelte';
@@ -237,17 +238,14 @@
           {/if}
         </p>
       {/if}
-      {#if person.url}
-        <a
-          href={person.url}
-          target="_blank"
-          rel="nofollow noopener noreferrer"
-          class="mt-1 inline-flex items-center gap-1 text-xs text-[var(--color-muted)] hover:underline"
-        >
-          <ExternalLink size={12} strokeWidth={2} />
-          {person.domain ?? person.url}
-        </a>
-      {/if}
+      <div class="mt-2">
+        <SocialLinks
+          url={person.url}
+          linkedinUrl={person.linkedinUrl}
+          xUrl={person.xUrl}
+          primaryFallback="linkedin"
+        />
+      </div>
     </div>
     <div class="flex items-center gap-1">
       <button
@@ -399,6 +397,8 @@
         <FieldRow label="Phone" icon={Phone} value={person.phone} field="phone" id={person.id} endpoint="people" />
         <FieldRow label="Location" icon={MapPin} value={person.location} field="location" id={person.id} endpoint="people" />
         <FieldRow label="Role" icon={Building2} value={person.role} field="role" id={person.id} endpoint="people" />
+        <FieldRow label="LinkedIn" icon={Linkedin} value={person.linkedinUrl} field="linkedinUrl" id={person.id} endpoint="people" />
+        <FieldRow label="X" icon={Twitter} value={person.xUrl} field="xUrl" id={person.id} endpoint="people" />
         {#if company}
           <div class="mt-2 rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-bg)] p-3">
             <p class="text-xs text-[var(--color-muted)]">Linked company</p>

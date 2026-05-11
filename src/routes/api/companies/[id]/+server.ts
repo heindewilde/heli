@@ -20,6 +20,8 @@ const ALLOWED: Record<string, (v: unknown) => unknown> = {
   isFavorite: (v) => (v ? 1 : 0),
   isArchived: (v) => (v ? 1 : 0),
   logoUrl: (v) => (v == null ? null : String(v).slice(0, 2048)),
+  linkedinUrl: (v) => (v == null || v === '' ? null : String(v).slice(0, 2048)),
+  xUrl: (v) => (v == null || v === '' ? null : String(v).slice(0, 2048)),
   priority: coercePriority,
   statusId: (v) => (v == null || v === '' ? null : String(v))
 };

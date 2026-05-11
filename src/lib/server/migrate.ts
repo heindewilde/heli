@@ -426,7 +426,12 @@ const ALTERS: string[] = [
   `CREATE INDEX IF NOT EXISTS idx_people_user_priority ON people(user_id, priority)`,
   `CREATE INDEX IF NOT EXISTS idx_people_user_status ON people(user_id, status_id)`,
   `CREATE INDEX IF NOT EXISTS idx_companies_user_priority ON companies(user_id, priority)`,
-  `CREATE INDEX IF NOT EXISTS idx_companies_user_status ON companies(user_id, status_id)`
+  `CREATE INDEX IF NOT EXISTS idx_companies_user_status ON companies(user_id, status_id)`,
+  // Social URLs surfaced as icons on detail pages.
+  `ALTER TABLE people ADD COLUMN linkedin_url TEXT`,
+  `ALTER TABLE people ADD COLUMN x_url TEXT`,
+  `ALTER TABLE companies ADD COLUMN linkedin_url TEXT`,
+  `ALTER TABLE companies ADD COLUMN x_url TEXT`
 ];
 
 async function applyAlters(c: Client) {

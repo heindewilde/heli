@@ -7,10 +7,14 @@
   import ShortcutHelp from '$lib/components/ShortcutHelp.svelte';
   import RemindersPopover from '$lib/components/RemindersPopover.svelte';
   import BrandMark from '$lib/components/BrandMark.svelte';
+  import ThemeToggle from '$lib/components/ThemeToggle.svelte';
   import { Users, Building2, MessagesSquare, FolderKanban, FolderOpen, GitBranch, LogOut, Search, HelpCircle, Settings, Menu, X } from 'lucide-svelte';
   import { page } from '$app/state';
   import { onMount } from 'svelte';
+  import { invalidateAll, goto } from '$app/navigation';
   import { bindKeys, isTypingTarget } from '$lib/keyboard.svelte';
+  import { toast } from '$lib/toasts.svelte';
+  import { saveErrorMessage } from '$lib/save-errors';
 
   let { data, children } = $props();
   const user = $derived(data.user);
@@ -90,6 +94,52 @@
       })
     );
 
+    // Paste-anywhere → save URL. A plain cmd/ctrl+V outside any text-entry
+    // surface is treated as "save this link". When the user pastes inside an
+    // input/textarea/contenteditable we leave the event alone so they can edit
+    // normally.
+    let pasteBusy = false;
+    const onPaste = async (e: ClipboardEvent) => {
+      if (!user) return;
+      if (pasteBusy) return;
+      if (isTypingTarget(e.target)) return;
+      const text = e.clipboardData?.getData('text/plain')?.trim();
+      if (!text) return;
+      // Cheap pre-check: only intercept things that plausibly look like a URL.
+      let url: URL;
+      try {
+        url = new URL(text);
+      } catch {
+        return;
+      }
+      if (url.protocol !== 'http:' && url.protocol !== 'https:') return;
+      e.preventDefault();
+      pasteBusy = true;
+      try {
+        const res = await fetch('/api/save', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          credentials: 'include',
+          body: JSON.stringify({ url: text })
+        });
+        if (!res.ok) {
+          const code = (await res.text().catch(() => '')) || '';
+          toast.danger(saveErrorMessage(code));
+          return;
+        }
+        const data = (await res.json()) as { id: string; kind: 'person' | 'company'; dedup: boolean };
+        const path = data.kind === 'person' ? `/people/${data.id}` : `/companies/${data.id}`;
+        await invalidateAll();
+        await goto(path + (data.dedup ? '?dedup=1' : '?just=1'));
+      } catch (err) {
+        toast.danger(saveErrorMessage(null, (err as Error).message || 'Save failed'));
+      } finally {
+        pasteBusy = false;
+      }
+    };
+    window.addEventListener('paste', onPaste);
+    cleanups.push(() => window.removeEventListener('paste', onPaste));
+
     return () => cleanups.forEach((c) => c());
   });
 </script>
@@ -117,6 +167,9 @@
       </div>
     {/if}
     <div class="ml-auto flex items-center gap-1 sm:gap-2">
+      {#if !user}
+        <ThemeToggle />
+      {/if}
       {#if user}
         <button
           type="button"
@@ -135,6 +188,7 @@
           aria-label="Keyboard shortcuts"
           class="hidden rounded-[var(--radius-sm)] p-1.5 text-[var(--color-subtle)] transition-colors hover:bg-[var(--color-surface)] hover:text-[var(--color-text)] sm:inline-flex"
         ><HelpCircle size={14} strokeWidth={2} /></button>
+        <ThemeToggle />
         <a
           href="/settings"
           title="Settings"
@@ -173,9 +227,9 @@
       ></button>
     {/if}
 
-    <div class="mx-auto flex w-full max-w-6xl gap-6 px-4 py-6">
+    <div class="flex w-full gap-6 py-6 md:pr-6">
       <aside
-        class="fixed inset-y-0 left-0 top-14 z-40 w-64 shrink-0 transform border-r border-[var(--color-border)] bg-[var(--color-bg)] p-4 transition-transform duration-200 ease-out md:static md:top-0 md:w-48 md:border-r-0 md:bg-transparent md:p-0 md:translate-x-0 {sidebarOpen ? 'translate-x-0 shadow-[var(--shadow-lg)]' : '-translate-x-full md:transform-none'}"
+        class="fixed inset-y-0 left-0 top-14 z-40 w-64 shrink-0 transform border-r border-[var(--color-border)] bg-[var(--color-bg)] p-4 transition-transform duration-200 ease-out md:static md:top-0 md:w-48 md:shrink-0 md:border-r-0 md:bg-transparent md:py-0 md:pl-4 md:pr-0 md:translate-x-0 {sidebarOpen ? 'translate-x-0 shadow-[var(--shadow-lg)]' : '-translate-x-full md:transform-none'}"
         aria-label="Primary navigation"
       >
         <nav class="flex flex-col gap-0.5">
@@ -201,7 +255,7 @@
           <RemindersPopover items={reminders} />
         </div>
       </aside>
-      <main class="min-w-0 flex-1">{@render children()}</main>
+      <main class="min-w-0 flex-1 px-4 md:px-0">{@render children()}</main>
     </div>
   {:else}
     <main>{@render children()}</main>
