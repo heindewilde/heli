@@ -27,6 +27,10 @@ export type CommandHit = {
   title: string;
   sub: string | null;
   href: string;
+  avatarUrl?: string | null;
+  logoUrl?: string | null;
+  faviconUrl?: string | null;
+  domain?: string | null;
 };
 
 export type CommandScope =
@@ -94,25 +98,25 @@ export async function searchAll(
 
   const [peopleRows, companyRows, interactionRows, projectRows, collectionRows, pipelineRows] = await Promise.all([
     wantPeople
-      ? d.all<{ id: string; name: string; role: string | null; domain: string | null }>(sql`
-          SELECT p.id, p.name, p.role, p.domain
+      ? d.all<{ id: string; name: string; role: string | null; domain: string | null; avatarUrl: string | null }>(sql`
+          SELECT p.id, p.name, p.role, p.domain, p.avatar_url AS avatarUrl
           FROM people p
           JOIN people_fts f ON f.rowid = p.rowid
           WHERE p.user_id = ${userId} AND f.people_fts MATCH ${fts} AND p.is_archived = 0
           ORDER BY rank
           LIMIT ${scope === 'person' ? SCOPED_LIMIT : perKind}
         `)
-      : Promise.resolve([] as { id: string; name: string; role: string | null; domain: string | null }[]),
+      : Promise.resolve([] as { id: string; name: string; role: string | null; domain: string | null; avatarUrl: string | null }[]),
     wantCompanies
-      ? d.all<{ id: string; name: string; description: string | null; domain: string | null }>(sql`
-          SELECT c.id, c.name, c.description, c.domain
+      ? d.all<{ id: string; name: string; description: string | null; domain: string | null; logoUrl: string | null; faviconUrl: string | null }>(sql`
+          SELECT c.id, c.name, c.description, c.domain, c.logo_url AS logoUrl, c.favicon_url AS faviconUrl
           FROM companies c
           JOIN companies_fts f ON f.rowid = c.rowid
           WHERE c.user_id = ${userId} AND f.companies_fts MATCH ${fts} AND c.is_archived = 0
           ORDER BY rank
           LIMIT ${scope === 'company' ? SCOPED_LIMIT : perKind}
         `)
-      : Promise.resolve([] as { id: string; name: string; description: string | null; domain: string | null }[]),
+      : Promise.resolve([] as { id: string; name: string; description: string | null; domain: string | null; logoUrl: string | null; faviconUrl: string | null }[]),
     wantInteractions
       ? d.all<{ id: string; title: string; type: string; occurredAt: number }>(sql`
           SELECT i.id, i.title, i.type, i.occurred_at AS occurredAt
@@ -168,7 +172,8 @@ export async function searchAll(
       id: p.id,
       title: p.name,
       sub: p.role || p.domain,
-      href: `/people/${p.id}`
+      href: `/people/${p.id}`,
+      avatarUrl: p.avatarUrl
     });
   }
   for (const c of companyRows) {
@@ -177,7 +182,10 @@ export async function searchAll(
       id: c.id,
       title: c.name,
       sub: c.domain || c.description,
-      href: `/companies/${c.id}`
+      href: `/companies/${c.id}`,
+      domain: c.domain,
+      logoUrl: c.logoUrl,
+      faviconUrl: c.faviconUrl
     });
   }
   for (const i of interactionRows) {
