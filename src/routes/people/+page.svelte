@@ -11,6 +11,7 @@
   import StatusFilterChip from '$lib/components/StatusFilterChip.svelte';
   import SortHeader from '$lib/components/SortHeader.svelte';
   import CompanyLogo from '$lib/components/CompanyLogo.svelte';
+  import CompanyCell from '$lib/components/CompanyCell.svelte';
   import type { StatusRow } from '$lib/statuses';
   import type { Priority } from '$lib/priority';
   import { bindKeys } from '$lib/keyboard.svelte';
@@ -341,23 +342,14 @@
               </a>
 
               <div class="min-w-0">
-                {#if person.companyId && person.companyName}
-                  <a
-                    href={`/companies/${person.companyId}`}
-                    class="inline-flex max-w-full items-center gap-1.5 truncate text-sm text-[var(--color-text)] hover:underline"
-                  >
-                    <CompanyLogo
-                      domain={person.companyDomain}
-                      fallbackUrl={person.companyLogoUrl ?? person.companyFaviconUrl}
-                      name={person.companyName}
-                      size={16}
-                      class="shrink-0 text-[8px]"
-                    />
-                    <span class="truncate">{person.companyName}</span>
-                  </a>
-                {:else}
-                  <span class="text-[var(--color-subtle)]">·</span>
-                {/if}
+                <CompanyCell
+                  companyId={person.companyId ?? null}
+                  companyName={person.companyName ?? null}
+                  companyDomain={person.companyDomain ?? null}
+                  companyLogoUrl={person.companyLogoUrl ?? null}
+                  companyFaviconUrl={person.companyFaviconUrl ?? null}
+                  onPick={(c) => patch(person.id, { companyId: c?.id ?? null })}
+                />
               </div>
 
               <div class="min-w-0">
