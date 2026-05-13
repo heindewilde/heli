@@ -111,7 +111,7 @@
       </a>
 
       <h1>
-        Finally, a delightful way to keep<br />track of people, companies,<br />and projects.
+        Finally, a delightful way to<br />organize your work and network.
       </h1>
 
       <p class="subtitle">
@@ -187,7 +187,7 @@
   }
 
   .brand-text {
-    font-size: 1.0625rem;
+    font-size: 1.25rem;
     font-weight: 700;
     letter-spacing: -0.04em;
   }
