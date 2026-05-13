@@ -6,9 +6,10 @@
   type Props = {
     kind: 'person' | 'company' | 'interaction' | 'project';
     refId: string;
+    iconOnly?: boolean;
   };
 
-  let { kind, refId }: Props = $props();
+  let { kind, refId, iconOnly = false }: Props = $props();
   let open = $state(false);
   let when = $state('');
   let saving = $state(false);
@@ -53,38 +54,75 @@
   }
 </script>
 
-<div class="flex flex-col gap-2">
-  {#if !open}
+{#if iconOnly}
+  <div class="relative">
     <button
       type="button"
-      onclick={startOpen}
-      class="inline-flex items-center gap-1 self-start rounded-[var(--radius-sm)] border border-[var(--color-border)] px-2 py-1 text-xs text-[var(--color-muted)] hover:bg-[var(--color-bg)]"
+      title="Set reminder"
+      onclick={open ? () => (open = false) : startOpen}
+      class="rounded-[var(--radius-sm)] p-2 text-[var(--color-subtle)] hover:bg-[var(--color-surface)] {open ? 'text-[var(--color-accent)]' : ''}"
     >
-      <Bell size={12} strokeWidth={2} />
-      Remind me
+      <Bell size={16} strokeWidth={2} />
     </button>
-  {:else}
-    <div class="flex items-center gap-1">
-      <input
-        type="datetime-local"
-        bind:value={when}
-        class="rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-bg)] px-2 py-1 text-xs"
-      />
+    {#if open}
+      <div class="absolute right-0 top-full z-20 mt-1 flex items-center gap-1 rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-bg)] p-2 shadow-md">
+        <input
+          type="datetime-local"
+          bind:value={when}
+          class="rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-surface)] px-2 py-1 text-xs"
+        />
+        <button
+          type="button"
+          onclick={save}
+          disabled={saving}
+          class="inline-flex items-center gap-1 rounded-[var(--radius-sm)] bg-[var(--color-accent)] transition-colors hover:bg-[var(--color-accent-hover)] px-2 py-1 text-xs text-[var(--color-accent-fg)]"
+        >
+          <Plus size={12} strokeWidth={2} />
+          Set
+        </button>
+        <button
+          type="button"
+          onclick={() => (open = false)}
+          class="rounded-[var(--radius-sm)] p-1 text-[var(--color-subtle)] hover:bg-[var(--color-surface)]"
+          aria-label="Cancel"
+        ><X size={12} strokeWidth={2} /></button>
+      </div>
+    {/if}
+  </div>
+{:else}
+  <div class="flex flex-col gap-2">
+    {#if !open}
       <button
         type="button"
-        onclick={save}
-        disabled={saving}
-        class="inline-flex items-center gap-1 rounded-[var(--radius-sm)] bg-[var(--color-accent)] transition-colors hover:bg-[var(--color-accent-hover)] px-2 py-1 text-xs text-[var(--color-accent-fg)]"
+        onclick={startOpen}
+        class="inline-flex items-center gap-1 self-start rounded-[var(--radius-sm)] border border-[var(--color-border)] px-2 py-1 text-xs text-[var(--color-muted)] hover:bg-[var(--color-bg)]"
       >
-        <Plus size={12} strokeWidth={2} />
-        Set
+        <Bell size={12} strokeWidth={2} />
+        Remind me
       </button>
-      <button
-        type="button"
-        onclick={() => (open = false)}
-        class="rounded-[var(--radius-sm)] p-1 text-[var(--color-subtle)] hover:bg-[var(--color-bg)]"
-        aria-label="Cancel"
-      ><X size={12} strokeWidth={2} /></button>
-    </div>
-  {/if}
-</div>
+    {:else}
+      <div class="flex items-center gap-1">
+        <input
+          type="datetime-local"
+          bind:value={when}
+          class="rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-bg)] px-2 py-1 text-xs"
+        />
+        <button
+          type="button"
+          onclick={save}
+          disabled={saving}
+          class="inline-flex items-center gap-1 rounded-[var(--radius-sm)] bg-[var(--color-accent)] transition-colors hover:bg-[var(--color-accent-hover)] px-2 py-1 text-xs text-[var(--color-accent-fg)]"
+        >
+          <Plus size={12} strokeWidth={2} />
+          Set
+        </button>
+        <button
+          type="button"
+          onclick={() => (open = false)}
+          class="rounded-[var(--radius-sm)] p-1 text-[var(--color-subtle)] hover:bg-[var(--color-bg)]"
+          aria-label="Cancel"
+        ><X size={12} strokeWidth={2} /></button>
+      </div>
+    {/if}
+  </div>
+{/if}

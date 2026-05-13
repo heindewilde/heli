@@ -249,6 +249,7 @@
       </div>
     </div>
     <div class="flex items-center gap-1">
+      <AddReminder iconOnly kind="person" refId={person.id} />
       <button
         type="button"
         title={person.isFavorite ? 'Unfavorite' : 'Favorite'}
@@ -426,10 +427,6 @@
       <div class="flex flex-col gap-2 rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)] p-3">
         <h3 class="text-xs font-medium uppercase tracking-wide text-[var(--color-subtle)]">Pipelines</h3>
         <PipelinesRibbon kind="person" refId={person.id} pipelines={data.pipelines} />
-      </div>
-      <div class="flex flex-col gap-2 rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)] p-3">
-        <h3 class="text-xs font-medium uppercase tracking-wide text-[var(--color-subtle)]">Reminder</h3>
-        <AddReminder kind="person" refId={person.id} />
       </div>
     </aside>
   </div>
