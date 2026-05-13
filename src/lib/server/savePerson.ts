@@ -3,15 +3,19 @@ import { createId } from '@paralleldrive/cuid2';
 import { db } from './db';
 import { people, companies } from './schema';
 import { cleanUrl, domainOf } from './url';
-import { classify, deriveHandle } from './classify';
+import { deriveHandle, humanizeHandle } from './classify';
 import {
   fetchOg,
+  pickJsonLdAddress,
+  pickJsonLdContact,
   pickJsonLdImage,
   pickJsonLdString,
   pickJsonLdWorksFor,
+  stripCompanySuffix,
   stripSiteSuffix
 } from './og';
 import { sanitize } from './sanitize';
+import { cacheRemoteImage } from './imageCache';
 
 export type SaveResult = { id: string; kind: 'person' | 'company'; dedup: boolean };
 
@@ -25,6 +29,12 @@ export type ManualPersonInput = {
   location?: string | null;
   notes?: string | null;
 };
+
+const LINKEDIN_BOILERPLATE_RE = /view\s+[^.]+'s\s+(full\s+)?profile\s+on\s+linkedin/i;
+
+function fallbackName(u: URL): string {
+  return humanizeHandle(deriveHandle(u)) ?? u.hostname.replace(/^www\./, '');
+}
 
 export async function savePerson(
   userId: string,
@@ -49,7 +59,7 @@ export async function savePerson(
     await d.insert(people).values({
       id,
       userId,
-      name: deriveHandle(u) ?? u.hostname,
+      name: fallbackName(u),
       url,
       domain: domainOf(u),
       handle: deriveHandle(u),
@@ -84,24 +94,60 @@ export async function savePerson(
   return { id, kind: 'person', dedup: false };
 }
 
-async function enrichPerson(id: string, userId: string, region: string, url: URL): Promise<void> {
+function cleanDescription(raw: string | undefined): string | null {
+  if (!raw) return null;
+  const trimmed = raw.trim();
+  if (!trimmed) return null;
+  if (LINKEDIN_BOILERPLATE_RE.test(trimmed)) return null;
+  const capped = trimmed.length > 280 ? trimmed.slice(0, 280).replace(/\s+\S*$/, '') + '…' : trimmed;
+  return sanitize(capped);
+}
+
+export async function enrichPerson(id: string, userId: string, region: string, url: URL): Promise<void> {
   const d = db(region);
   try {
     const og = await fetchOg(url);
-    const cleanName = stripSiteSuffix(og.title, og.siteName);
-    const jsonLdName = pickJsonLdString(og.jsonLd, 'name');
+
+    // Extract employer first so we can use it to strip the company name out
+    // of the person's title — LinkedIn often serves "Name - Company" or
+    // "Name | Company" as og:title, and we don't want that ending up in `name`.
+    const worksFor = pickJsonLdWorksFor(og.jsonLd);
+    const employerName = worksFor?.name?.trim() ?? null;
+
+    const titleClean = stripCompanySuffix(stripSiteSuffix(og.title, og.siteName), employerName);
+    const ldNameRaw = pickJsonLdString(og.jsonLd, 'name');
+    const ldNameClean = stripCompanySuffix(stripSiteSuffix(ldNameRaw, og.siteName), employerName);
     const role = pickJsonLdString(og.jsonLd, 'jobTitle');
     const jsonLdImage = pickJsonLdImage(og.jsonLd);
-    const avatar = jsonLdImage ?? og.image ?? null;
-    const description = og.description ? sanitize(og.description) : null;
+    const remoteAvatar = jsonLdImage ?? og.image ?? null;
+    const cachedAvatar = await cacheRemoteImage(remoteAvatar);
+    const avatar = cachedAvatar ?? remoteAvatar;
 
-    const finalName = jsonLdName?.trim() || cleanName?.trim() || null;
+    const description = cleanDescription(
+      pickJsonLdString(og.jsonLd, 'description') ?? og.description
+    );
+
+    const jsonLdAddress = pickJsonLdAddress(og.jsonLd) ?? og.address;
+    const contact = pickJsonLdContact(og.jsonLd);
+
+    const finalName = ldNameClean?.trim() || titleClean?.trim() || null;
+
+    const hostNow = url.hostname.toLowerCase().replace(/^www\./, '');
+    const linkedinUrl =
+      og.socials?.linkedinUrl && !hostNow.endsWith('linkedin.com') ? og.socials.linkedinUrl : null;
+    const xUrl =
+      og.socials?.xUrl && hostNow !== 'x.com' && hostNow !== 'twitter.com' ? og.socials.xUrl : null;
 
     const updates: Partial<typeof people.$inferInsert> = {
       avatarUrl: avatar,
       faviconUrl: og.faviconUrl ?? null,
       role: role ?? null,
       notes: description,
+      location: jsonLdAddress ?? null,
+      email: contact.email ?? null,
+      phone: contact.telephone ?? null,
+      linkedinUrl,
+      xUrl,
       source: null,
       updatedAt: Date.now()
     };
@@ -109,10 +155,22 @@ async function enrichPerson(id: string, userId: string, region: string, url: URL
 
     await d.update(people).set(updates).where(and(eq(people.id, id), eq(people.userId, userId)));
 
-    const worksFor = pickJsonLdWorksFor(og.jsonLd);
     if (worksFor?.url) {
       try {
-        const employerDomain = domainOf(new URL(worksFor.url));
+        // If the employer URL is a LinkedIn company page, try once to resolve
+        // it to the company's real website — so the "Add company" suggestion
+        // saves a URL that can be properly enriched (industry, location, etc).
+        let resolvedUrl = worksFor.url;
+        try {
+          const employerUrl = new URL(worksFor.url);
+          if (employerUrl.hostname.toLowerCase().replace(/^www\./, '').endsWith('linkedin.com')) {
+            const website = await resolveCompanyWebsite(employerUrl);
+            if (website) resolvedUrl = website;
+          }
+        } catch {
+          // Bad URL; keep original.
+        }
+        const employerDomain = domainOf(new URL(resolvedUrl));
         const company = await d
           .select({ id: companies.id })
           .from(companies)
@@ -132,7 +190,7 @@ async function enrichPerson(id: string, userId: string, region: string, url: URL
             .update(people)
             .set({
               suggestedCompanyName: worksFor.name.trim(),
-              suggestedCompanyUrl: worksFor.url
+              suggestedCompanyUrl: resolvedUrl
             })
             .where(eq(people.id, id));
         }
@@ -154,3 +212,52 @@ async function enrichPerson(id: string, userId: string, region: string, url: URL
       .where(and(eq(people.id, id), eq(people.userId, userId)));
   }
 }
+
+// Fetch a LinkedIn company page once and try to find the company's real
+// website. Looks at JSON-LD `Organization.url`, then `sameAs` for the first
+// non-LinkedIn http(s) URL. Returns null on any failure — caller falls back
+// to the LinkedIn URL.
+async function resolveCompanyWebsite(linkedinUrl: URL): Promise<string | null> {
+  try {
+    const og = await fetchOg(linkedinUrl);
+    const orgUrl = pickJsonLdString(og.jsonLd, 'url');
+    if (orgUrl) {
+      try {
+        const u = new URL(orgUrl);
+        const host = u.hostname.toLowerCase().replace(/^www\./, '');
+        if (host && !host.endsWith('linkedin.com') && (u.protocol === 'http:' || u.protocol === 'https:')) {
+          return u.toString();
+        }
+      } catch {
+        // bad url
+      }
+    }
+    const sameAs = (og.jsonLd as Record<string, unknown> | null)?.sameAs;
+    const arr = Array.isArray(sameAs) ? sameAs : typeof sameAs === 'string' ? [sameAs] : [];
+    for (const item of arr) {
+      if (typeof item !== 'string') continue;
+      try {
+        const u = new URL(item);
+        const host = u.hostname.toLowerCase().replace(/^www\./, '');
+        if (
+          (u.protocol === 'http:' || u.protocol === 'https:') &&
+          host &&
+          !host.endsWith('linkedin.com') &&
+          host !== 'x.com' &&
+          host !== 'twitter.com' &&
+          host !== 'facebook.com' &&
+          host !== 'instagram.com' &&
+          host !== 'youtube.com'
+        ) {
+          return u.toString();
+        }
+      } catch {
+        // ignore
+      }
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+

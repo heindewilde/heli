@@ -10,7 +10,13 @@ const TRACKING_PARAMS = [
   'vero_id', 'vero_conv',
   'mkt_tok',
   'yclid',
-  'ref_src', 'ref_url'
+  'ref_src', 'ref_url',
+  // LinkedIn — tracking + session telemetry that ride on shared profile links.
+  'miniProfile', 'miniCompanyUrn', 'trackingId', 'refId', 'originalSubdomain',
+  'lipi', 'lici', 'original_referer', 'original_referer_id', 'trk', 'trkInfo',
+  'midToken', 'midSig', 'eBP', 'lgCta', 'lgsig',
+  // X / Twitter — share-button tracking pair.
+  's', 't'
 ];
 
 export class UrlError extends Error {
@@ -41,6 +47,27 @@ export function cleanUrl(input: string): string {
   }
   u.hostname = u.hostname.toLowerCase();
   for (const p of TRACKING_PARAMS) u.searchParams.delete(p);
+  // LinkedIn/X never use query params legitimately on profile/company pages.
+  // Drop anything that survived the generic strip, and trim any trailing path
+  // segments LinkedIn appends (language codes like `/en`, legacy `/pub`
+  // multi-segment URLs, `/details/...` sub-views). The handle/slug is the
+  // first segment after the prefix.
+  const bareHost = u.hostname.replace(/^www\./, '');
+  if (bareHost.endsWith('linkedin.com')) {
+    const m = u.pathname.match(/^\/(in|company|school|showcase)\/([^/]+)/i);
+    if (m) {
+      u.pathname = `/${m[1].toLowerCase()}/${m[2]}`;
+      u.search = '';
+    } else if (/^\/pub\/([^/]+)/i.test(u.pathname)) {
+      const pm = u.pathname.match(/^\/pub\/([^/]+)/i);
+      if (pm) {
+        u.pathname = `/pub/${pm[1]}`;
+        u.search = '';
+      }
+    }
+  } else if ((bareHost === 'x.com' || bareHost === 'twitter.com') && /^\/[^/]+\/?$/.test(u.pathname)) {
+    u.search = '';
+  }
   // Drop trailing slash on the path (but keep the bare "/").
   if (u.pathname.length > 1 && u.pathname.endsWith('/')) {
     u.pathname = u.pathname.replace(/\/+$/, '');

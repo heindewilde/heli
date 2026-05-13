@@ -61,7 +61,38 @@ export function deriveHandle(url: URL): string | null {
   if (segments.length === 0) return null;
   let leaf = segments[segments.length - 1];
   // For LinkedIn /in/<handle> the handle is segment[1]; same logic — leaf works.
+  // Decode percent-encoded characters first — non-English LinkedIn handles
+  // (e.g. `améraaphorst`) get encoded by `new URL(...)`.
+  try {
+    leaf = decodeURIComponent(leaf);
+  } catch {
+    // Malformed encoding; keep raw.
+  }
   leaf = leaf.replace(/^@/, '');
-  if (!/^[A-Za-z0-9_.\-]+$/.test(leaf)) return null;
+  // Allow Unicode letters/digits so accented handles aren't rejected.
+  if (!/^[\p{L}\p{N}_.\-]+$/u.test(leaf)) return null;
   return leaf || null;
+}
+
+export function humanizeHandle(handle: string | null | undefined): string | null {
+  if (!handle) return null;
+  let s = handle.trim();
+  if (!s) return null;
+  // LinkedIn appends a random suffix to disambiguate names — either
+  // alphanumeric (`john-doe-83a4b2`) or pure numeric ID (`john-doe-065847151`).
+  // Strip the trailing token when it's ≥4 chars and contains a digit; that
+  // leaves intentional short suffixes like `john-2nd` (3 chars) untouched.
+  const tail = s.match(/[-_.]([A-Za-z0-9]+)$/);
+  if (tail && tail[1].length >= 4 && /\d/.test(tail[1])) {
+    s = s.slice(0, s.length - tail[0].length);
+  }
+  const parts = s.split(/[-_.\s]+/).filter(Boolean);
+  if (parts.length === 0) return null;
+  const cased = parts.map((p) => {
+    // Keep all-caps acronyms (≤4 chars) as-is; otherwise title-case.
+    if (p.length <= 4 && p === p.toUpperCase() && /^[A-Z]+$/.test(p)) return p;
+    return p.charAt(0).toUpperCase() + p.slice(1).toLowerCase();
+  });
+  const out = cased.join(' ').replace(/\s+/g, ' ').trim();
+  return out || null;
 }
