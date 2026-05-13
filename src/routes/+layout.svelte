@@ -90,7 +90,7 @@
             return true;
           }
         }
-        const idx = parseInt(e.key) - 1;
+        const idx = Number(e.key) - 1;
         if (idx >= 0 && idx < tabs.length) {
           goto(tabs[idx].href);
           return true;
