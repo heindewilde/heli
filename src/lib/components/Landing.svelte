@@ -1,49 +1,459 @@
 <script lang="ts">
-  import { APP_NAME, APP_TAGLINE } from '$lib/branding';
-  import { Lock, Database, Zap, Sparkles } from 'lucide-svelte';
+  import {
+    Github,
+    ArrowRight,
+    Lock,
+    Database,
+    Zap,
+    Sparkles,
+    BookmarkPlus,
+    Users,
+    Download,
+    MessagesSquare,
+    FolderKanban,
+    Moon,
+    Sun
+  } from 'lucide-svelte';
+  import { onMount } from 'svelte';
 
-  const trust = [
-    { icon: Lock, label: 'Open source' },
-    { icon: Database, label: 'Self-hostable' },
-    { icon: Zap, label: 'No tracking' },
-    { icon: Sparkles, label: 'One file backup' }
+  const GITHUB_URL = 'https://github.com';
+
+  let isDark = $state(false);
+  onMount(() => {
+    isDark = document.documentElement.dataset.theme === 'dark';
+  });
+
+  function toggleDark() {
+    isDark = !isDark;
+    document.documentElement.dataset.theme = isDark ? 'dark' : 'light';
+    try {
+      localStorage.setItem('theme', isDark ? 'dark' : 'light');
+    } catch {}
+  }
+
+  const features = [
+    {
+      icon: Lock,
+      title: 'Private by design',
+      body: 'No tracking, no ads, no third-party access. Your contacts and relationships are yours alone.'
+    },
+    {
+      icon: Database,
+      title: 'Choose where your data lives',
+      body: 'US, EU, APAC, or your own server. Export or move it any time — no lock-in, ever.'
+    },
+    {
+      icon: BookmarkPlus,
+      title: 'Save in one click',
+      body: 'A bookmarklet or a simple paste. Add anyone to your CRM in seconds without breaking your flow.'
+    },
+    {
+      icon: Users,
+      title: 'People and companies',
+      body: 'Track individuals and organizations side by side. See who works where, who introduced whom.'
+    },
+    {
+      icon: MessagesSquare,
+      title: 'Log every interaction',
+      body: 'Calls, emails, coffee chats — a running log of every touchpoint so nothing slips through the cracks.'
+    },
+    {
+      icon: FolderKanban,
+      title: 'Projects and pipelines',
+      body: 'Group contacts into projects and move them through stages. Simple boards, no complexity tax.'
+    },
+    {
+      icon: Zap,
+      title: 'Keyboard first',
+      body: 'j/k to navigate, Enter to open, / to search. Every action has a shortcut. The mouse is a fallback.'
+    },
+    {
+      icon: Sparkles,
+      title: 'Smart enrichment',
+      body: 'Paste a LinkedIn or website link and Heli fills in the details — name, role, company — automatically.'
+    },
+    {
+      icon: Download,
+      title: 'Export your data',
+      body: 'Download your full contact list as CSV any time. You own your data and can take it anywhere.'
+    }
   ];
 </script>
 
-<section class="mx-auto flex min-h-[80vh] max-w-3xl flex-col items-start justify-center gap-7 px-6 py-20">
-  <span
-    class="inline-flex items-center gap-2 rounded-full border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-1 text-xs text-[var(--color-muted)] shadow-[var(--shadow-xs)]"
-  >
-    <span class="inline-block h-1.5 w-1.5 rounded-full bg-[var(--color-success)]"></span>
-    Open source · self-hostable
-  </span>
+<div class="landing">
+  <header class="nav">
+    <a href="/" class="brand" aria-label="Heli home">
+      <span class="brand-mark" aria-hidden="true">🚁</span>
+      <span class="brand-text">heli</span>
+    </a>
 
-  <h1 class="text-balance text-[clamp(2.25rem,5.5vw,3.75rem)] font-semibold leading-[1.02] tracking-[-0.02em]">
-    {APP_TAGLINE}.
-  </h1>
-  <p class="max-w-xl text-[1.0625rem] leading-relaxed text-[var(--color-muted)]">
-    {APP_NAME} is a private, lightweight CRM for People, Companies, and Interactions.
-    Paste a link in the topbar and it gets classified, stored, and enriched —
-    nothing more, nothing less.
-  </p>
+    <nav class="nav-right" aria-label="Primary">
+      <button class="icon-btn" onclick={toggleDark} aria-label="Toggle theme">
+        {#if isDark}
+          <Sun size={16} strokeWidth={2} />
+        {:else}
+          <Moon size={16} strokeWidth={2} />
+        {/if}
+      </button>
+      <a class="icon-btn" href={GITHUB_URL} target="_blank" rel="noreferrer noopener" aria-label="GitHub repository">
+        <Github size={16} strokeWidth={2} />
+      </a>
+      <a class="btn-ghost" href="/auth">Sign in</a>
+      <a class="btn-primary" href="/auth?mode=register">Get started</a>
+    </nav>
+  </header>
 
-  <div class="flex flex-wrap gap-2">
-    <a
-      href="/auth?mode=register"
-      class="inline-flex items-center gap-1.5 rounded-[var(--radius-sm)] bg-[var(--color-accent)] px-4 py-2.5 text-sm font-medium text-[var(--color-accent-fg)] shadow-[var(--shadow-sm)] transition-all hover:bg-[var(--color-accent-hover)] hover:shadow-[var(--shadow-md)]"
-    >Get started</a>
-    <a
-      href="/auth"
-      class="inline-flex items-center rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-surface)] px-4 py-2.5 text-sm font-medium transition-colors hover:border-[var(--color-border-strong)]"
-    >Sign in</a>
-  </div>
+  <main class="main">
+    <section class="hero">
+      <a class="eyebrow" href={GITHUB_URL} target="_blank" rel="noreferrer noopener">
+        <Github size={13} strokeWidth={2} />
+        <span>Open source</span>
+      </a>
 
-  <ul class="mt-4 grid w-full grid-cols-2 gap-2 sm:grid-cols-4">
-    {#each trust as t (t.label)}
-      <li class="flex items-center gap-2 rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 text-sm shadow-[var(--shadow-xs)]">
-        <t.icon size={14} strokeWidth={2} class="text-[var(--color-muted)]" />
-        <span>{t.label}</span>
-      </li>
-    {/each}
-  </ul>
-</section>
+      <h1>
+        Finally, a delightful way to keep<br />track of people, companies,<br />and projects.
+      </h1>
+
+      <p class="subtitle">
+        Heli is the CRM for freelancers and small businesses. More than a spreadsheet, less than bloated tools like Salesforce and HubSpot.
+        Heli is fast, easy to use, and beautifully designed — once you're on board, you don't want to go back.
+      </p>
+
+      <div class="cta-row">
+        <a class="btn-primary-lg" href="/auth?mode=register">
+          <span>Start flying</span>
+          <ArrowRight size={15} strokeWidth={2} />
+        </a>
+      </div>
+
+      <p class="hero-note">Free to start.</p>
+    </section>
+
+    <section class="features" aria-label="Features">
+      <div class="features-grid">
+        {#each features as f}
+          <article class="feature">
+            <div class="feature-icon">
+              <f.icon size={16} strokeWidth={2} />
+            </div>
+            <h3>{f.title}</h3>
+            <p>{f.body}</p>
+          </article>
+        {/each}
+      </div>
+    </section>
+  </main>
+
+  <footer class="footer">
+    <span class="footer-brand">heli</span>
+    <span class="footer-sep">·</span>
+    <span>A calmer CRM for the people you care about.</span>
+    <span class="footer-spacer"></span>
+    <a href={GITHUB_URL} target="_blank" rel="noreferrer noopener">GitHub</a>
+    <a href="/auth">Sign in</a>
+  </footer>
+</div>
+
+<style>
+  .landing {
+    min-height: 100vh;
+    background: var(--color-bg);
+    color: var(--color-text);
+    display: flex;
+    flex-direction: column;
+  }
+
+  .nav {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 1.25rem 2rem;
+    max-width: 1200px;
+    width: 100%;
+    margin: 0 auto;
+  }
+
+  .brand {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    text-decoration: none;
+    color: var(--color-text);
+  }
+
+  .brand-mark {
+    font-size: 1.125rem;
+    line-height: 1;
+  }
+
+  .brand-text {
+    font-size: 1.0625rem;
+    font-weight: 700;
+    letter-spacing: -0.04em;
+  }
+
+  .nav-right {
+    display: flex;
+    align-items: center;
+    gap: 0.375rem;
+  }
+
+  .icon-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 2rem;
+    height: 2rem;
+    border-radius: var(--radius-md);
+    border: 1px solid transparent;
+    background: transparent;
+    color: var(--color-muted);
+    cursor: pointer;
+    text-decoration: none;
+    transition: background 0.15s, color 0.15s, border-color 0.15s;
+  }
+
+  .icon-btn:hover {
+    background: var(--color-surface);
+    border-color: var(--color-border);
+    color: var(--color-text);
+  }
+
+  .btn-ghost {
+    display: inline-flex;
+    align-items: center;
+    padding: 0.4rem 0.75rem;
+    border-radius: var(--radius-md);
+    font-size: 0.875rem;
+    font-weight: 500;
+    color: var(--color-muted);
+    text-decoration: none;
+    transition: color 0.15s, background 0.15s;
+  }
+
+  .btn-ghost:hover {
+    color: var(--color-text);
+    background: var(--color-surface);
+  }
+
+  .btn-primary {
+    display: inline-flex;
+    align-items: center;
+    padding: 0.4rem 0.85rem;
+    border-radius: var(--radius-md);
+    background: var(--color-text);
+    color: var(--color-bg);
+    font-size: 0.875rem;
+    font-weight: 500;
+    text-decoration: none;
+    transition: opacity 0.15s;
+  }
+
+  .btn-primary:hover {
+    opacity: 0.88;
+  }
+
+  .main {
+    flex: 1;
+    max-width: 1100px;
+    width: 100%;
+    margin: 0 auto;
+    padding: 0 2rem;
+  }
+
+  .hero {
+    text-align: center;
+    padding: 5rem 0 4.5rem;
+  }
+
+  .eyebrow {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.375rem 0.75rem;
+    border-radius: 999px;
+    border: 1px solid var(--color-border);
+    background: var(--color-surface);
+    color: var(--color-muted);
+    font-size: 0.75rem;
+    font-weight: 500;
+    letter-spacing: -0.005em;
+    text-decoration: none;
+    transition: border-color 0.15s, color 0.15s;
+  }
+
+  .eyebrow:hover {
+    border-color: var(--color-border-strong);
+    color: var(--color-text);
+  }
+
+  h1 {
+    margin: 1.5rem 0 1.25rem;
+    font-size: clamp(2rem, 5vw, 3.375rem);
+    line-height: 1.08;
+    letter-spacing: -0.035em;
+    font-weight: 600;
+  }
+
+  .subtitle {
+    max-width: 40rem;
+    margin: 0 auto;
+    color: var(--color-muted);
+    font-size: clamp(0.9375rem, 1.4vw, 1.0625rem);
+    line-height: 1.55;
+  }
+
+  .cta-row {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.625rem;
+    margin-top: 2rem;
+    flex-wrap: wrap;
+  }
+
+  .btn-primary-lg {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.625rem 1.125rem;
+    border-radius: var(--radius-md);
+    font-size: 0.9375rem;
+    font-weight: 500;
+    text-decoration: none;
+    background: var(--color-text);
+    color: var(--color-bg);
+    border: 1px solid var(--color-text);
+    transition: opacity 0.15s;
+  }
+
+  .btn-primary-lg:hover {
+    opacity: 0.9;
+  }
+
+  .hero-note {
+    color: var(--color-subtle);
+    font-size: 0.8125rem;
+    margin: 1.25rem 0 0;
+  }
+
+  .features {
+    padding: 1.5rem 0 5rem;
+  }
+
+  .features-grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 1px;
+    background: var(--color-border);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-lg);
+    overflow: hidden;
+  }
+
+  .feature {
+    background: var(--color-surface);
+    padding: 1.5rem 1.5rem 1.75rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+
+  .feature-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 1.875rem;
+    height: 1.875rem;
+    border-radius: var(--radius-sm);
+    background: var(--color-bg);
+    border: 1px solid var(--color-border);
+    color: var(--color-text);
+    margin-bottom: 0.375rem;
+  }
+
+  .feature h3 {
+    margin: 0;
+    font-size: 0.9375rem;
+    font-weight: 600;
+    letter-spacing: -0.01em;
+  }
+
+  .feature p {
+    margin: 0;
+    color: var(--color-muted);
+    font-size: 0.875rem;
+    line-height: 1.5;
+  }
+
+  .footer {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    max-width: 1100px;
+    width: 100%;
+    margin: 0 auto;
+    padding: 1.5rem 2rem 2rem;
+    color: var(--color-muted);
+    font-size: 0.8125rem;
+    border-top: 1px solid var(--color-border);
+  }
+
+  .footer-brand {
+    font-weight: 700;
+    letter-spacing: -0.04em;
+    color: var(--color-text);
+  }
+
+  .footer-sep {
+    color: var(--color-subtle);
+  }
+
+  .footer-spacer {
+    flex: 1;
+  }
+
+  .footer a {
+    color: var(--color-muted);
+    text-decoration: none;
+    margin-left: 1rem;
+    transition: color 0.15s;
+  }
+
+  .footer a:hover {
+    color: var(--color-text);
+  }
+
+  @media (max-width: 860px) {
+    .features-grid {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+  }
+
+  @media (max-width: 560px) {
+    .nav {
+      padding: 1rem 1.25rem;
+    }
+
+    .main {
+      padding: 0 1.25rem;
+    }
+
+    .hero {
+      padding: 3rem 0 3.5rem;
+    }
+
+    .btn-ghost {
+      display: none;
+    }
+
+    .features-grid {
+      grid-template-columns: 1fr;
+    }
+
+    .footer {
+      padding: 1.25rem 1.25rem 1.75rem;
+      flex-wrap: wrap;
+    }
+  }
+</style>

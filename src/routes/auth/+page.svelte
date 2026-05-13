@@ -1,71 +1,81 @@
 <script lang="ts">
-  import { APP_NAME } from '$lib/branding';
-  import { Lock, Database, Zap, Sparkles } from 'lucide-svelte';
   import { enhance } from '$app/forms';
-  import BrandMark from '$lib/components/BrandMark.svelte';
+  import {
+    Lock,
+    Database,
+    Zap,
+    Sparkles,
+    BookmarkPlus,
+    Users,
+    Download,
+    MessagesSquare,
+    FolderKanban
+  } from 'lucide-svelte';
+  import { untrack } from 'svelte';
 
   let { data, form } = $props();
+  let mode = $state<'login' | 'register'>(
+    untrack(() => (!data.registrationDisabled && data.mode === 'register' ? 'register' : 'login'))
+  );
 
-  // svelte-ignore state_referenced_locally
-  let mode = $state<'login' | 'register'>(data.mode === 'register' ? 'register' : 'login');
+  $effect(() => {
+    if (data.registrationDisabled && mode === 'register') mode = 'login';
+  });
+
   let submitting = $state(false);
 
-  const error = $derived(form?.error ?? null);
-  const formMode = $derived(form?.mode ?? mode);
-  const initialEmail = $derived(form?.email ?? '');
-  const initialUsername = $derived(form && 'username' in form ? form.username ?? '' : '');
-
-  const trust = [
-    { icon: Lock, label: 'Open source' },
-    { icon: Database, label: 'Self-hostable' },
-    { icon: Zap, label: 'No tracking' },
-    { icon: Sparkles, label: 'One file backup' }
+  const trustSignals = [
+    { icon: Lock, label: 'Private by design' },
+    { icon: Database, label: 'Choose where your data lives' },
+    { icon: BookmarkPlus, label: 'Save in one click' },
+    { icon: Users, label: 'People and companies' },
+    { icon: MessagesSquare, label: 'Log every interaction' },
+    { icon: FolderKanban, label: 'Projects and pipelines' },
+    { icon: Zap, label: 'Keyboard first' },
+    { icon: Sparkles, label: 'Smart enrichment' },
+    { icon: Download, label: 'Export your data' }
   ];
 </script>
 
-<section class="grid min-h-[calc(100vh-3.5rem)] grid-cols-1 md:grid-cols-2">
-  <aside class="hidden flex-col justify-between gap-12 border-r border-[var(--color-border)] bg-[var(--color-surface)] p-12 md:flex">
-    <a href="/" class="flex items-center gap-2 font-semibold tracking-tight">
-      <BrandMark size={24} />
-      <span>{APP_NAME}</span>
-    </a>
-    <ul class="flex flex-col gap-3">
-      {#each trust as t (t.label)}
-        <li class="flex items-center gap-3 text-sm text-[var(--color-muted)]">
-          <span class="flex h-8 w-8 items-center justify-center rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-bg)]">
-            <t.icon size={14} strokeWidth={2} />
-          </span>
-          <span>{t.label}</span>
-        </li>
-      {/each}
-    </ul>
-    <p class="text-xs text-[var(--color-subtle)]">A calmer CRM for the people you care about.</p>
-  </aside>
+<svelte:head>
+  <title>{mode === 'login' ? 'Sign in' : 'Create account'} — Heli</title>
+</svelte:head>
 
-  <div class="flex items-center justify-center p-8">
-    <div class="w-full max-w-sm">
-      <div class="mb-6 inline-flex rounded-[var(--radius-md)] border border-[var(--color-border)] p-1 text-sm">
-        <button
-          type="button"
-          class="rounded-[var(--radius-sm)] px-3 py-1 {mode === 'login' ? 'bg-[var(--color-surface)]' : 'text-[var(--color-muted)]'}"
-          onclick={() => (mode = 'login')}
-        >Sign in</button>
-        <button
-          type="button"
-          class="rounded-[var(--radius-sm)] px-3 py-1 {mode === 'register' ? 'bg-[var(--color-surface)]' : 'text-[var(--color-muted)]'}"
-          onclick={() => (mode = 'register')}
-          disabled={data.registrationDisabled}
-        >Sign up</button>
+<div class="auth-page">
+  <div class="split">
+    <!-- Left brand panel (desktop only) -->
+    <aside class="brand-panel">
+      <div class="brand-panel-inner">
+        <a href="/" class="panel-logo" aria-label="Heli home">
+          <span class="brand-mark lg" aria-hidden="true">🚁</span>
+          <span class="brand-text lg">heli</span>
+        </a>
+        <ul class="trust-signals">
+          {#each trustSignals as t}
+            <li>
+              <span class="trust-icon"><t.icon size={14} strokeWidth={2} /></span>
+              <span>{t.label}</span>
+            </li>
+          {/each}
+        </ul>
       </div>
+    </aside>
 
-      <h1 class="mb-6 text-2xl font-semibold tracking-tight">
-        {mode === 'login' ? 'Welcome back' : 'Create your account'}
-      </h1>
+    <!-- Right form panel -->
+    <main class="form-panel">
+      <!-- Mobile logo (hidden on desktop) -->
+      <a href="/" class="mobile-logo" aria-label="Heli home">
+        <span class="brand-mark" aria-hidden="true">🚁</span>
+        <span class="brand-text">heli</span>
+      </a>
 
-      {#if data.registrationDisabled && mode === 'register'}
-        <p class="mb-4 rounded-[var(--radius-sm)] border border-[var(--color-warning-border)] bg-[var(--color-warning-bg)] px-3 py-2 text-sm text-[var(--color-warning)]">
-          Registration is currently disabled on this instance.
-        </p>
+      <h1>{mode === 'login' ? 'Welcome back' : 'Create account'}</h1>
+      <p class="subtitle">
+        {mode === 'login' ? 'Sign in to your CRM' : 'Start tracking your network'}
+      </p>
+
+      {#if form?.error}
+        <div class="error-banner">{form.error}</div>
       {/if}
 
       <form
@@ -78,63 +88,342 @@
             submitting = false;
           };
         }}
-        class="flex flex-col gap-3"
       >
         <input type="hidden" name="next" value={data.next} />
+
         {#if mode === 'register'}
-          <label class="flex flex-col gap-1 text-sm">
-            <span class="text-[var(--color-muted)]">Username (optional)</span>
-            <input
-              name="username"
-              type="text"
-              autocomplete="username"
-              value={formMode === 'register' ? initialUsername : ''}
-              class="rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2"
-            />
-          </label>
+          <div class="field">
+            <label for="username">Username <span class="optional">(optional)</span></label>
+            <div class="input-prefix-wrap">
+              <span class="input-prefix">@</span>
+              <input
+                id="username"
+                name="username"
+                type="text"
+                placeholder="yourhandle"
+                autocomplete="username"
+                class="prefixed-input"
+              />
+            </div>
+          </div>
         {/if}
-        <label class="flex flex-col gap-1 text-sm">
-          <span class="text-[var(--color-muted)]">Email</span>
+
+        <div class="field">
+          <label for="email">Email</label>
           <input
+            id="email"
             name="email"
             type="email"
+            placeholder="you@example.com"
             required
             autocomplete="email"
-            value={formMode === mode ? initialEmail : ''}
-            class="rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2"
+            value={form?.email ?? ''}
           />
-        </label>
-        <label class="flex flex-col gap-1 text-sm">
-          <span class="text-[var(--color-muted)]">Password</span>
+        </div>
+
+        <div class="field">
+          <div class="label-row">
+            <label for="password">Password</label>
+            {#if mode === 'login'}
+              <a href="/auth/forgot-password" class="forgot-link">Forgot password?</a>
+            {/if}
+          </div>
           <input
+            id="password"
             name="password"
             type="password"
+            placeholder="••••••••"
             required
             minlength="8"
             maxlength="72"
             autocomplete={mode === 'login' ? 'current-password' : 'new-password'}
-            class="rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2"
           />
-        </label>
+        </div>
 
-        {#if error && formMode === mode}
-          <p class="rounded-[var(--radius-sm)] border border-[var(--color-danger-border)] bg-[var(--color-danger-bg)] px-3 py-2 text-sm text-[var(--color-danger)]">
-            {error}
-          </p>
-        {/if}
-
-        <button
-          type="submit"
-          disabled={submitting}
-          class="mt-1 rounded-[var(--radius-sm)] bg-[var(--color-accent)] px-3 py-2 text-sm font-medium text-[var(--color-accent-fg)] shadow-[var(--shadow-sm)] transition-colors hover:bg-[var(--color-accent-hover)] disabled:opacity-60"
-        >
+        <button type="submit" class="btn-primary" disabled={submitting}>
           {submitting ? 'Working…' : mode === 'login' ? 'Sign in' : 'Create account'}
         </button>
       </form>
 
-      <div class="mt-4 flex items-center justify-between text-xs text-[var(--color-muted)]">
-        <a href="/auth/forgot-password" class="hover:underline">Forgot password?</a>
-      </div>
-    </div>
+      {#if !data.registrationDisabled}
+        <p class="toggle">
+          {#if mode === 'login'}
+            No account? <button onclick={() => (mode = 'register')}>Create one</button>
+          {:else}
+            Already have an account? <button onclick={() => (mode = 'login')}>Sign in</button>
+          {/if}
+        </p>
+      {:else}
+        <p class="toggle">Registration is disabled on this instance.</p>
+      {/if}
+    </main>
   </div>
-</section>
+</div>
+
+<style>
+  .auth-page {
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    background: var(--color-bg);
+  }
+
+  .brand-mark {
+    font-size: 1.125rem;
+    line-height: 1;
+    flex-shrink: 0;
+  }
+
+  .brand-mark.lg {
+    font-size: 1.5rem;
+  }
+
+  .brand-text {
+    font-size: 1.0625rem;
+    font-weight: 700;
+    letter-spacing: -0.04em;
+  }
+
+  .brand-text.lg {
+    font-size: 1.375rem;
+  }
+
+  /* ── Split layout ── */
+  .split {
+    flex: 1;
+    display: flex;
+  }
+
+  /* ── Left brand panel ── */
+  .brand-panel {
+    width: 45%;
+    background: var(--color-surface);
+    border-right: 1px solid var(--color-border);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 3rem 2.5rem;
+  }
+
+  .brand-panel-inner {
+    max-width: 320px;
+  }
+
+  .panel-logo {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.625rem;
+    text-decoration: none;
+    color: var(--color-text);
+    margin-bottom: 2.5rem;
+  }
+
+  .trust-signals {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 0.625rem;
+  }
+
+  .trust-signals li {
+    display: flex;
+    align-items: center;
+    gap: 0.625rem;
+    font-size: 0.875rem;
+    color: var(--color-muted);
+  }
+
+  .trust-icon {
+    display: flex;
+    align-items: center;
+    color: var(--color-text);
+    flex-shrink: 0;
+  }
+
+  /* ── Right form panel ── */
+  .form-panel {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    padding: 3rem 2.5rem;
+    max-width: 440px;
+    margin: 0 auto;
+    width: 100%;
+  }
+
+  .mobile-logo {
+    display: none;
+    align-items: center;
+    gap: 0.5rem;
+    text-decoration: none;
+    color: var(--color-text);
+    margin-bottom: 1.75rem;
+  }
+
+  h1 {
+    font-size: 1.375rem;
+    font-weight: 600;
+    letter-spacing: -0.025em;
+    margin: 0 0 0.25rem;
+  }
+
+  .subtitle {
+    color: var(--color-muted);
+    font-size: 0.875rem;
+    margin: 0 0 1.75rem;
+  }
+
+  .error-banner {
+    background: var(--color-danger-bg);
+    border: 1px solid var(--color-danger-border);
+    color: var(--color-danger);
+    border-radius: var(--radius-md);
+    padding: 0.625rem 0.875rem;
+    font-size: 0.875rem;
+    margin-bottom: 1rem;
+  }
+
+  .field {
+    display: flex;
+    flex-direction: column;
+    gap: 0.375rem;
+    margin-bottom: 1rem;
+  }
+
+  label {
+    font-size: 0.8125rem;
+    font-weight: 500;
+    color: var(--color-text);
+  }
+
+  .optional {
+    font-weight: 400;
+    color: var(--color-muted);
+  }
+
+  .label-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+  }
+
+  .forgot-link {
+    font-size: 0.8125rem;
+    color: var(--color-muted);
+    text-decoration: none;
+    transition: color 0.15s;
+  }
+
+  .forgot-link:hover {
+    color: var(--color-text);
+  }
+
+  input[type='text'],
+  input[type='email'],
+  input[type='password'] {
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
+    padding: 0.5625rem 0.75rem;
+    font-size: 1rem;
+    font-family: inherit;
+    background: var(--color-bg);
+    color: var(--color-text);
+    transition: border-color 0.15s;
+    width: 100%;
+  }
+
+  input:focus {
+    outline: none;
+    border-color: var(--color-text);
+  }
+
+  input::placeholder {
+    color: var(--color-subtle);
+  }
+
+  /* @ prefix input */
+  .input-prefix-wrap {
+    display: flex;
+  }
+
+  .input-prefix {
+    font-size: 1rem;
+    color: var(--color-muted);
+    padding: 0.5625rem 0 0.5625rem 0.75rem;
+    background: var(--color-bg);
+    border: 1px solid var(--color-border);
+    border-right: none;
+    border-radius: var(--radius-md) 0 0 var(--radius-md);
+    line-height: 1;
+    user-select: none;
+  }
+
+  .prefixed-input {
+    border-radius: 0 var(--radius-md) var(--radius-md) 0 !important;
+  }
+
+  .btn-primary {
+    width: 100%;
+    background: var(--color-text);
+    color: var(--color-bg);
+    border: none;
+    border-radius: var(--radius-md);
+    padding: 0.625rem 1rem;
+    font-size: 0.9375rem;
+    font-weight: 500;
+    font-family: inherit;
+    cursor: pointer;
+    margin-top: 0.5rem;
+    transition: opacity 0.15s;
+  }
+
+  .btn-primary:hover {
+    opacity: 0.85;
+  }
+
+  .btn-primary:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+  }
+
+  .toggle {
+    text-align: center;
+    font-size: 0.875rem;
+    color: var(--color-muted);
+    margin: 1.25rem 0 0;
+  }
+
+  .toggle button {
+    background: none;
+    border: none;
+    color: var(--color-text);
+    font-weight: 500;
+    cursor: pointer;
+    font-family: inherit;
+    font-size: inherit;
+    text-decoration: underline;
+    text-underline-offset: 2px;
+  }
+
+  /* Mobile */
+  @media (max-width: 639px) {
+    .brand-panel {
+      display: none;
+    }
+
+    .mobile-logo {
+      display: inline-flex;
+    }
+
+    .split {
+      padding: 0 1.25rem;
+    }
+
+    .form-panel {
+      padding: 1.5rem 0 3rem;
+    }
+  }
+</style>
