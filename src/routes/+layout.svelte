@@ -1,14 +1,12 @@
 <script lang="ts">
   import '../app.css';
-  import { APP_NAME } from '$lib/branding';
   import Toaster from '$lib/components/Toaster.svelte';
   import SaveBar from '$lib/components/SaveBar.svelte';
   import CommandPalette from '$lib/components/CommandPalette.svelte';
   import ShortcutHelp from '$lib/components/ShortcutHelp.svelte';
   import RemindersPopover from '$lib/components/RemindersPopover.svelte';
-  import BrandMark from '$lib/components/BrandMark.svelte';
   import ThemeToggle from '$lib/components/ThemeToggle.svelte';
-  import { LayoutDashboard, Users, Building2, MessagesSquare, FolderKanban, FolderOpen, GitBranch, LogOut, Search, HelpCircle, Settings, Menu, X } from 'lucide-svelte';
+  import { LayoutDashboard, Users, Building2, MessagesSquare, Briefcase, Folder, Funnel, LogOut, Search, HelpCircle, Settings, Menu, X } from 'lucide-svelte';
   import { page } from '$app/state';
   import { onMount } from 'svelte';
   import { invalidateAll, goto } from '$app/navigation';
@@ -30,9 +28,9 @@
     { href: '/people', label: 'People', icon: Users },
     { href: '/companies', label: 'Companies', icon: Building2 },
     { href: '/interactions', label: 'Interactions', icon: MessagesSquare },
-    { href: '/projects', label: 'Projects', icon: FolderKanban },
-    { href: '/collections', label: 'Collections', icon: FolderOpen },
-    { href: '/pipelines', label: 'Pipelines', icon: GitBranch }
+    { href: '/collections', label: 'Collections', icon: Folder },
+    { href: '/pipelines', label: 'Pipelines', icon: Funnel },
+    { href: '/projects', label: 'Projects', icon: Briefcase }
   ];
 
   // Close the mobile drawer whenever the route changes (clicking a tab inside
@@ -145,10 +143,11 @@
   });
 </script>
 
-<div class="min-h-screen bg-[var(--color-bg)] text-[var(--color-text)]">
-  {#if user || (page.url.pathname !== '/' && !page.url.pathname.startsWith('/auth'))}
-  <header class="sticky top-0 z-30 flex h-14 items-center gap-3 border-b border-[var(--color-border)] bg-[color-mix(in_srgb,var(--color-bg)_88%,transparent)] px-4 backdrop-blur supports-[backdrop-filter]:bg-[color-mix(in_srgb,var(--color-bg)_72%,transparent)]">
-    {#if user}
+<div class="h-screen overflow-hidden bg-[var(--color-bg)] text-[var(--color-text)]">
+  {#if user}
+
+    <!-- Topbar: sticky, in flow, full width. Pushes everything below it down naturally. -->
+    <header class="sticky top-0 z-50 flex h-14 items-center gap-3 border-b border-[var(--color-border)] bg-[var(--color-bg)] px-4">
       <button
         type="button"
         onclick={() => (sidebarOpen = !sidebarOpen)}
@@ -158,21 +157,14 @@
       >
         {#if sidebarOpen}<X size={18} strokeWidth={2} />{:else}<Menu size={18} strokeWidth={2} />{/if}
       </button>
-    {/if}
-    <a href="/" class="flex shrink-0 items-center gap-2 text-[var(--color-text)]">
-      <BrandMark size={22} />
-      <span class="hidden text-sm font-semibold tracking-tight sm:inline">{APP_NAME}</span>
-    </a>
-    {#if user}
+      <a href="/" class="flex shrink-0 items-center gap-2 text-[var(--color-text)] md:ml-2.5">
+        <span class="text-lg leading-none" aria-hidden="true">🚁</span>
+        <span class="hidden text-xl font-bold tracking-[-0.04em] sm:inline">heli</span>
+      </a>
       <div class="min-w-0 flex-1">
         <SaveBar bind:this={saveBar} />
       </div>
-    {/if}
-    <div class="ml-auto flex items-center gap-0.5">
-      {#if !user}
-        <ThemeToggle />
-      {/if}
-      {#if user}
+      <div class="ml-auto flex items-center gap-0.5">
         <button
           type="button"
           onclick={() => (paletteOpen = true)}
@@ -209,18 +201,10 @@
             <LogOut size={14} strokeWidth={2} />
           </button>
         </form>
-      {:else}
-        <a
-          href="/auth"
-          class="rounded-[var(--radius-sm)] bg-[var(--color-accent)] px-3 py-1.5 text-sm font-medium text-[var(--color-accent-fg)] shadow-[var(--shadow-sm)] transition-colors hover:bg-[var(--color-accent-hover)]"
-        >Sign in</a>
-      {/if}
-    </div>
-  </header>
-  {/if}
+      </div>
+    </header>
 
-  {#if user}
-    <!-- Backdrop: only visible on mobile when the drawer is open. -->
+    <!-- Mobile backdrop -->
     {#if sidebarOpen}
       <button
         type="button"
@@ -230,39 +214,58 @@
       ></button>
     {/if}
 
-    <div class="flex w-full gap-6 py-6 md:pr-6">
-      <aside
-        class="fixed inset-y-0 left-0 top-14 z-40 w-64 shrink-0 transform border-r border-[var(--color-border)] bg-[var(--color-bg)] p-4 transition-transform duration-200 ease-out md:static md:top-0 md:w-48 md:shrink-0 md:border-r-0 md:bg-transparent md:py-0 md:pl-4 md:pr-0 md:translate-x-0 {sidebarOpen ? 'translate-x-0 shadow-[var(--shadow-lg)]' : '-translate-x-full md:transform-none'}"
-        aria-label="Primary navigation"
-      >
-        <nav class="flex flex-col gap-0.5">
-          {#each tabs as tab (tab.href)}
-            {@const active = tab.href === '/' ? page.url.pathname === '/' : page.url.pathname === tab.href || page.url.pathname.startsWith(tab.href + '/')}
-            <a
-              href={tab.href}
-              aria-current={active ? 'page' : undefined}
-              class="group relative flex items-center gap-2.5 rounded-[var(--radius-sm)] px-2.5 py-1.5 text-sm transition-colors {active
-                ? 'font-medium text-[var(--color-text)]'
-                : 'text-[var(--color-muted)] hover:bg-[var(--color-surface)] hover:text-[var(--color-text)]'}"
-            >
-              <span
-                aria-hidden="true"
-                class="absolute inset-y-1 left-0 w-0.5 rounded-full bg-[var(--color-accent)] transition-opacity {active ? 'opacity-100' : 'opacity-0'}"
-              ></span>
-              <tab.icon size={14} strokeWidth={active ? 2.25 : 2} class={active ? 'text-[var(--color-text)]' : 'text-[var(--color-subtle)] group-hover:text-[var(--color-muted)]'} />
-              <span>{tab.label}</span>
-            </a>
-          {/each}
-        </nav>
-        <div class="mt-4 border-t border-[var(--color-border)] pt-3">
-          <RemindersPopover items={reminders} />
-        </div>
-      </aside>
-      <main class="min-w-0 flex-1 px-4 md:px-0">{@render children()}</main>
-    </div>
+    <!-- Sidebar: fixed below topbar, never moves. On mobile it slides in as a drawer. -->
+    <aside
+      class="fixed bottom-0 left-0 top-14 z-40 w-64 transform border-r border-[var(--color-border)] bg-[var(--color-bg)] p-4 transition-transform duration-200 ease-out md:w-48 md:border-r-0 md:px-4 md:py-4 md:translate-x-0 {sidebarOpen ? 'translate-x-0 shadow-[var(--shadow-lg)]' : '-translate-x-full md:translate-x-0'}"
+      aria-label="Primary navigation"
+    >
+      <nav class="flex flex-col gap-0.5">
+        {#each tabs as tab (tab.href)}
+          {@const active = tab.href === '/' ? page.url.pathname === '/' : page.url.pathname === tab.href || page.url.pathname.startsWith(tab.href + '/')}
+          <a
+            href={tab.href}
+            aria-current={active ? 'page' : undefined}
+            class="group relative flex items-center gap-2.5 rounded-[var(--radius-sm)] px-2.5 py-1.5 text-sm transition-colors {active
+              ? 'font-medium text-[var(--color-text)]'
+              : 'text-[var(--color-muted)] hover:bg-[var(--color-surface)] hover:text-[var(--color-text)]'}"
+          >
+            <span
+              aria-hidden="true"
+              class="absolute inset-y-1 left-0 w-0.5 rounded-full bg-[var(--color-accent)] transition-opacity {active ? 'opacity-100' : 'opacity-0'}"
+            ></span>
+            <tab.icon size={14} strokeWidth={active ? 2.25 : 2} class={active ? 'text-[var(--color-text)]' : 'text-[var(--color-subtle)] group-hover:text-[var(--color-muted)]'} />
+            <span>{tab.label}</span>
+          </a>
+        {/each}
+      </nav>
+      <div class="mt-4 border-t border-[var(--color-border)] pt-3">
+        <RemindersPopover items={reminders} />
+      </div>
+    </aside>
+
+    <!-- Main: offset past the sidebar on desktop. Scrolls independently. -->
+    <main class="h-[calc(100vh-3.5rem)] overflow-y-auto px-4 py-6 md:ml-48 md:px-6 md:pr-8">
+      {@render children()}
+    </main>
+
   {:else if page.url.pathname === '/' || page.url.pathname.startsWith('/auth')}
     {@render children()}
+
   {:else}
+    <!-- Unauthenticated, non-landing pages: bare header + content -->
+    <header class="sticky top-0 z-50 flex h-14 items-center gap-3 border-b border-[var(--color-border)] bg-[var(--color-bg)] px-4">
+      <a href="/" class="flex shrink-0 items-center gap-2 text-[var(--color-text)]">
+        <span class="text-lg leading-none" aria-hidden="true">🚁</span>
+        <span class="hidden text-xl font-bold tracking-[-0.04em] sm:inline">heli</span>
+      </a>
+      <div class="ml-auto flex items-center gap-0.5">
+        <ThemeToggle />
+        <a
+          href="/auth"
+          class="rounded-[var(--radius-sm)] bg-[var(--color-accent)] px-3 py-1.5 text-sm font-medium text-[var(--color-accent-fg)] shadow-[var(--shadow-sm)] transition-colors hover:bg-[var(--color-accent-hover)]"
+        >Sign in</a>
+      </div>
+    </header>
     <main>{@render children()}</main>
   {/if}
 </div>
