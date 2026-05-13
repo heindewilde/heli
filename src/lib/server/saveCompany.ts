@@ -101,7 +101,7 @@ async function enrichCompany(id: string, userId: string, region: string, url: UR
 
     await d.update(companies).set(updates).where(and(eq(companies.id, id), eq(companies.userId, userId)));
   } catch (err) {
-    console.warn('[gusto] company enrichment failed:', (err as Error).message);
+    console.warn('[heli] company enrichment failed:', (err as Error).message);
     await d
       .update(companies)
       .set({ source: null, updatedAt: Date.now() })

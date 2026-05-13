@@ -1,10 +1,10 @@
-# Gusto
+# Heli
 
 ## Register
 product — design serves the product. This is a CRM app, not a marketing surface.
 
 ## Product Purpose
-Gusto is a calmer CRM for the people and companies you care about. Self-hosted-friendly, dependency-light, designed to feel like a quiet desk reference rather than a sales tool. The user pastes links (LinkedIn, X, GitHub, company sites, etc.); Gusto saves and enriches the entity in the background and shows it in a dense, keyboard-driven list.
+Heli is a calmer CRM for the people and companies you care about. Self-hosted-friendly, dependency-light, designed to feel like a quiet desk reference rather than a sales tool. The user pastes links (LinkedIn, X, GitHub, company sites, etc.); Heli saves and enriches the entity in the background and shows it in a dense, keyboard-driven list.
 
 ## Users
 Individual operators (founders, recruiters, investors, generalists) who maintain a personal network of people and companies. They live in the keyboard, value speed over chrome, and don't want a CRM that nags or upsells. They expect inline editing, fast filters, and tables that read clearly at a glance.

@@ -1,4 +1,4 @@
-# Gusto Design System
+# Heli Design System
 
 Single source: `src/app.css` (`@theme` block, light) + `[data-theme='dark']`.
 

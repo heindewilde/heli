@@ -36,7 +36,7 @@ function regionUrl(region: string): { url: string; authToken?: string } {
   const url =
     process.env[`DATABASE_URL_${upper}`] ||
     process.env.DATABASE_URL ||
-    `file:${process.env.DB_PATH ?? './data/gusto.db'}`;
+    `file:${process.env.DB_PATH ?? './data/heli.db'}`;
   const authToken = process.env[`DATABASE_AUTH_TOKEN_${upper}`] || process.env.DATABASE_AUTH_TOKEN;
   return { url, authToken };
 }

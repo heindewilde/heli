@@ -147,7 +147,7 @@ async function enrichPerson(id: string, userId: string, region: string, url: URL
     }
   } catch (err) {
     // Log enrichment errors in dev but don't throw — surface to user as "no enrichment yet".
-    console.warn('[gusto] person enrichment failed:', (err as Error).message);
+    console.warn('[heli] person enrichment failed:', (err as Error).message);
     await d
       .update(people)
       .set({ source: null, updatedAt: Date.now() })

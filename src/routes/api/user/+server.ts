@@ -27,7 +27,7 @@ function isAction(v: unknown): v is Action {
 export const POST: RequestHandler = async ({ request, locals, cookies }) => {
   if (!locals.user) throw error(401, 'unauthorized');
 
-  const sessionCookie = cookies.get('gusto_session');
+  const sessionCookie = cookies.get('heli_session');
   if (!sessionCookie) throw error(401, 'unauthorized');
 
   let body: Record<string, unknown>;

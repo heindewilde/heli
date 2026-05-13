@@ -250,7 +250,7 @@ export const GET: RequestHandler = async ({ url, locals }) => {
     });
   }
 
-  const filename = `gusto-${kind}-${new Date().toISOString().slice(0, 10)}.csv`;
+  const filename = `heli-${kind}-${new Date().toISOString().slice(0, 10)}.csv`;
   return new Response(stream, {
     status: 200,
     headers: {

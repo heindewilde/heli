@@ -1,4 +1,4 @@
-# Working on Gusto
+# Working on Heli
 
 The phased build spec is gone — work from what the user says in conversation, not from a written plan doc.
 
@@ -19,7 +19,7 @@ The phased build spec is gone — work from what the user says in conversation, 
 
 - **FTS5 triggers**: when adding/altering FTS5 virtual tables, mirror `ai/ad/au` triggers for every column listed in the `CREATE VIRTUAL TABLE` block. On migration, seed `INSERT INTO *_fts(rowid, …) SELECT …` so pre-existing rows are searchable.
 - **SSRF guard with redirects**: `fetch` follows redirects automatically; `assertPublicUrl` on the input URL is not enough. Use `redirect: 'manual'` and re-check `assertPublicUrl` on each `Location` header before re-fetching. Cap to a few hops. See `fetchWithRedirectGuard` in `src/lib/server/og.ts`.
-- **Bookmarklet** posts to `/api/save` with `credentials:'include'` — only works when invoked from same-origin (i.e. while on a Gusto tab) or when CORS is configured. Same-origin limitation is documented in Settings; do not loosen CORS for it.
+- **Bookmarklet** posts to `/api/save` with `credentials:'include'` — only works when invoked from same-origin (i.e. while on a Heli tab) or when CORS is configured. Same-origin limitation is documented in Settings; do not loosen CORS for it.
 - **Bootstrap escape hatch**: `DISABLE_REGISTRATION=1` must still allow registration when `users` table is empty.
 - **Janitor**: at startup, clear `source='parsing'` rows where `updatedAt < now-10min` — covers crashed enrichments mid-fetch.
 - **Sanitize on write**, not on read. Stored notes are already-sanitized HTML.
@@ -27,7 +27,7 @@ The phased build spec is gone — work from what the user says in conversation, 
 
 ## Naming
 
-- Brand strings live in `src/lib/branding.ts` only (`APP_NAME`, `APP_DOMAIN`, `APP_TAGLINE`, `BRAND_ACCENT`). Never hardcode "Gusto" elsewhere — the user accepted the payroll-company name collision but wants a single rename point.
+- Brand strings live in `src/lib/branding.ts` only (`APP_NAME`, `APP_DOMAIN`, `APP_TAGLINE`, `BRAND_ACCENT`). Never hardcode "Heli" elsewhere — keep a single rename point.
 
 ## graphify
 

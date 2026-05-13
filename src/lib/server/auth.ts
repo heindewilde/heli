@@ -264,4 +264,4 @@ export async function updateEmail(userId: string, region: string, newEmailRaw: s
   await primaryDb().insert(emailRouting).values({ email: newEmail, region });
 }
 
-export const SESSION_COOKIE = 'gusto_session';
+export const SESSION_COOKIE = 'heli_session';

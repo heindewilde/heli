@@ -11,7 +11,7 @@ export const actions: Actions = {
       const link = `${url.origin}/auth/reset-password/${token}`;
       // Phase 1: no SMTP yet. Surface the link in dev logs so flows are testable end-to-end.
       if (dev) {
-        console.log('\n[gusto] password reset link for', email, '\n  ', link, '\n');
+        console.log('\n[heli] password reset link for', email, '\n  ', link, '\n');
       }
     }
     return { sent: true };

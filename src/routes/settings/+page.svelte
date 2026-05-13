@@ -18,9 +18,9 @@
   let deletePwd = $state('');
   let saving = $state<null | string>(null);
 
-  // Bookmarklet: opens /save?url=… in a new tab on this Gusto instance.
+  // Bookmarklet: opens /save?url=… in a new tab on this Heli instance.
   // Same-origin /api/save requires the cookie, which arbitrary websites cannot
-  // send — so we navigate to Gusto where the cookie *is* present. The /save
+  // send — so we navigate to Heli where the cookie *is* present. The /save
   // route classifies and lands on the new entity page.
   const bookmarkletJs = $derived(
     `javascript:void(window.open('${data.origin}/save?url='+encodeURIComponent(location.href),'_blank'))`

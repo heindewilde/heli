@@ -4,7 +4,7 @@ import { assertPublicUrl, UrlError } from './url';
 const TIMEOUT_MS = 10_000;
 const MAX_BYTES = 2 * 1024 * 1024;
 const MAX_REDIRECTS = 5;
-const USER_AGENT = 'GustoBot/1.0 (+https://gusto.sh)';
+const USER_AGENT = 'HeliBot/1.0 (+https://heli.so)';
 
 export type OgData = {
   title?: string;

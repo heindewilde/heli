@@ -15,7 +15,7 @@ export const load: PageServerLoad = async ({ locals, url }) => {
   ]);
 
   // Build the bookmarklet against the request's origin so it points back at
-  // *this* deployment (localhost in dev, gusto.sh in prod, your-host.example
+  // *this* deployment (localhost in dev, heli.so in prod, your-host.example
   // when self-hosted). Document the same-origin caveat in the UI.
   const origin = url.origin;
 
