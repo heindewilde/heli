@@ -90,6 +90,11 @@
             return true;
           }
         }
+        const idx = parseInt(e.key) - 1;
+        if (idx >= 0 && idx < tabs.length) {
+          goto(tabs[idx].href);
+          return true;
+        }
       })
     );
 
@@ -147,21 +152,27 @@
   {#if user}
 
     <!-- Topbar: sticky, in flow, full width. Pushes everything below it down naturally. -->
-    <header class="sticky top-0 z-50 flex h-14 items-center gap-3 border-b border-[var(--color-border)] bg-[var(--color-bg)] px-4">
-      <button
-        type="button"
-        onclick={() => (sidebarOpen = !sidebarOpen)}
-        aria-label={sidebarOpen ? 'Close menu' : 'Open menu'}
-        aria-expanded={sidebarOpen}
-        class="-ml-1 inline-flex items-center justify-center rounded-[var(--radius-sm)] p-1.5 text-[var(--color-subtle)] hover:bg-[var(--color-surface)] md:hidden"
-      >
-        {#if sidebarOpen}<X size={18} strokeWidth={2} />{:else}<Menu size={18} strokeWidth={2} />{/if}
-      </button>
-      <a href="/" class="flex shrink-0 items-center gap-2 text-[var(--color-text)] md:ml-2.5">
-        <span class="text-lg leading-none" aria-hidden="true">🚁</span>
-        <span class="hidden text-xl font-bold tracking-[-0.04em] sm:inline">heli</span>
-      </a>
-      <div class="min-w-0 flex-1">
+    <!-- Header padding removed on desktop; each section handles its own padding
+         to structurally mirror the page layout (sidebar width + main padding). -->
+    <header class="sticky top-0 z-50 flex h-14 items-center border-b border-[var(--color-border)] bg-[var(--color-bg)] px-4 md:gap-0 md:px-0">
+      <!-- Logo: same width as sidebar (md:w-48), same left padding (md:pl-4) -->
+      <div class="flex shrink-0 items-center gap-2 md:w-48 md:shrink-0 md:pl-4">
+        <button
+          type="button"
+          onclick={() => (sidebarOpen = !sidebarOpen)}
+          aria-label={sidebarOpen ? 'Close menu' : 'Open menu'}
+          aria-expanded={sidebarOpen}
+          class="-ml-1 inline-flex items-center justify-center rounded-[var(--radius-sm)] p-1.5 text-[var(--color-subtle)] hover:bg-[var(--color-surface)] md:hidden"
+        >
+          {#if sidebarOpen}<X size={18} strokeWidth={2} />{:else}<Menu size={18} strokeWidth={2} />{/if}
+        </button>
+        <a href="/" class="flex shrink-0 items-center gap-2 text-[var(--color-text)]">
+          <span class="text-lg leading-none" aria-hidden="true">🚁</span>
+          <span class="hidden text-xl font-bold tracking-[-0.04em] sm:inline">heli</span>
+        </a>
+      </div>
+      <!-- SaveBar: same left padding as main content (md:pl-6) -->
+      <div class="min-w-0 flex-1 md:pl-6">
         <SaveBar bind:this={saveBar} />
       </div>
       <div class="ml-auto flex items-center gap-0.5">
