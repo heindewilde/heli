@@ -12,6 +12,15 @@
 
   let { data } = $props();
   const pipeline = $derived(data.pipeline);
+  const sync = $derived(data.sync);
+
+  async function disconnectSync() {
+    if (!sync) return;
+    const res = await fetch(`/api/collections/${sync.collectionId}/sync`, { method: 'DELETE' });
+    if (!res.ok) { toast.danger('Disconnect failed'); return; }
+    await invalidateAll();
+    toast.success('Sync disconnected');
+  }
 
   let editingName = $state(false);
   // svelte-ignore state_referenced_locally
@@ -204,6 +213,22 @@
       ><Trash2 size={16} strokeWidth={2} /></button>
     </div>
   </header>
+
+  {#if sync}
+    <div class="flex items-center gap-2 rounded-[var(--radius-sm)] border border-[var(--color-highlight-border)] bg-[var(--color-highlight-bg)] px-3 py-2 text-xs">
+      <GitBranch size={12} strokeWidth={2} class="shrink-0 text-[var(--color-muted)]" />
+      <span class="text-[var(--color-muted)]">
+        Synced with collection
+        <a href={`/collections/${sync.collectionId}`} class="font-medium text-[var(--color-text)] underline underline-offset-2 hover:opacity-80">{sync.collectionName}</a>
+        — members are mirrored automatically.
+      </span>
+      <button
+        type="button"
+        onclick={disconnectSync}
+        class="ml-auto shrink-0 text-[var(--color-subtle)] underline underline-offset-2 hover:text-[var(--color-danger)]"
+      >Disconnect</button>
+    </div>
+  {/if}
 
   {#if pipeline.description !== null && pipeline.description !== undefined || true}
     <div class="flex flex-col gap-2">

@@ -1,6 +1,7 @@
 import { fail, redirect, type Actions } from '@sveltejs/kit';
 import { createPipeline, isPipelineView, isStageKind, seedPipelineFromCollection } from '$lib/server/pipelines';
 import { getCollection } from '$lib/server/collections';
+import { createCollectionSync } from '$lib/server/sync';
 import type { PageServerLoad } from './$types';
 import type { PipelineView, StageKind } from '$lib/server/schema';
 
@@ -63,6 +64,9 @@ export const actions: Actions = {
     const fromCollectionId = String(data.get('fromCollectionId') ?? '').trim();
     if (fromCollectionId) {
       await seedPipelineFromCollection(locals.user.id, locals.user.region, id, fromCollectionId);
+      if (data.get('syncWithCollection') === '1') {
+        await createCollectionSync(locals.user.id, locals.user.region, fromCollectionId, id);
+      }
     }
 
     throw redirect(303, `/pipelines/${id}?just=1`);

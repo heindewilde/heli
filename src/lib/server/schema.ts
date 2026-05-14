@@ -443,6 +443,23 @@ export const pipelineItemEvents = sqliteTable(
   (t) => [index('idx_pipeline_item_events_item_at').on(t.itemId, t.at)]
 );
 
+export const collectionPipelineSync = sqliteTable(
+  'collection_pipeline_syncs',
+  {
+    collectionId: text('collection_id')
+      .primaryKey()
+      .references(() => collections.id, { onDelete: 'cascade' }),
+    pipelineId: text('pipeline_id')
+      .notNull()
+      .references(() => pipelines.id, { onDelete: 'cascade' }),
+    userId: text('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    createdAt: integer('created_at').notNull()
+  },
+  (t) => [index('idx_cps_pipeline').on(t.pipelineId)]
+);
+
 export type User = typeof users.$inferSelect;
 export type Session = typeof sessions.$inferSelect;
 export type Person = typeof people.$inferSelect;

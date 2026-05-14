@@ -10,6 +10,14 @@
 
   let { data } = $props();
   const collection = $derived(data.collection);
+  const sync = $derived(data.sync);
+
+  async function disconnectSync() {
+    const res = await fetch(`/api/collections/${collection.id}/sync`, { method: 'DELETE' });
+    if (!res.ok) { toast.danger('Disconnect failed'); return; }
+    await invalidateAll();
+    toast.success('Sync disconnected');
+  }
 
   let editingName = $state(false);
   // svelte-ignore state_referenced_locally
@@ -272,9 +280,27 @@
     </section>
 
     <aside class="flex flex-col gap-3">
-      <div class="rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)] p-3 text-xs text-[var(--color-muted)]">
-        <p>Collections are a lightweight grouping concept. They don't replace tags, projects, or pipelines — they're just an ad-hoc way to keep related people and companies side-by-side.</p>
-      </div>
+      {#if sync}
+        <div class="rounded-[var(--radius-md)] border border-[var(--color-highlight-border)] bg-[var(--color-highlight-bg)] p-3 text-xs">
+          <div class="flex items-center gap-1.5 font-medium text-[var(--color-text)]">
+            <GitBranch size={12} strokeWidth={2} />
+            Synced with pipeline
+          </div>
+          <p class="mt-1 text-[var(--color-muted)]">
+            <a href={`/pipelines/${sync.pipelineId}`} class="underline underline-offset-2 hover:text-[var(--color-text)]">{sync.pipelineName}</a>
+            — members added or removed on either side are mirrored automatically.
+          </p>
+          <button
+            type="button"
+            onclick={disconnectSync}
+            class="mt-2 text-[var(--color-subtle)] underline underline-offset-2 hover:text-[var(--color-danger)]"
+          >Disconnect sync</button>
+        </div>
+      {:else}
+        <div class="rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)] p-3 text-xs text-[var(--color-muted)]">
+          <p>Collections are a lightweight grouping concept. They don't replace tags, projects, or pipelines — they're just an ad-hoc way to keep related people and companies side-by-side.</p>
+        </div>
+      {/if}
     </aside>
   </div>
 </article>

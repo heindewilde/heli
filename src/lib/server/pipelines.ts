@@ -710,6 +710,43 @@ export async function updatePipelineItem(
     .where(eq(pipelines.id, pipelineId));
 }
 
+export async function getPipelineItemRef(
+  userId: string,
+  region: string,
+  pipelineId: string,
+  itemId: string
+): Promise<{ kind: MemberKind; refId: string } | null> {
+  const d = db(region);
+  if (!(await ensurePipelineOwned(d, userId, pipelineId))) return null;
+  const row = await d
+    .select({ kind: pipelineItems.kind, refId: pipelineItems.refId })
+    .from(pipelineItems)
+    .where(and(eq(pipelineItems.id, itemId), eq(pipelineItems.pipelineId, pipelineId)))
+    .get();
+  return row ? { kind: row.kind as MemberKind, refId: row.refId } : null;
+}
+
+export async function removePipelineItemByRef(
+  userId: string,
+  region: string,
+  pipelineId: string,
+  kind: MemberKind,
+  refId: string
+): Promise<void> {
+  const d = db(region);
+  if (!(await ensurePipelineOwned(d, userId, pipelineId))) return;
+  await d
+    .delete(pipelineItems)
+    .where(
+      and(
+        eq(pipelineItems.pipelineId, pipelineId),
+        eq(pipelineItems.kind, kind),
+        eq(pipelineItems.refId, refId)
+      )
+    );
+  await d.update(pipelines).set({ updatedAt: Date.now() }).where(eq(pipelines.id, pipelineId));
+}
+
 export async function removePipelineItem(
   userId: string,
   region: string,
