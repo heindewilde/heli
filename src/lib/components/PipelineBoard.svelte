@@ -16,6 +16,41 @@
 
   let dragItemId = $state<string | null>(null);
   let dragOverStage = $state<string | null>(null);
+  let scrollEl = $state<HTMLElement | undefined>(undefined);
+
+  // Edge-scroll state — plain vars so the RAF closure always reads the latest value
+  let _rafId: number | null = null;
+  let _scrollSpeed = 0;
+
+  function updateEdgeScroll(e: DragEvent) {
+    if (!scrollEl) return;
+    const { left, right } = scrollEl.getBoundingClientRect();
+    const ZONE = 80;
+    const MAX = 14;
+    const x = e.clientX;
+    if (x - left < ZONE) {
+      _scrollSpeed = -MAX * (1 - (x - left) / ZONE);
+    } else if (right - x < ZONE) {
+      _scrollSpeed = MAX * (1 - (right - x) / ZONE);
+    } else {
+      _scrollSpeed = 0;
+    }
+    if (_scrollSpeed !== 0 && _rafId === null) {
+      const tick = () => {
+        _rafId = null;
+        if (_scrollSpeed !== 0 && scrollEl) {
+          scrollEl.scrollLeft += _scrollSpeed;
+          _rafId = requestAnimationFrame(tick);
+        }
+      };
+      _rafId = requestAnimationFrame(tick);
+    }
+  }
+
+  function stopEdgeScroll() {
+    _scrollSpeed = 0;
+    if (_rafId !== null) { cancelAnimationFrame(_rafId); _rafId = null; }
+  }
 
   const stages = $derived(pipeline.stages);
   const visibleStages = $derived(stages);
@@ -48,6 +83,7 @@
   function onDragEnd() {
     dragItemId = null;
     dragOverStage = null;
+    stopEdgeScroll();
   }
   function onDragOver(e: DragEvent, stageId: string) {
     e.preventDefault();
@@ -78,7 +114,7 @@
 </script>
 
 <div class="flex flex-col gap-2">
-  <div class="flex gap-3 overflow-x-auto pb-2">
+  <div bind:this={scrollEl} class="flex gap-3 overflow-x-auto pb-2" ondragover={updateEdgeScroll}>
     {#each visibleStages as stage (stage.id)}
       {@const items = itemsByStage.get(stage.id) ?? []}
       {@const hot = dragOverStage === stage.id}
