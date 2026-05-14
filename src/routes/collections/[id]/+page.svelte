@@ -1,6 +1,6 @@
 <script lang="ts">
   import { goto, invalidateAll } from '$app/navigation';
-  import { Trash2, Archive, X, FolderOpen } from 'lucide-svelte';
+  import { Trash2, Archive, X, FolderOpen, GitBranch } from 'lucide-svelte';
   import { COLLECTION_ICON_MAP } from '$lib/collectionIcons';
   import CompanyLogo from '$lib/components/CompanyLogo.svelte';
   import PersonPicker from '$lib/components/PersonPicker.svelte';
@@ -159,6 +159,11 @@
       </p>
     </div>
     <div class="flex items-center gap-1">
+      <a
+        href={`/pipelines/new?fromCollection=${collection.id}`}
+        title="Create pipeline from this collection"
+        class="rounded-[var(--radius-sm)] p-2 text-[var(--color-subtle)] hover:bg-[var(--color-surface)]"
+      ><GitBranch size={16} strokeWidth={2} /></a>
       <button
         type="button"
         title={collection.isArchived ? 'Unarchive' : 'Archive'}

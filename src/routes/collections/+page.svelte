@@ -167,6 +167,7 @@
             companyCount={c.companyCount}
             onArchive={() => archive(c.id, c.name, c.isArchived)}
             onDelete={() => del(c.id, c.name)}
+            onCreatePipeline={() => goto(`/pipelines/new?fromCollection=${c.id}`)}
           />
         </li>
       {/each}

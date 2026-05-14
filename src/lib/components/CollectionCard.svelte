@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { Trash2, Archive, FolderOpen, Users, Building2 } from 'lucide-svelte';
+  import { Trash2, Archive, FolderOpen, Users, Building2, GitBranch } from 'lucide-svelte';
   import { COLLECTION_ICON_MAP } from '$lib/collectionIcons';
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   type AnyIcon = any;
@@ -14,6 +14,7 @@
     companyCount: number;
     onArchive?: () => void;
     onDelete?: () => void;
+    onCreatePipeline?: () => void;
   };
 
   let {
@@ -25,7 +26,8 @@
     peopleCount,
     companyCount,
     onArchive,
-    onDelete
+    onDelete,
+    onCreatePipeline
   }: Props = $props();
 
   const IconComponent = $derived(icon ? COLLECTION_ICON_MAP[icon] ?? null : null);
@@ -38,6 +40,16 @@
 >
   <!-- Action buttons top-right -->
   <span class="absolute right-2 top-2 flex items-center gap-0.5 opacity-0 transition-opacity group-hover:opacity-100">
+    {#if onCreatePipeline}
+      <button
+        type="button"
+        title="Create pipeline from this collection"
+        onclick={(e) => { e.preventDefault(); onCreatePipeline?.(); }}
+        class="rounded-[var(--radius-sm)] p-1.5 text-[var(--color-subtle)] hover:bg-[var(--color-bg)] hover:text-[var(--color-muted)]"
+      >
+        <GitBranch size={13} strokeWidth={2} />
+      </button>
+    {/if}
     {#if onArchive}
       <button
         type="button"

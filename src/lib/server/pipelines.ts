@@ -8,6 +8,8 @@ import {
   pipelineItemEvents,
   people,
   companies,
+  collections,
+  collectionItems,
   STAGE_KINDS,
   PIPELINE_VIEWS,
   type Pipeline,
@@ -801,4 +803,71 @@ export async function searchPipelines(
     LIMIT ${limit}
   `);
   return rows.map((r) => ({ ...r, isArchived: Number(r.isArchived ?? 0) }));
+}
+
+export async function seedPipelineFromCollection(
+  userId: string,
+  region: string,
+  pipelineId: string,
+  collectionId: string
+): Promise<{ added: number }> {
+  const d = db(region);
+
+  const coll = await d
+    .select({ id: collections.id })
+    .from(collections)
+    .where(and(eq(collections.id, collectionId), eq(collections.userId, userId)))
+    .get();
+  if (!coll) return { added: 0 };
+
+  const firstStage =
+    (await d
+      .select({ id: pipelineStages.id })
+      .from(pipelineStages)
+      .where(and(eq(pipelineStages.pipelineId, pipelineId), eq(pipelineStages.kind, 'open')))
+      .orderBy(asc(pipelineStages.position))
+      .limit(1)
+      .get()) ??
+    (await d
+      .select({ id: pipelineStages.id })
+      .from(pipelineStages)
+      .where(eq(pipelineStages.pipelineId, pipelineId))
+      .orderBy(asc(pipelineStages.position))
+      .limit(1)
+      .get());
+  if (!firstStage) return { added: 0 };
+
+  const members = await d
+    .select({ kind: collectionItems.kind, refId: collectionItems.refId })
+    .from(collectionItems)
+    .where(eq(collectionItems.collectionId, collectionId));
+
+  if (members.length === 0) return { added: 0 };
+
+  const now = Date.now();
+  for (const m of members) {
+    if (m.kind !== 'person' && m.kind !== 'company') continue;
+    const id = createId();
+    await d.insert(pipelineItems).values({
+      id,
+      pipelineId,
+      kind: m.kind,
+      refId: m.refId,
+      stageId: firstStage.id,
+      enteredStageAt: now,
+      createdAt: now,
+      updatedAt: now
+    });
+    await d.insert(pipelineItemEvents).values({
+      id: createId(),
+      itemId: id,
+      fromStageId: null,
+      toStageId: firstStage.id,
+      at: now,
+      byUserId: userId
+    });
+  }
+
+  await d.update(pipelines).set({ updatedAt: now }).where(eq(pipelines.id, pipelineId));
+  return { added: members.length };
 }

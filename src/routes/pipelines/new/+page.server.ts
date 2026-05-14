@@ -1,6 +1,25 @@
 import { fail, redirect, type Actions } from '@sveltejs/kit';
-import { createPipeline, isPipelineView, isStageKind } from '$lib/server/pipelines';
+import { createPipeline, isPipelineView, isStageKind, seedPipelineFromCollection } from '$lib/server/pipelines';
+import { getCollection } from '$lib/server/collections';
+import type { PageServerLoad } from './$types';
 import type { PipelineView, StageKind } from '$lib/server/schema';
+
+export const load: PageServerLoad = async ({ locals, url }) => {
+  const collectionId = url.searchParams.get('fromCollection');
+  if (!collectionId || !locals.user) return { fromCollection: null };
+  const collection = await getCollection(locals.user.id, locals.user.region, collectionId);
+  if (!collection) return { fromCollection: null };
+  const peopleCount = collection.members.filter((m) => m.kind === 'person').length;
+  const companyCount = collection.members.filter((m) => m.kind === 'company').length;
+  return {
+    fromCollection: {
+      id: collection.id,
+      name: collection.name,
+      peopleCount,
+      companyCount
+    }
+  };
+};
 
 export const actions: Actions = {
   default: async ({ request, locals }) => {
@@ -12,8 +31,6 @@ export const actions: Actions = {
     const viewRaw = String(data.get('defaultView') ?? 'kanban');
     const defaultView: PipelineView = isPipelineView(viewRaw) ? viewRaw : 'kanban';
 
-    // Stage names + kinds come in as parallel CSV strings. If empty, the
-    // server falls back to its default 4-stage scaffold.
     const stageNames = String(data.get('stageNames') ?? '')
       .split('|')
       .map((s) => s.trim())
@@ -41,6 +58,11 @@ export const actions: Actions = {
       id = result.id;
     } catch (err) {
       return fail(400, { error: (err as Error).message });
+    }
+
+    const fromCollectionId = String(data.get('fromCollectionId') ?? '').trim();
+    if (fromCollectionId) {
+      await seedPipelineFromCollection(locals.user.id, locals.user.region, id, fromCollectionId);
     }
 
     throw redirect(303, `/pipelines/${id}?just=1`);
