@@ -3,6 +3,7 @@ import type { PageServerLoad } from './$types';
 import { db } from '$lib/server/db';
 import { eq, sql } from 'drizzle-orm';
 import { people, companies, interactions } from '$lib/server/schema';
+import { isEmailConfigured } from '$lib/server/email';
 
 export const load: PageServerLoad = async ({ locals, url }) => {
   if (!locals.user) throw redirect(303, '/auth?next=/settings');
@@ -26,6 +27,7 @@ export const load: PageServerLoad = async ({ locals, url }) => {
       companies: Number(c?.n ?? 0),
       interactions: Number(i?.n ?? 0)
     },
-    origin
+    origin,
+    emailConfigured: isEmailConfigured()
   };
 };

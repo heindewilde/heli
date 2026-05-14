@@ -155,6 +155,13 @@
     <p class="text-sm text-[var(--color-muted)]">Account, capture surfaces, exports, and danger zone.</p>
   </header>
 
+  {#if !data.emailConfigured}
+    <div class="flex items-start gap-3 rounded-[var(--radius-md)] border border-[var(--color-warning-border)] bg-[var(--color-warning-bg)] px-4 py-3 text-sm text-[var(--color-warning)]">
+      <Mail size={15} strokeWidth={2} class="mt-0.5 shrink-0" />
+      <span>Email is not configured — password reset links will only appear in server logs. Set <code class="font-mono text-xs">RESEND_API_KEY</code> in your environment to enable email delivery.</span>
+    </div>
+  {/if}
+
   <section class="flex flex-col gap-3 rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)] p-5">
     <h2 class="flex items-center gap-2 text-sm font-medium"><Bookmark size={14} strokeWidth={2} /> Bookmarklet</h2>
     <p class="text-sm text-[var(--color-muted)]">
