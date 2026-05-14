@@ -256,10 +256,11 @@ export type ManualPipelineInput = {
 };
 
 const DEFAULT_STAGES: { name: string; color: string }[] = [
-  { name: 'Backlog',     color: 'gray' },
-  { name: 'In progress', color: 'sky' },
-  { name: 'Won',         color: 'green' },
-  { name: 'Lost',        color: 'red' },
+  { name: 'Backlog',              color: 'gray' },
+  { name: 'In progress',          color: 'sky' },
+  { name: 'Waiting for response', color: 'yellow' },
+  { name: 'Won',                  color: 'green' },
+  { name: 'Lost',                 color: 'red' },
 ];
 
 export async function createPipeline(

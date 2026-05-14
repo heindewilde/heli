@@ -9,10 +9,11 @@
   type StageDraft = { name: string; color: StageColor };
 
   let stages = $state<StageDraft[]>([
-    { name: 'Backlog',     color: 'gray' },
-    { name: 'In progress', color: 'sky' },
-    { name: 'Won',         color: 'green' },
-    { name: 'Lost',        color: 'red' }
+    { name: 'Backlog',              color: 'gray' },
+    { name: 'In progress',          color: 'sky' },
+    { name: 'Waiting for response', color: 'yellow' },
+    { name: 'Won',                  color: 'green' },
+    { name: 'Lost',                 color: 'red' }
   ]);
   let newStageName = $state('');
   let newStageColor = $state<StageColor>('gray');
