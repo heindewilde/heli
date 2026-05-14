@@ -83,7 +83,7 @@
           The collection itself will remain unchanged.
         </p>
       </div>
-      <div class="rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2.5 text-sm">
+      <div class="rounded-[var(--radius-sm)] border border-[var(--color-highlight-border)] bg-[var(--color-highlight-bg)] px-3 py-2.5 text-sm">
         <label class="inline-flex cursor-pointer items-center gap-2">
           <input type="checkbox" name="syncWithCollection" value="1" class="rounded-[var(--radius-sm)]" />
           <span class="text-[var(--color-text)]">Keep in sync</span>
