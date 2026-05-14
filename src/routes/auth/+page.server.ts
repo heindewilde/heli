@@ -4,6 +4,7 @@ import { register, login, AuthError } from '$lib/server/auth';
 import { isFirstUser } from '$lib/server/auth';
 import { setSessionCookie } from '$lib/server/cookies';
 import { checkRateLimit, LIMITS, RateLimitError } from '$lib/server/rate-limit';
+import { isMultiRegion, isValidRegion } from '$lib/server/db';
 
 function safeNext(raw: string | null): string {
   // Only allow same-origin absolute paths so a poisoned `?next=` can't
@@ -19,7 +20,8 @@ export const load: PageServerLoad = async ({ locals, url }) => {
   return {
     mode: url.searchParams.get('mode') === 'register' ? 'register' : 'login',
     next,
-    registrationDisabled: process.env.DISABLE_REGISTRATION === '1' && !(await isFirstUser())
+    registrationDisabled: process.env.DISABLE_REGISTRATION === '1' && !(await isFirstUser()),
+    multiRegion: isMultiRegion()
   };
 };
 
@@ -50,15 +52,22 @@ export const actions: Actions = {
     const email = String(data.get('email') ?? '');
     const password = String(data.get('password') ?? '');
     const username = String(data.get('username') ?? '') || null;
+    const regionRaw = data.get('region');
     const next = safeNext(String(data.get('next') ?? '') || url.searchParams.get('next'));
 
     if (process.env.DISABLE_REGISTRATION === '1' && !(await isFirstUser())) {
       return fail(403, { mode: 'register', email, username, error: 'Registration is disabled.' });
     }
 
+    const multiRegion = isMultiRegion();
+    const region = isValidRegion(regionRaw) ? regionRaw : (multiRegion ? null : 'eu');
+    if (!region) {
+      return fail(400, { mode: 'register', email, username, error: 'Please select a data region.' });
+    }
+
     try {
       checkRateLimit(LIMITS.register, getClientAddress());
-      const result = await register({ email, password, username });
+      const result = await register({ email, password, username, region });
       setSessionCookie(cookies, result.sessionId);
     } catch (err) {
       if (err instanceof RateLimitError) {

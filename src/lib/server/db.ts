@@ -6,6 +6,18 @@ import * as schema from './schema';
 
 export type DB = LibSQLDatabase<typeof schema>;
 
+export type Region = 'eu' | 'us' | 'apac';
+export const REGIONS: Region[] = ['eu', 'us', 'apac'];
+export const REGION_LABELS: Record<Region, string> = {
+  eu: 'Europe',
+  us: 'United States',
+  apac: 'Asia Pacific'
+};
+
+export function isValidRegion(value: unknown): value is Region {
+  return typeof value === 'string' && (REGIONS as string[]).includes(value);
+}
+
 type Bundle = { client: Client; db: DB; isFile: boolean };
 
 const cache = new Map<string, Bundle>();
@@ -39,6 +51,11 @@ function regionUrl(region: string): { url: string; authToken?: string } {
     `file:${process.env.DB_PATH ?? './data/heli.db'}`;
   const authToken = process.env[`DATABASE_AUTH_TOKEN_${upper}`] || process.env.DATABASE_AUTH_TOKEN;
   return { url, authToken };
+}
+
+export function isMultiRegion(): boolean {
+  const euUrl = regionUrl('eu').url;
+  return euUrl !== regionUrl('us').url || euUrl !== regionUrl('apac').url;
 }
 
 function buildBundle(url: string, authToken: string | undefined): Bundle {

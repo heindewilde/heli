@@ -23,6 +23,13 @@
   });
 
   let submitting = $state(false);
+  let selectedRegion = $state('eu');
+
+  const regionButtons = [
+    { value: 'eu', emoji: '🇪🇺', label: 'EU' },
+    { value: 'us', emoji: '🇺🇸', label: 'US' },
+    { value: 'apac', emoji: '🇯🇵', label: 'APAC' }
+  ];
 
   const trustSignals = [
     { icon: Lock, label: 'Private by design' },
@@ -106,6 +113,27 @@
               />
             </div>
           </div>
+
+          {#if data.multiRegion}
+            <div class="field">
+              <label>Data region</label>
+              <input type="hidden" name="region" value={selectedRegion} />
+              <div class="region-group">
+                {#each regionButtons as r}
+                  <button
+                    type="button"
+                    class="region-btn"
+                    class:active={selectedRegion === r.value}
+                    onclick={() => (selectedRegion = r.value)}
+                  >
+                    <span>{r.emoji}</span>
+                    <span>{r.label}</span>
+                  </button>
+                {/each}
+              </div>
+              <p class="field-hint">Your data is stored in this region. Cannot be changed later.</p>
+            </div>
+          {/if}
         {/if}
 
         <div class="field">
@@ -363,6 +391,52 @@
 
   .prefixed-input {
     border-radius: 0 var(--radius-md) var(--radius-md) 0 !important;
+  }
+
+  /* Region picker */
+  .region-group {
+    display: flex;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
+    overflow: hidden;
+  }
+
+  .region-btn {
+    flex: 1;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.375rem;
+    padding: 0.5rem;
+    font-size: 0.875rem;
+    font-family: inherit;
+    font-weight: 500;
+    background: var(--color-bg);
+    color: var(--color-muted);
+    border: none;
+    border-right: 1px solid var(--color-border);
+    cursor: pointer;
+    transition: background 0.15s, color 0.15s;
+  }
+
+  .region-btn:last-child {
+    border-right: none;
+  }
+
+  .region-btn.active {
+    background: var(--color-text);
+    color: var(--color-bg);
+  }
+
+  .region-btn:not(.active):hover {
+    background: var(--color-surface);
+    color: var(--color-text);
+  }
+
+  .field-hint {
+    font-size: 0.75rem;
+    color: var(--color-muted);
+    margin: 0.25rem 0 0;
   }
 
   .btn-primary {
