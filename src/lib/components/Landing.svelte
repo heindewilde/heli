@@ -472,19 +472,32 @@
     gap: 0.4rem;
     padding: 0.375rem 0.75rem;
     border-radius: 999px;
-    border: 1px solid var(--color-border);
-    background: var(--color-surface);
+    border: 1px solid rgba(255, 255, 255, 0.55);
+    background: rgba(255, 255, 255, 0.5);
+    backdrop-filter: blur(14px);
+    -webkit-backdrop-filter: blur(14px);
     color: var(--color-muted);
     font-size: 0.75rem;
     font-weight: 500;
     letter-spacing: -0.005em;
     text-decoration: none;
-    transition: border-color 0.15s, color 0.15s;
+    transition: background 0.15s, border-color 0.15s, color 0.15s;
   }
 
   .eyebrow:hover {
-    border-color: var(--color-border-strong);
+    background: rgba(255, 255, 255, 0.7);
+    border-color: rgba(255, 255, 255, 0.75);
     color: var(--color-text);
+  }
+
+  :global([data-theme='dark']) .eyebrow {
+    background: rgba(20, 32, 50, 0.45);
+    border-color: rgba(255, 255, 255, 0.08);
+  }
+
+  :global([data-theme='dark']) .eyebrow:hover {
+    background: rgba(20, 32, 50, 0.6);
+    border-color: rgba(255, 255, 255, 0.16);
   }
 
   h1 {
@@ -544,19 +557,24 @@
   .features-grid {
     display: grid;
     grid-template-columns: repeat(3, minmax(0, 1fr));
-    gap: 1px;
-    background: var(--color-border);
-    border: 1px solid var(--color-border);
-    border-radius: var(--radius-lg);
-    overflow: hidden;
+    gap: 0.75rem;
   }
 
   .feature {
-    background: var(--color-surface);
+    background: rgba(255, 255, 255, 0.5);
+    backdrop-filter: blur(14px);
+    -webkit-backdrop-filter: blur(14px);
+    border: 1px solid rgba(255, 255, 255, 0.55);
+    border-radius: var(--radius-lg);
     padding: 1.5rem 1.5rem 1.75rem;
     display: flex;
     flex-direction: column;
     gap: 0.5rem;
+  }
+
+  :global([data-theme='dark']) .feature {
+    background: rgba(20, 32, 50, 0.45);
+    border-color: rgba(255, 255, 255, 0.08);
   }
 
   .feature-icon {
@@ -566,10 +584,15 @@
     width: 1.875rem;
     height: 1.875rem;
     border-radius: var(--radius-sm);
-    background: var(--color-bg);
-    border: 1px solid var(--color-border);
+    background: rgba(255, 255, 255, 0.45);
+    border: 1px solid rgba(255, 255, 255, 0.6);
     color: var(--color-text);
     margin-bottom: 0.375rem;
+  }
+
+  :global([data-theme='dark']) .feature-icon {
+    background: rgba(255, 255, 255, 0.04);
+    border-color: rgba(255, 255, 255, 0.08);
   }
 
   .feature h3 {
