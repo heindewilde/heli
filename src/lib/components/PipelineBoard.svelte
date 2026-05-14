@@ -1,6 +1,6 @@
 <script lang="ts">
   import { invalidateAll } from '$app/navigation';
-  import { Eye, EyeOff } from 'lucide-svelte';
+
   import PipelineItemCard from './PipelineItemCard.svelte';
   import { toast } from '$lib/toasts.svelte';
   import type { PipelineDetail, PipelineItemRow } from '$lib/server/pipelines';
@@ -14,14 +14,11 @@
 
   let { pipeline, onRemoveItem }: Props = $props();
 
-  let showTerminal = $state(false);
   let dragItemId = $state<string | null>(null);
   let dragOverStage = $state<string | null>(null);
 
   const stages = $derived(pipeline.stages);
-  const visibleStages = $derived(
-    showTerminal ? stages : stages.filter((s) => s.kind === 'open')
-  );
+  const visibleStages = $derived(stages);
   const itemsByStage = $derived.by(() => {
     const map = new Map<string, PipelineItemRow[]>();
     for (const s of stages) map.set(s.id, []);
@@ -81,20 +78,6 @@
 </script>
 
 <div class="flex flex-col gap-2">
-  <div class="flex items-center justify-end">
-    <button
-      type="button"
-      onclick={() => (showTerminal = !showTerminal)}
-      class="inline-flex items-center gap-1 rounded-[var(--radius-sm)] border border-[var(--color-border)] px-2 py-1 text-xs text-[var(--color-muted)] hover:bg-[var(--color-surface)]"
-    >
-      {#if showTerminal}
-        <EyeOff size={12} strokeWidth={2} /> Hide won/lost
-      {:else}
-        <Eye size={12} strokeWidth={2} /> Show won/lost
-      {/if}
-    </button>
-  </div>
-
   <div class="flex gap-3 overflow-x-auto pb-2">
     {#each visibleStages as stage (stage.id)}
       {@const items = itemsByStage.get(stage.id) ?? []}
