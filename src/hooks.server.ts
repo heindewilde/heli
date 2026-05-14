@@ -1,8 +1,9 @@
-import { redirect, type Handle } from '@sveltejs/kit';
+import { redirect, error, type Handle } from '@sveltejs/kit';
 import { dev } from '$app/environment';
 import { initDb } from '$lib/server/db';
 import { migrate } from '$lib/server/migrate';
 import { validateSession, SESSION_COOKIE } from '$lib/server/auth';
+import { checkRateLimit, LIMITS, RateLimitError } from '$lib/server/rate-limit';
 
 const ready = (async () => {
   await initDb();
@@ -49,6 +50,16 @@ export const handle: Handle = async ({ event, resolve }) => {
     if (PROTECTED_PATTERNS.some((p) => p.test(path))) {
       const next = path + event.url.search;
       throw redirect(303, `/auth?next=${encodeURIComponent(next)}`);
+    }
+  }
+
+  // Broad per-user rate limit on authenticated API calls.
+  if (event.locals.user && event.url.pathname.startsWith('/api/')) {
+    try {
+      checkRateLimit(LIMITS.api, event.locals.user.id);
+    } catch (err) {
+      if (err instanceof RateLimitError) throw error(429, 'rate_limited');
+      throw err;
     }
   }
 
