@@ -1,6 +1,6 @@
 <script lang="ts">
   import { goto, invalidateAll } from '$app/navigation';
-  import { Trash2, Archive, GitBranch, Settings, LayoutGrid, List as ListIcon } from 'lucide-svelte';
+  import { Trash2, Archive, Funnel, Settings, LayoutGrid, List as ListIcon } from 'lucide-svelte';
   import PersonPicker from '$lib/components/PersonPicker.svelte';
   import CompanyPicker from '$lib/components/CompanyPicker.svelte';
   import NotesEditor from '$lib/components/NotesEditor.svelte';
@@ -146,7 +146,7 @@
 
   <header class="flex items-start gap-4">
     <span class="mt-1 flex h-9 w-9 shrink-0 items-center justify-center rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-surface)] text-[var(--color-muted)]">
-      <GitBranch size={16} strokeWidth={2} />
+      <Funnel size={16} strokeWidth={2} />
     </span>
     <div class="min-w-0 flex-1">
       <div class="flex flex-wrap items-center gap-2">
@@ -216,7 +216,7 @@
 
   {#if sync}
     <div class="flex items-center gap-2 rounded-[var(--radius-sm)] border border-[var(--color-highlight-border)] bg-[var(--color-highlight-bg)] px-3 py-2 text-xs">
-      <GitBranch size={12} strokeWidth={2} class="shrink-0 text-[var(--color-muted)]" />
+      <Funnel size={12} strokeWidth={2} class="shrink-0 text-[var(--color-muted)]" />
       <span class="text-[var(--color-muted)]">
         Synced with collection
         <a href={`/collections/${sync.collectionId}`} class="font-medium text-[var(--color-text)] underline underline-offset-2 hover:opacity-80">{sync.collectionName}</a>

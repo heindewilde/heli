@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { Trash2, Archive, GitBranch } from 'lucide-svelte';
+  import { Trash2, Archive, Funnel } from 'lucide-svelte';
 
   type Props = {
     href: string;
@@ -38,7 +38,7 @@
     : 'border-transparent hover:bg-[var(--color-surface)]'} {isArchived ? 'opacity-60' : ''}"
 >
   <span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-surface)] text-[var(--color-muted)]">
-    <GitBranch size={16} strokeWidth={2} />
+    <Funnel size={16} strokeWidth={2} />
   </span>
   <span class="min-w-0 flex-1">
     <span class="truncate text-sm font-medium text-[var(--color-text)]">{name}</span>

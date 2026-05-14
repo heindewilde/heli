@@ -1,6 +1,6 @@
 <script lang="ts">
   import { goto } from '$app/navigation';
-  import { Search, User, MessageSquare, FolderKanban, FolderOpen, GitBranch } from 'lucide-svelte';
+  import { Search, User, MessageSquare, FolderKanban, FolderOpen, Funnel } from 'lucide-svelte';
   import CompanyLogo from './CompanyLogo.svelte';
   import { logoDevUrl } from '$lib/logo';
 
@@ -114,7 +114,7 @@
     interaction: MessageSquare,
     project: FolderKanban,
     collection: FolderOpen,
-    pipeline: GitBranch
+    pipeline: Funnel
   } as const;
 
   const KIND_LABEL = {

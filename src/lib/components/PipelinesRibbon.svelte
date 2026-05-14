@@ -1,6 +1,6 @@
 <script lang="ts">
   import { invalidateAll } from '$app/navigation';
-  import { GitBranch, Plus, X } from 'lucide-svelte';
+  import { Funnel, Plus, X } from 'lucide-svelte';
   import { toast } from '$lib/toasts.svelte';
   import type { PipelineMembershipForEntity } from '$lib/server/pipelines';
   import type { MemberKind } from '$lib/server/schema';
@@ -115,7 +115,7 @@
   {#each pipelines as p (p.itemId)}
     <div class="group inline-flex items-center gap-1 rounded-full border border-[var(--color-border)] bg-[var(--color-surface)] py-0.5 pl-2 pr-1 text-xs {p.isArchived ? 'opacity-60' : ''}">
       <a href={`/pipelines/${p.pipelineId}`} class="inline-flex items-center gap-1 hover:underline">
-        <GitBranch size={10} strokeWidth={2} class="text-[var(--color-subtle)]" />
+        <Funnel size={10} strokeWidth={2} class="text-[var(--color-subtle)]" />
         <span>{p.pipelineName}</span>
       </a>
       <span class="text-[var(--color-subtle)]">·</span>
@@ -181,7 +181,7 @@
                   onclick={() => add(p.id)}
                   class="flex w-full items-center gap-1 rounded-[var(--radius-sm)] px-2 py-1 text-left text-sm hover:bg-[var(--color-surface)]"
                 >
-                  <GitBranch size={12} strokeWidth={2} class="text-[var(--color-subtle)]" />
+                  <Funnel size={12} strokeWidth={2} class="text-[var(--color-subtle)]" />
                   <span class="truncate">{p.name}</span>
                 </button>
               </li>

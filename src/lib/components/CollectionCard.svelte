@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { Trash2, Archive, FolderOpen, Users, Building2, GitBranch } from 'lucide-svelte';
+  import { Trash2, Archive, FolderOpen, Users, Building2, Funnel } from 'lucide-svelte';
   import { COLLECTION_ICON_MAP } from '$lib/collectionIcons';
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   type AnyIcon = any;
@@ -47,7 +47,7 @@
         onclick={(e) => { e.preventDefault(); onCreatePipeline?.(); }}
         class="rounded-[var(--radius-sm)] p-1.5 text-[var(--color-subtle)] hover:bg-[var(--color-bg)] hover:text-[var(--color-muted)]"
       >
-        <GitBranch size={13} strokeWidth={2} />
+        <Funnel size={13} strokeWidth={2} />
       </button>
     {/if}
     {#if onArchive}
