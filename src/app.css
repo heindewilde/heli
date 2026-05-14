@@ -13,35 +13,35 @@
   --font-sans: 'Geist', ui-sans-serif, system-ui, sans-serif;
   --font-mono: 'Geist Mono', ui-monospace, monospace;
 
-  /* Neutrals — warm, paper-grade. Light mode. */
-  --color-bg: #fbfbf9;
+  /* Neutrals — cool, paper-grade with a faint blue cast. Light mode. */
+  --color-bg: #f6f8fc;
   --color-surface: #ffffff;
-  --color-surface-2: #f5f4f1;
-  --color-border: #e8e7e3;
-  --color-border-strong: #d4d3ce;
-  --color-text: #17171a;
-  --color-muted: #6b6b66;
-  --color-subtle: #9a9a94;
+  --color-surface-2: #eef2f8;
+  --color-border: #e2e6ee;
+  --color-border-strong: #cdd2dc;
+  --color-text: #15161a;
+  --color-muted: #676a73;
+  --color-subtle: #969aa3;
 
   /* Accent — ink. Used for primary actions, brand, and true emphasis.
-     Deliberately near-black: a confident graphite, not a hue. */
-  --color-accent: #17171a;
-  --color-accent-hover: #2a2a2d;
-  --color-accent-fg: #fbfbf9;
-  --color-accent-soft: #f0efeb;
-  --color-accent-soft-border: #d4d3ce;
-  --color-accent-soft-text: #2a2a2d;
+     Deliberately near-black: a confident cool graphite, not a hue. */
+  --color-accent: #15161a;
+  --color-accent-hover: #282a30;
+  --color-accent-fg: #f6f8fc;
+  --color-accent-soft: #ebeef4;
+  --color-accent-soft-border: #cdd2dc;
+  --color-accent-soft-text: #282a30;
 
   /* Highlight — a quiet neutral wash for "selected/active" states.
      Distinct from accent (which is for emphasis), so users don't confuse
      "this row is selected" with "this is a clickable primary action". */
-  --color-highlight-bg: #f3f2ee;
-  --color-highlight-border: #dedcd6;
-  --color-highlight-text: #2a2a2d;
+  --color-highlight-bg: #eef1f7;
+  --color-highlight-border: #d8dde6;
+  --color-highlight-text: #282a30;
 
   /* Row-hover wash — a barely-there tint so hover stays distinct from the
      selected state (which uses --color-highlight-bg + accent edge). */
-  --color-row-hover: rgb(23 23 26 / 0.035);
+  --color-row-hover: rgb(21 22 26 / 0.035);
 
   /* Semantic — dialed back from saturated web defaults. */
   --color-danger: #b42318;
@@ -70,26 +70,26 @@
 }
 
 [data-theme='dark'] {
-  --color-bg: #0e0e10;
-  --color-surface: #17171a;
-  --color-surface-2: #1f1f23;
-  --color-border: #28282d;
-  --color-border-strong: #3a3a40;
-  --color-text: #f3f2ee;
-  --color-muted: #9a9a94;
-  --color-subtle: #6b6b66;
+  --color-bg: #0c0d11;
+  --color-surface: #15161b;
+  --color-surface-2: #1c1e24;
+  --color-border: #26282f;
+  --color-border-strong: #383a43;
+  --color-text: #eef1f7;
+  --color-muted: #969aa3;
+  --color-subtle: #676a73;
 
-  --color-accent: #f3f2ee;
+  --color-accent: #eef1f7;
   --color-accent-hover: #ffffff;
-  --color-accent-fg: #17171a;
-  --color-accent-soft: #1f1f23;
-  --color-accent-soft-border: #3a3a40;
-  --color-accent-soft-text: #f3f2ee;
+  --color-accent-fg: #15161b;
+  --color-accent-soft: #1c1e24;
+  --color-accent-soft-border: #383a43;
+  --color-accent-soft-text: #eef1f7;
 
-  --color-highlight-bg: #1f1f23;
-  --color-highlight-border: #2e2e34;
-  --color-highlight-text: #f3f2ee;
-  --color-row-hover: rgb(255 255 255 / 0.045);
+  --color-highlight-bg: #1c1e24;
+  --color-highlight-border: #2c2e36;
+  --color-highlight-text: #eef1f7;
+  --color-row-hover: rgb(238 241 247 / 0.045);
 
   --color-danger: #f97066;
   --color-danger-bg: #2a1413;
