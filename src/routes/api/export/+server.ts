@@ -1,5 +1,5 @@
 import { error, type RequestHandler } from '@sveltejs/kit';
-import { eq, asc } from 'drizzle-orm';
+import { eq, asc, inArray } from 'drizzle-orm';
 import { db } from '$lib/server/db';
 import {
   people,
@@ -126,13 +126,15 @@ export const GET: RequestHandler = async ({ url, locals }) => {
       .from(interactions)
       .where(eq(interactions.userId, userId));
     // Person links: one query, group by interactionId.
-    const links = rows.length
+    const interactionIds = rows.map((r) => r.id);
+    const links = interactionIds.length
       ? await d
           .select({
             interactionId: interactionPeople.interactionId,
             personId: interactionPeople.personId
           })
           .from(interactionPeople)
+          .where(inArray(interactionPeople.interactionId, interactionIds))
       : [];
     const personByInteraction = new Map<string, string[]>();
     for (const l of links) {
@@ -179,13 +181,16 @@ export const GET: RequestHandler = async ({ url, locals }) => {
           d
             .select({ projectId: projectLinks.projectId, url: projectLinks.url, label: projectLinks.label })
             .from(projectLinks)
+            .where(inArray(projectLinks.projectId, ids))
             .orderBy(asc(projectLinks.createdAt)),
           d
             .select({ projectId: projectPeople.projectId, personId: projectPeople.personId })
-            .from(projectPeople),
+            .from(projectPeople)
+            .where(inArray(projectPeople.projectId, ids)),
           d
             .select({ projectId: projectCompanies.projectId, companyId: projectCompanies.companyId })
             .from(projectCompanies)
+            .where(inArray(projectCompanies.projectId, ids))
         ])
       : [[], [], []];
 
