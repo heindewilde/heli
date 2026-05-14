@@ -121,7 +121,7 @@
       </a>
 
       <h1>
-        Finally, a delightful way to<br />organize your work and network.
+        Finally, a delightful way to<br />organize your <span class="handwrite">(net)</span>work
       </h1>
 
       <p class="subtitle">
@@ -506,6 +506,23 @@
     line-height: 1.08;
     letter-spacing: -0.035em;
     font-weight: 600;
+  }
+
+  .handwrite {
+    font-family: 'Caveat', cursive;
+    font-weight: 600;
+    /* Caveat has a smaller x-height than Geist — bump up to match the cap height */
+    font-size: 1.25em;
+    letter-spacing: 0;
+    color: #4b6ea8;
+    display: inline-block;
+    transform: translateY(0.05em) rotate(-2deg);
+    transform-origin: center;
+    margin: 0 0.04em;
+  }
+
+  :global([data-theme='dark']) .handwrite {
+    color: #a9c3ee;
   }
 
   .subtitle {
