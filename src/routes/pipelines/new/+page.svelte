@@ -1,6 +1,6 @@
 <script lang="ts">
   import { enhance } from '$app/forms';
-  import { ArrowUp, ArrowDown, Plus, Trash2 } from 'lucide-svelte';
+  import { ArrowUp, ArrowDown, Trash2 } from 'lucide-svelte';
   import { STAGE_COLORS, STAGE_COLOR_SWATCH, type StageColor } from '$lib/stageColors';
 
   let { form, data } = $props();
@@ -16,6 +16,20 @@
   ]);
   let newStageName = $state('');
   let newStageColor = $state<StageColor>('gray');
+
+  // Which row's color picker is open: stage index, 'new', or null
+  let openPicker = $state<number | 'new' | null>(null);
+
+  $effect(() => {
+    if (openPicker === null) return;
+    const close = () => { openPicker = null; };
+    document.addEventListener('pointerdown', close);
+    return () => document.removeEventListener('pointerdown', close);
+  });
+
+  function togglePicker(idx: number | 'new') {
+    openPicker = openPicker === idx ? null : idx;
+  }
 
   const inputClass =
     'rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2';
@@ -97,74 +111,99 @@
 
     <div class="flex flex-col gap-2 text-sm">
       <span class="text-[var(--color-muted)]">Stages</span>
-      <div class="flex flex-col gap-2 rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-surface)] p-3">
-        <ul class="flex flex-col gap-1">
-          {#each stages as stage, i (i)}
-            <li class="flex items-center gap-2 rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-bg)] p-2">
-              <div class="flex flex-col">
-                <button
-                  type="button"
-                  onclick={() => move(i, -1)}
-                  disabled={i === 0}
-                  class="rounded-[var(--radius-sm)] p-0.5 text-[var(--color-subtle)] hover:bg-[var(--color-surface)] disabled:opacity-30"
-                ><ArrowUp size={12} strokeWidth={2} /></button>
-                <button
-                  type="button"
-                  onclick={() => move(i, 1)}
-                  disabled={i === stages.length - 1}
-                  class="rounded-[var(--radius-sm)] p-0.5 text-[var(--color-subtle)] hover:bg-[var(--color-surface)] disabled:opacity-30"
-                ><ArrowDown size={12} strokeWidth={2} /></button>
-              </div>
-              <input
-                bind:value={stage.name}
-                class="min-w-0 flex-1 rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-surface)] px-2 py-1 text-sm"
-              />
-              <div class="flex items-center gap-1">
-                {#each STAGE_COLORS as c (c)}
-                  <button
-                    type="button"
-                    onclick={() => (stage.color = c)}
-                    title={c}
-                    class="h-4 w-4 rounded-full transition-transform {stage.color === c ? 'ring-2 ring-offset-1 ring-[var(--color-text)] scale-110' : 'hover:scale-110'}"
-                    style="background-color:{STAGE_COLOR_SWATCH[c]}"
-                  ></button>
-                {/each}
-              </div>
+      <div class="flex flex-col gap-1 rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-surface)] p-3">
+        {#each stages as stage, i (i)}
+          <div class="flex items-center gap-2 rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-bg)] p-2">
+            <div class="flex flex-col">
               <button
                 type="button"
-                onclick={() => removeStage(i)}
-                title="Remove stage"
-                class="rounded-[var(--radius-sm)] p-1 text-[var(--color-subtle)] hover:bg-[var(--color-danger-bg)] hover:text-[var(--color-danger)]"
-              ><Trash2 size={12} strokeWidth={2} /></button>
-            </li>
-          {/each}
-        </ul>
-        <div class="flex items-center gap-2">
+                onclick={() => move(i, -1)}
+                disabled={i === 0}
+                class="rounded-[var(--radius-sm)] p-0.5 text-[var(--color-subtle)] hover:bg-[var(--color-surface)] disabled:opacity-30"
+              ><ArrowUp size={12} strokeWidth={2} /></button>
+              <button
+                type="button"
+                onclick={() => move(i, 1)}
+                disabled={i === stages.length - 1}
+                class="rounded-[var(--radius-sm)] p-0.5 text-[var(--color-subtle)] hover:bg-[var(--color-surface)] disabled:opacity-30"
+              ><ArrowDown size={12} strokeWidth={2} /></button>
+            </div>
+            <input
+              bind:value={stage.name}
+              class="min-w-0 flex-1 rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-surface)] px-2 py-1 text-sm"
+            />
+            <div class="relative">
+              <button
+                type="button"
+                onclick={() => togglePicker(i)}
+                class="h-4 w-4 rounded-full ring-offset-1 hover:ring-2 hover:ring-[var(--color-border)]"
+                style="background-color:{STAGE_COLOR_SWATCH[stage.color]}"
+              ></button>
+              {#if openPicker === i}
+                <div
+                  class="absolute bottom-full right-0 z-10 mb-1.5 flex gap-1 rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-bg)] p-1.5 shadow-md"
+                  onpointerdown={(e) => e.stopPropagation()}
+                >
+                  {#each STAGE_COLORS as c (c)}
+                    <button
+                      type="button"
+                      onclick={() => { stage.color = c; openPicker = null; }}
+                      title={c}
+                      class="h-4 w-4 rounded-full ring-offset-1 transition-transform hover:scale-110 {stage.color === c ? 'ring-2 ring-[var(--color-text)]' : ''}"
+                      style="background-color:{STAGE_COLOR_SWATCH[c]}"
+                    ></button>
+                  {/each}
+                </div>
+              {/if}
+            </div>
+            <button
+              type="button"
+              onclick={() => removeStage(i)}
+              title="Remove stage"
+              class="rounded-[var(--radius-sm)] p-1 text-[var(--color-subtle)] hover:bg-[var(--color-danger-bg)] hover:text-[var(--color-danger)]"
+            ><Trash2 size={12} strokeWidth={2} /></button>
+          </div>
+        {/each}
+
+        <!-- New stage row — same layout as existing rows, arrows and trash invisible -->
+        <div class="flex items-center gap-2 rounded-[var(--radius-sm)] border border-dashed border-[var(--color-border)] bg-[var(--color-bg)] p-2">
+          <div class="invisible flex flex-col">
+            <div class="p-0.5"><ArrowUp size={12} strokeWidth={2} /></div>
+            <div class="p-0.5"><ArrowDown size={12} strokeWidth={2} /></div>
+          </div>
           <input
             bind:value={newStageName}
             placeholder="New stage…"
             onkeydown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addStage(); } }}
-            class="min-w-0 flex-1 rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-bg)] px-2 py-1 text-sm"
+            class="min-w-0 flex-1 rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-surface)] px-2 py-1 text-sm"
           />
-          <div class="flex items-center gap-1">
-            {#each STAGE_COLORS as c (c)}
-              <button
-                type="button"
-                onclick={() => (newStageColor = c)}
-                title={c}
-                class="h-4 w-4 rounded-full transition-transform {newStageColor === c ? 'ring-2 ring-offset-1 ring-[var(--color-text)] scale-110' : 'hover:scale-110'}"
-                style="background-color:{STAGE_COLOR_SWATCH[c]}"
-              ></button>
-            {/each}
+          <div class="relative">
+            <button
+              type="button"
+              onclick={() => togglePicker('new')}
+              class="h-4 w-4 rounded-full ring-offset-1 hover:ring-2 hover:ring-[var(--color-border)]"
+              style="background-color:{STAGE_COLOR_SWATCH[newStageColor]}"
+            ></button>
+            {#if openPicker === 'new'}
+              <div
+                class="absolute bottom-full right-0 z-10 mb-1.5 flex gap-1 rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-bg)] p-1.5 shadow-md"
+                onpointerdown={(e) => e.stopPropagation()}
+              >
+                {#each STAGE_COLORS as c (c)}
+                  <button
+                    type="button"
+                    onclick={() => { newStageColor = c; openPicker = null; }}
+                    title={c}
+                    class="h-4 w-4 rounded-full ring-offset-1 transition-transform hover:scale-110 {newStageColor === c ? 'ring-2 ring-[var(--color-text)]' : ''}"
+                    style="background-color:{STAGE_COLOR_SWATCH[c]}"
+                  ></button>
+                {/each}
+              </div>
+            {/if}
           </div>
-          <button
-            type="button"
-            onclick={addStage}
-            class="inline-flex items-center gap-1 rounded-[var(--radius-sm)] border border-[var(--color-border)] px-2 py-1 text-xs hover:bg-[var(--color-surface)]"
-          >
-            <Plus size={12} strokeWidth={2} /> Add
-          </button>
+          <div class="invisible p-1"><Trash2 size={12} strokeWidth={2} /></div>
         </div>
+
         <input type="hidden" name="stageNames" value={stages.map((s) => s.name).join('|')} />
         <input type="hidden" name="stageColors" value={stages.map((s) => s.color).join('|')} />
       </div>
