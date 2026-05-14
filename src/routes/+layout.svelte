@@ -148,7 +148,7 @@
   });
 </script>
 
-<div class="h-screen overflow-hidden bg-[var(--color-bg)] text-[var(--color-text)]">
+<div class="bg-[var(--color-bg)] text-[var(--color-text)] {user ? 'h-screen overflow-hidden' : ''}">
   {#if user}
 
     <!-- Topbar: sticky, in flow, full width. Pushes everything below it down naturally. -->
