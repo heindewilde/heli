@@ -65,6 +65,33 @@
     }}
     class="flex flex-col gap-3"
   >
+    {#if data.fromCollection}
+      {@const fc = data.fromCollection}
+      <input type="hidden" name="fromCollectionId" value={fc.id} />
+      <div class="rounded-[var(--radius-sm)] border border-[var(--color-highlight-border)] bg-[var(--color-highlight-bg)] px-3 py-2.5 text-sm">
+        <p class="font-medium text-[var(--color-text)]">Members from "{fc.name}" will be added</p>
+        <p class="mt-0.5 text-[var(--color-muted)]">
+          {#if fc.peopleCount > 0 && fc.companyCount > 0}
+            {fc.peopleCount} {fc.peopleCount === 1 ? 'person' : 'people'} and {fc.companyCount} {fc.companyCount === 1 ? 'company' : 'companies'} will be placed in the first stage of this pipeline.
+          {:else if fc.peopleCount > 0}
+            {fc.peopleCount} {fc.peopleCount === 1 ? 'person' : 'people'} will be placed in the first stage of this pipeline.
+          {:else if fc.companyCount > 0}
+            {fc.companyCount} {fc.companyCount === 1 ? 'company' : 'companies'} will be placed in the first stage of this pipeline.
+          {:else}
+            The collection is empty — no members will be added.
+          {/if}
+          The collection itself will remain unchanged.
+        </p>
+      </div>
+      <div class="rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2.5 text-sm">
+        <label class="inline-flex cursor-pointer items-center gap-2">
+          <input type="checkbox" name="syncWithCollection" value="1" class="rounded-[var(--radius-sm)]" />
+          <span class="text-[var(--color-text)]">Keep in sync</span>
+          <span class="text-[var(--color-muted)]">— adding or removing members on either side will mirror to the other</span>
+        </label>
+      </div>
+    {/if}
+
     <label class="flex flex-col gap-1 text-sm">
       <span class="text-[var(--color-muted)]">Name *</span>
       <input name="name" required maxlength="200" class={inputClass} />
@@ -159,33 +186,6 @@
       <input type="hidden" name="stageNames" value={stages.map((s) => s.name).join('|')} />
       <input type="hidden" name="stageKinds" value={stages.map((s) => s.kind).join('|')} />
     </div>
-
-    {#if data.fromCollection}
-      {@const fc = data.fromCollection}
-      <input type="hidden" name="fromCollectionId" value={fc.id} />
-      <div class="flex flex-col gap-2 rounded-[var(--radius-sm)] border border-[var(--color-highlight-border)] bg-[var(--color-highlight-bg)] px-3 py-2.5 text-sm">
-        <div>
-          <p class="font-medium text-[var(--color-text)]">Members from "{fc.name}" will be added</p>
-          <p class="mt-0.5 text-[var(--color-muted)]">
-            {#if fc.peopleCount > 0 && fc.companyCount > 0}
-              {fc.peopleCount} {fc.peopleCount === 1 ? 'person' : 'people'} and {fc.companyCount} {fc.companyCount === 1 ? 'company' : 'companies'} will be placed in the first stage.
-            {:else if fc.peopleCount > 0}
-              {fc.peopleCount} {fc.peopleCount === 1 ? 'person' : 'people'} will be placed in the first stage.
-            {:else if fc.companyCount > 0}
-              {fc.companyCount} {fc.companyCount === 1 ? 'company' : 'companies'} will be placed in the first stage.
-            {:else}
-              The collection is empty — no members will be added.
-            {/if}
-            The collection itself will remain unchanged.
-          </p>
-        </div>
-        <label class="inline-flex cursor-pointer items-center gap-2 text-sm">
-          <input type="checkbox" name="syncWithCollection" value="1" class="rounded-[var(--radius-sm)]" />
-          <span class="text-[var(--color-text)]">Keep in sync</span>
-          <span class="text-[var(--color-muted)]">— adding or removing members on either side will mirror to the other</span>
-        </label>
-      </div>
-    {/if}
 
     {#if form?.error}
       <p class="rounded-[var(--radius-sm)] border border-[var(--color-danger-border)] bg-[var(--color-danger-bg)] px-3 py-2 text-sm text-[var(--color-danger)]">
