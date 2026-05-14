@@ -20,6 +20,7 @@ import {
 } from './schema';
 import { ftsQuery } from './search';
 import { sanitizePlainText } from './sanitize';
+import { colorToKind } from '$lib/stageColors';
 
 export function isStageKind(v: unknown): v is StageKind {
   return typeof v === 'string' && (STAGE_KINDS as readonly string[]).includes(v);
@@ -251,14 +252,14 @@ export type ManualPipelineInput = {
   description?: string | null;
   defaultView?: PipelineView;
   /** When omitted, a sensible default set of stages is created. */
-  initialStages?: { name: string; kind: StageKind }[];
+  initialStages?: { name: string; color?: string | null }[];
 };
 
-const DEFAULT_STAGES: { name: string; kind: StageKind }[] = [
-  { name: 'Backlog', kind: 'open' },
-  { name: 'In progress', kind: 'open' },
-  { name: 'Won', kind: 'won' },
-  { name: 'Lost', kind: 'lost' }
+const DEFAULT_STAGES: { name: string; color: string }[] = [
+  { name: 'Backlog',     color: 'gray' },
+  { name: 'In progress', color: 'sky' },
+  { name: 'Won',         color: 'green' },
+  { name: 'Lost',        color: 'red' },
 ];
 
 export async function createPipeline(
@@ -291,7 +292,8 @@ export async function createPipeline(
     id: createId(),
     pipelineId: id,
     name: sanitizePlainText(s.name, 100) || s.name,
-    kind: isStageKind(s.kind) ? s.kind : 'open',
+    kind: colorToKind(s.color),
+    color: s.color ?? null,
     position: idx,
     createdAt: now
   }));

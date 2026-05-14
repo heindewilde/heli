@@ -1,28 +1,21 @@
 <script lang="ts">
   import { enhance } from '$app/forms';
   import { ArrowUp, ArrowDown, Plus, Trash2 } from 'lucide-svelte';
-  import type { PipelineView, StageKind } from '$lib/server/schema';
+  import { STAGE_COLORS, STAGE_COLOR_SWATCH, type StageColor } from '$lib/stageColors';
 
   let { form, data } = $props();
   let submitting = $state(false);
-  let defaultView = $state<PipelineView>('kanban');
 
-  type StageDraft = { name: string; kind: StageKind };
+  type StageDraft = { name: string; color: StageColor };
 
   let stages = $state<StageDraft[]>([
-    { name: 'Backlog', kind: 'open' },
-    { name: 'In progress', kind: 'open' },
-    { name: 'Won', kind: 'won' },
-    { name: 'Lost', kind: 'lost' }
+    { name: 'Backlog',     color: 'gray' },
+    { name: 'In progress', color: 'sky' },
+    { name: 'Won',         color: 'green' },
+    { name: 'Lost',        color: 'red' }
   ]);
   let newStageName = $state('');
-  let newStageKind = $state<StageKind>('open');
-
-  const STAGE_KIND_OPTIONS: { value: StageKind; label: string }[] = [
-    { value: 'open', label: 'Open' },
-    { value: 'won', label: 'Won' },
-    { value: 'lost', label: 'Lost' }
-  ];
+  let newStageColor = $state<StageColor>('gray');
 
   const inputClass =
     'rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2';
@@ -30,9 +23,9 @@
   function addStage() {
     const n = newStageName.trim();
     if (!n) return;
-    stages = [...stages, { name: n, kind: newStageKind }];
+    stages = [...stages, { name: n, color: newStageColor }];
     newStageName = '';
-    newStageKind = 'open';
+    newStageColor = 'gray';
   }
   function removeStage(i: number) {
     stages = stages.filter((_, idx) => idx !== i);
@@ -102,89 +95,79 @@
       <textarea name="description" rows="2" class={inputClass}></textarea>
     </label>
 
-    <fieldset class="flex flex-wrap items-center gap-1.5 text-sm">
-      <legend class="w-full text-[var(--color-muted)]">Default view</legend>
-      {#each ['kanban', 'list'] as v (v)}
-        <label class="inline-flex items-center gap-1.5 rounded-[var(--radius-sm)] border px-2.5 py-1 {defaultView === v
-          ? 'border-[var(--color-highlight-border)] bg-[var(--color-highlight-bg)] text-[var(--color-text)]'
-          : 'border-[var(--color-border)] bg-[var(--color-surface)] text-[var(--color-muted)]'}">
-          <input
-            type="radio"
-            name="defaultView"
-            value={v}
-            bind:group={defaultView}
-            class="sr-only"
-          />
-          {v}
-        </label>
-      {/each}
-    </fieldset>
-
-    <div class="flex flex-col gap-2 rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-surface)] p-3 text-sm">
-      <legend class="text-xs text-[var(--color-muted)]">Stages</legend>
-      <ul class="flex flex-col gap-1">
-        {#each stages as stage, i (i)}
-          <li class="flex items-center gap-2 rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-bg)] p-2">
-            <div class="flex flex-col">
+    <div class="flex flex-col gap-2 text-sm">
+      <span class="text-[var(--color-muted)]">Stages</span>
+      <div class="flex flex-col gap-2 rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-surface)] p-3">
+        <ul class="flex flex-col gap-1">
+          {#each stages as stage, i (i)}
+            <li class="flex items-center gap-2 rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-bg)] p-2">
+              <div class="flex flex-col">
+                <button
+                  type="button"
+                  onclick={() => move(i, -1)}
+                  disabled={i === 0}
+                  class="rounded-[var(--radius-sm)] p-0.5 text-[var(--color-subtle)] hover:bg-[var(--color-surface)] disabled:opacity-30"
+                ><ArrowUp size={12} strokeWidth={2} /></button>
+                <button
+                  type="button"
+                  onclick={() => move(i, 1)}
+                  disabled={i === stages.length - 1}
+                  class="rounded-[var(--radius-sm)] p-0.5 text-[var(--color-subtle)] hover:bg-[var(--color-surface)] disabled:opacity-30"
+                ><ArrowDown size={12} strokeWidth={2} /></button>
+              </div>
+              <input
+                bind:value={stage.name}
+                class="min-w-0 flex-1 rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-surface)] px-2 py-1 text-sm"
+              />
+              <div class="flex items-center gap-1">
+                {#each STAGE_COLORS as c (c)}
+                  <button
+                    type="button"
+                    onclick={() => (stage.color = c)}
+                    title={c}
+                    class="h-4 w-4 rounded-full transition-transform {stage.color === c ? 'ring-2 ring-offset-1 ring-[var(--color-text)] scale-110' : 'hover:scale-110'}"
+                    style="background-color:{STAGE_COLOR_SWATCH[c]}"
+                  ></button>
+                {/each}
+              </div>
               <button
                 type="button"
-                onclick={() => move(i, -1)}
-                disabled={i === 0}
-                class="rounded-[var(--radius-sm)] p-0.5 text-[var(--color-subtle)] hover:bg-[var(--color-surface)] disabled:opacity-30"
-              ><ArrowUp size={12} strokeWidth={2} /></button>
-              <button
-                type="button"
-                onclick={() => move(i, 1)}
-                disabled={i === stages.length - 1}
-                class="rounded-[var(--radius-sm)] p-0.5 text-[var(--color-subtle)] hover:bg-[var(--color-surface)] disabled:opacity-30"
-              ><ArrowDown size={12} strokeWidth={2} /></button>
-            </div>
-            <input
-              bind:value={stage.name}
-              class="min-w-0 flex-1 rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-surface)] px-2 py-1 text-sm"
-            />
-            <select
-              bind:value={stage.kind}
-              class="rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-surface)] px-2 py-1 text-xs"
-            >
-              {#each STAGE_KIND_OPTIONS as o (o.value)}
-                <option value={o.value}>{o.label}</option>
-              {/each}
-            </select>
-            <button
-              type="button"
-              onclick={() => removeStage(i)}
-              title="Remove stage"
-              class="rounded-[var(--radius-sm)] p-1 text-[var(--color-subtle)] hover:bg-[var(--color-danger-bg)] hover:text-[var(--color-danger)]"
-            ><Trash2 size={12} strokeWidth={2} /></button>
-          </li>
-        {/each}
-      </ul>
-      <div class="flex items-center gap-2">
-        <input
-          bind:value={newStageName}
-          placeholder="New stage…"
-          onkeydown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addStage(); } }}
-          class="min-w-0 flex-1 rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-bg)] px-2 py-1 text-sm"
-        />
-        <select
-          bind:value={newStageKind}
-          class="rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-bg)] px-2 py-1 text-xs"
-        >
-          {#each STAGE_KIND_OPTIONS as o (o.value)}
-            <option value={o.value}>{o.label}</option>
+                onclick={() => removeStage(i)}
+                title="Remove stage"
+                class="rounded-[var(--radius-sm)] p-1 text-[var(--color-subtle)] hover:bg-[var(--color-danger-bg)] hover:text-[var(--color-danger)]"
+              ><Trash2 size={12} strokeWidth={2} /></button>
+            </li>
           {/each}
-        </select>
-        <button
-          type="button"
-          onclick={addStage}
-          class="inline-flex items-center gap-1 rounded-[var(--radius-sm)] border border-[var(--color-border)] px-2 py-1 text-xs hover:bg-[var(--color-surface)]"
-        >
-          <Plus size={12} strokeWidth={2} /> Add
-        </button>
+        </ul>
+        <div class="flex items-center gap-2">
+          <input
+            bind:value={newStageName}
+            placeholder="New stage…"
+            onkeydown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addStage(); } }}
+            class="min-w-0 flex-1 rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-bg)] px-2 py-1 text-sm"
+          />
+          <div class="flex items-center gap-1">
+            {#each STAGE_COLORS as c (c)}
+              <button
+                type="button"
+                onclick={() => (newStageColor = c)}
+                title={c}
+                class="h-4 w-4 rounded-full transition-transform {newStageColor === c ? 'ring-2 ring-offset-1 ring-[var(--color-text)] scale-110' : 'hover:scale-110'}"
+                style="background-color:{STAGE_COLOR_SWATCH[c]}"
+              ></button>
+            {/each}
+          </div>
+          <button
+            type="button"
+            onclick={addStage}
+            class="inline-flex items-center gap-1 rounded-[var(--radius-sm)] border border-[var(--color-border)] px-2 py-1 text-xs hover:bg-[var(--color-surface)]"
+          >
+            <Plus size={12} strokeWidth={2} /> Add
+          </button>
+        </div>
+        <input type="hidden" name="stageNames" value={stages.map((s) => s.name).join('|')} />
+        <input type="hidden" name="stageColors" value={stages.map((s) => s.color).join('|')} />
       </div>
-      <input type="hidden" name="stageNames" value={stages.map((s) => s.name).join('|')} />
-      <input type="hidden" name="stageKinds" value={stages.map((s) => s.kind).join('|')} />
     </div>
 
     {#if form?.error}

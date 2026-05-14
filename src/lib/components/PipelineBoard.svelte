@@ -5,6 +5,7 @@
   import { toast } from '$lib/toasts.svelte';
   import type { PipelineDetail, PipelineItemRow } from '$lib/server/pipelines';
   import type { PipelineStage, StageKind } from '$lib/server/schema';
+  import { STAGE_COLOR_BOARD, type StageColor } from '$lib/stageColors';
 
   type Props = {
     pipeline: PipelineDetail;
@@ -70,10 +71,12 @@
     await moveItem(id, stageId);
   }
 
-  function stageKindClass(kind: StageKind): string {
-    if (kind === 'won') return 'border-[var(--color-success-border)] bg-[var(--color-success-bg)]';
-    if (kind === 'lost') return 'border-[var(--color-danger-border)] bg-[var(--color-danger-bg)]';
-    return 'border-[var(--color-border)] bg-[var(--color-surface)]';
+  function stageColumnStyle(stage: PipelineStage): string {
+    const c = stage.color ? STAGE_COLOR_BOARD[stage.color as StageColor] : null;
+    if (c) return `border-color:${c.border};background-color:${c.bg}`;
+    if (stage.kind === 'won') return 'border-color:var(--color-success-border);background-color:var(--color-success-bg)';
+    if (stage.kind === 'lost') return 'border-color:var(--color-danger-border);background-color:var(--color-danger-bg)';
+    return '';
   }
 </script>
 
@@ -99,7 +102,8 @@
       <!-- svelte-ignore a11y_no_static_element_interactions -->
       <section
         aria-label={`${stage.name} stage`}
-        class="flex w-72 shrink-0 flex-col gap-2 rounded-[var(--radius-md)] border p-2 transition-colors {stageKindClass(stage.kind as StageKind)} {hot ? 'ring-2 ring-[var(--color-accent)] ring-offset-2 ring-offset-[var(--color-bg)]' : ''}"
+        class="flex w-72 shrink-0 flex-col gap-2 rounded-[var(--radius-md)] border p-2 transition-colors {!stage.color && stage.kind === 'open' ? 'border-[var(--color-border)] bg-[var(--color-surface)]' : ''} {hot ? 'ring-2 ring-[var(--color-accent)] ring-offset-2 ring-offset-[var(--color-bg)]' : ''}"
+        style={stageColumnStyle(stage)}
         ondragover={(e) => onDragOver(e, stage.id)}
         ondragleave={() => onDragLeave(stage.id)}
         ondrop={(e) => onDrop(e, stage.id)}

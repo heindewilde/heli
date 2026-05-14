@@ -1,9 +1,9 @@
 import { fail, redirect, type Actions } from '@sveltejs/kit';
-import { createPipeline, isPipelineView, isStageKind, seedPipelineFromCollection } from '$lib/server/pipelines';
+import { createPipeline, isPipelineView, seedPipelineFromCollection } from '$lib/server/pipelines';
 import { getCollection } from '$lib/server/collections';
 import { createCollectionSync } from '$lib/server/sync';
 import type { PageServerLoad } from './$types';
-import type { PipelineView, StageKind } from '$lib/server/schema';
+import type { PipelineView } from '$lib/server/schema';
 
 export const load: PageServerLoad = async ({ locals, url }) => {
   const collectionId = url.searchParams.get('fromCollection');
@@ -36,16 +36,12 @@ export const actions: Actions = {
       .split('|')
       .map((s) => s.trim())
       .filter(Boolean);
-    const stageKinds = String(data.get('stageKinds') ?? '')
+    const stageColors = String(data.get('stageColors') ?? '')
       .split('|')
       .map((s) => s.trim());
     const initialStages =
       stageNames.length > 0
-        ? stageNames.map((n, i) => {
-            const k = stageKinds[i];
-            const kind: StageKind = isStageKind(k) ? k : 'open';
-            return { name: n, kind };
-          })
+        ? stageNames.map((n, i) => ({ name: n, color: stageColors[i] ?? null }))
         : undefined;
 
     let id: string;

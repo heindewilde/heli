@@ -396,6 +396,7 @@ export const pipelineStages = sqliteTable(
       .references(() => pipelines.id, { onDelete: 'cascade' }),
     name: text('name').notNull(),
     kind: text('kind').notNull().default('open'),
+    color: text('color'),
     position: integer('position').notNull(),
     createdAt: integer('created_at').notNull()
   },

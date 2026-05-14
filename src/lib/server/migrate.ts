@@ -431,7 +431,9 @@ const ALTERS: string[] = [
   // Icon picker for collections.
   `ALTER TABLE collections ADD COLUMN icon TEXT`,
   // Icon picker for projects.
-  `ALTER TABLE projects ADD COLUMN icon TEXT`
+  `ALTER TABLE projects ADD COLUMN icon TEXT`,
+  // Stage color picker on pipeline creation.
+  `ALTER TABLE pipeline_stages ADD COLUMN color TEXT`
 ];
 
 async function applyAlters(c: Client) {
