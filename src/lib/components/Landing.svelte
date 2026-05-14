@@ -121,7 +121,7 @@
       </a>
 
       <h1>
-        Finally, a delightful way to<br />organize your <span class="handwrite">(net)</span>work
+        Finally, a delightful<span class="mobile-break"><br /></span> way to<span class="desktop-break"><br /></span> organize<span class="mobile-break"><br /></span> your <span class="nowrap"><span class="handwrite">(net)</span>work</span>
       </h1>
 
       <p class="subtitle">
@@ -508,6 +508,18 @@
     font-weight: 600;
   }
 
+  .desktop-break {
+    display: inline;
+  }
+
+  .mobile-break {
+    display: none;
+  }
+
+  .nowrap {
+    white-space: nowrap;
+  }
+
   .handwrite {
     font-family: 'Patrick Hand', cursive;
     font-weight: 400;
@@ -682,6 +694,14 @@
   }
 
   @media (max-width: 560px) {
+    .desktop-break {
+      display: none;
+    }
+
+    .mobile-break {
+      display: inline;
+    }
+
     .nav {
       padding: 1rem 1.25rem;
     }
