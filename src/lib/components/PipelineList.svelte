@@ -3,8 +3,8 @@
   import { ChevronDown, ChevronRight } from 'lucide-svelte';
   import PipelineItemCard from './PipelineItemCard.svelte';
   import { toast } from '$lib/toasts.svelte';
+  import { STAGE_COLOR_SWATCH, type StageColor } from '$lib/stageColors';
   import type { PipelineDetail, PipelineItemRow } from '$lib/server/pipelines';
-  import type { StageKind } from '$lib/server/schema';
 
   type Props = {
     pipeline: PipelineDetail;
@@ -14,6 +14,14 @@
   let { pipeline, onRemoveItem }: Props = $props();
 
   let collapsed = $state<Record<string, boolean>>({});
+  let openMoverFor = $state<string | null>(null);
+
+  $effect(() => {
+    if (openMoverFor === null) return;
+    const close = () => { openMoverFor = null; };
+    document.addEventListener('pointerdown', close);
+    return () => document.removeEventListener('pointerdown', close);
+  });
 
   const stages = $derived(pipeline.stages);
   const itemsByStage = $derived.by(() => {
@@ -27,22 +35,14 @@
   });
 
   async function moveItem(itemId: string, toStageId: string) {
+    openMoverFor = null;
     const res = await fetch(`/api/pipelines/${pipeline.id}/items/${itemId}/move`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ toStageId })
     });
-    if (!res.ok) {
-      toast.danger('Move failed');
-      return;
-    }
+    if (!res.ok) { toast.danger('Move failed'); return; }
     await invalidateAll();
-  }
-
-  function kindBadge(kind: StageKind): { label: string; cls: string } {
-    if (kind === 'won') return { label: 'won', cls: 'bg-emerald-300/15 text-emerald-700 dark:text-emerald-300' };
-    if (kind === 'lost') return { label: 'lost', cls: 'bg-rose-300/15 text-rose-700 dark:text-rose-300' };
-    return { label: 'open', cls: 'bg-[var(--color-surface)] text-[var(--color-muted)]' };
   }
 </script>
 
@@ -50,7 +50,7 @@
   {#each stages as stage (stage.id)}
     {@const items = itemsByStage.get(stage.id) ?? []}
     {@const isCollapsed = collapsed[stage.id] === true}
-    {@const badge = kindBadge(stage.kind as StageKind)}
+    {@const dotColor = STAGE_COLOR_SWATCH[(stage.color ?? 'gray') as StageColor]}
     <section class="flex flex-col gap-1">
       <button
         type="button"
@@ -62,8 +62,8 @@
         {:else}
           <ChevronDown size={14} strokeWidth={2} class="text-[var(--color-subtle)]" />
         {/if}
+        <span class="h-2 w-2 shrink-0 rounded-full" style="background-color:{dotColor}"></span>
         <h3 class="text-sm font-medium">{stage.name}</h3>
-        <span class="rounded-full px-1.5 py-0.5 text-[10px] {badge.cls}">{badge.label}</span>
         <span class="ml-auto text-xs text-[var(--color-muted)]">{items.length}</span>
       </button>
       {#if !isCollapsed}
@@ -72,25 +72,42 @@
             No items in this stage.
           </p>
         {:else}
-          <ul class="ml-6 flex flex-col gap-2">
+          <ul class="ml-6 flex flex-col gap-1.5">
             {#each items as item (item.id)}
-              <li class="flex items-center gap-2">
+              <li class="group relative flex items-center gap-2">
                 <div class="flex-1">
                   <PipelineItemCard
                     {item}
                     onRemove={onRemoveItem ? () => onRemoveItem!(item.id) : undefined}
                   />
                 </div>
-                <select
-                  value={item.stageId}
-                  onchange={(e) => moveItem(item.id, (e.currentTarget as HTMLSelectElement).value)}
-                  class="shrink-0 rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-surface)] px-2 py-1 text-xs"
-                  title="Move to stage"
-                >
-                  {#each stages as s (s.id)}
-                    <option value={s.id}>{s.name}</option>
-                  {/each}
-                </select>
+                <div class="relative shrink-0">
+                  <button
+                    type="button"
+                    title="Move to stage"
+                    onpointerdown={(e) => { e.stopPropagation(); openMoverFor = openMoverFor === item.id ? null : item.id; }}
+                    class="flex items-center gap-1.5 rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-surface)] px-2 py-1 text-xs text-[var(--color-muted)] opacity-0 transition-opacity hover:border-[var(--color-highlight-border)] hover:text-[var(--color-text)] group-hover:opacity-100 {openMoverFor === item.id ? 'opacity-100' : ''}"
+                  >
+                    Move
+                  </button>
+                  {#if openMoverFor === item.id}
+                    <div
+                      class="absolute right-0 top-full z-20 mt-1 min-w-[200px] rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-surface)] py-1 shadow-[var(--shadow-md)]"
+                      onpointerdown={(e) => e.stopPropagation()}
+                    >
+                      {#each stages.filter((s) => s.id !== item.stageId) as s (s.id)}
+                        <button
+                          type="button"
+                          onclick={() => moveItem(item.id, s.id)}
+                          class="flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm hover:bg-[var(--color-highlight-bg)]"
+                        >
+                          <span class="h-2 w-2 shrink-0 rounded-full" style="background-color:{STAGE_COLOR_SWATCH[(s.color ?? 'gray') as StageColor]}"></span>
+                          {s.name}
+                        </button>
+                      {/each}
+                    </div>
+                  {/if}
+                </div>
               </li>
             {/each}
           </ul>

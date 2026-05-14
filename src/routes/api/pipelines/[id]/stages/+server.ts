@@ -1,17 +1,11 @@
 import { error, json, type RequestHandler } from '@sveltejs/kit';
-import {
-  addStage,
-  updateStage,
-  deleteStage,
-  reorderStages,
-  isStageKind
-} from '$lib/server/pipelines';
+import { addStage, updateStage, deleteStage, reorderStages } from '$lib/server/pipelines';
 
-type AddBody = { name?: unknown; kind?: unknown; position?: unknown };
+type AddBody = { name?: unknown; color?: unknown; position?: unknown };
 type PatchBody = {
   stageId?: unknown;
   name?: unknown;
-  kind?: unknown;
+  color?: unknown;
   /** Alternate form: pass `order: string[]` to reorder. */
   order?: unknown;
 };
@@ -25,11 +19,10 @@ export const POST: RequestHandler = async ({ request, params, locals }) => {
     throw error(400, 'invalid_json');
   }
   if (typeof body.name !== 'string') throw error(400, 'missing_name');
-  if (!isStageKind(body.kind)) throw error(400, 'invalid_kind');
   try {
     const result = await addStage(locals.user.id, locals.user.region, params.id!, {
       name: body.name,
-      kind: body.kind,
+      color: typeof body.color === 'string' ? body.color : null,
       position: typeof body.position === 'number' ? body.position : undefined
     });
     return json(result, { status: 201 });
@@ -62,12 +55,9 @@ export const PATCH: RequestHandler = async ({ request, params, locals }) => {
   }
 
   if (typeof body.stageId !== 'string') throw error(400, 'missing_stageId');
-  const updates: { name?: string; kind?: 'open' | 'won' | 'lost' } = {};
+  const updates: { name?: string; color?: string | null } = {};
   if (typeof body.name === 'string') updates.name = body.name;
-  if (body.kind !== undefined) {
-    if (!isStageKind(body.kind)) throw error(400, 'invalid_kind');
-    updates.kind = body.kind;
-  }
+  if ('color' in body) updates.color = typeof body.color === 'string' ? body.color : null;
   try {
     await updateStage(
       locals.user.id,

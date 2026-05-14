@@ -386,13 +386,12 @@ export async function addStage(
   userId: string,
   region: string,
   pipelineId: string,
-  input: { name: string; kind: StageKind; position?: number }
+  input: { name: string; color?: string | null; position?: number }
 ): Promise<{ id: string }> {
   const d = db(region);
   if (!(await ensurePipelineOwned(d, userId, pipelineId))) throw new Error('not_found');
   const name = sanitizePlainText(input.name, 100);
   if (!name) throw new Error('missing_name');
-  if (!isStageKind(input.kind)) throw new Error('invalid_kind');
 
   // Default position = end of the list.
   let position = input.position;
@@ -409,7 +408,8 @@ export async function addStage(
     id,
     pipelineId,
     name,
-    kind: input.kind,
+    kind: colorToKind(input.color),
+    color: input.color ?? null,
     position,
     createdAt: Date.now()
   });
@@ -425,7 +425,7 @@ export async function updateStage(
   region: string,
   pipelineId: string,
   stageId: string,
-  input: { name?: string; kind?: StageKind }
+  input: { name?: string; color?: string | null }
 ): Promise<void> {
   const d = db(region);
   if (!(await ensurePipelineOwned(d, userId, pipelineId))) throw new Error('not_found');
@@ -436,9 +436,9 @@ export async function updateStage(
     if (!next) throw new Error('missing_name');
     updates.name = next;
   }
-  if (input.kind !== undefined) {
-    if (!isStageKind(input.kind)) throw new Error('invalid_kind');
-    updates.kind = input.kind;
+  if ('color' in input) {
+    updates.color = input.color ?? null;
+    updates.kind = colorToKind(input.color);
   }
   if (Object.keys(updates).length === 0) return;
   await d
@@ -877,10 +877,32 @@ export async function seedPipelineFromCollection(
       .get());
   if (!firstStage) return { added: 0 };
 
-  const members = await d
+  const rawMembers = await d
     .select({ kind: collectionItems.kind, refId: collectionItems.refId })
     .from(collectionItems)
     .where(eq(collectionItems.collectionId, collectionId));
+
+  if (rawMembers.length === 0) return { added: 0 };
+
+  const personIds = rawMembers.filter((m) => m.kind === 'person').map((m) => m.refId);
+  const companyIds = rawMembers.filter((m) => m.kind === 'company').map((m) => m.refId);
+
+  const [existingPeople, existingCompanies] = await Promise.all([
+    personIds.length > 0
+      ? d.select({ id: people.id }).from(people).where(and(eq(people.userId, userId), inArray(people.id, personIds)))
+      : Promise.resolve([]),
+    companyIds.length > 0
+      ? d.select({ id: companies.id }).from(companies).where(and(eq(companies.userId, userId), inArray(companies.id, companyIds)))
+      : Promise.resolve([])
+  ]);
+
+  const validPersonIds = new Set(existingPeople.map((p) => p.id));
+  const validCompanyIds = new Set(existingCompanies.map((c) => c.id));
+
+  const members = rawMembers.filter((m) =>
+    (m.kind === 'person' && validPersonIds.has(m.refId)) ||
+    (m.kind === 'company' && validCompanyIds.has(m.refId))
+  );
 
   if (members.length === 0) return { added: 0 };
 

@@ -55,15 +55,6 @@
     return v.toFixed(0);
   });
 
-  const daysInStage = $derived(
-    Math.max(0, Math.floor((Date.now() - item.enteredStageAt) / 86_400_000))
-  );
-
-  const ageLabel = $derived.by(() => {
-    if (daysInStage === 0) return 'today';
-    if (daysInStage === 1) return '1d';
-    return `${daysInStage}d`;
-  });
 </script>
 
 <!-- svelte-ignore a11y_no_static_element_interactions -->
@@ -104,7 +95,6 @@
           onclick={(e) => { if (onClick) { e.stopPropagation(); onClick(); } }}
           class="truncate font-medium text-[var(--color-text)] hover:underline"
         >{item.member?.name ?? '(missing)'}</a>
-        <span class="shrink-0 text-[10px] text-[var(--color-subtle)]" title={`In stage for ${daysInStage} days`}>{ageLabel}</span>
       </div>
       {#if item.kind === 'person' && item.member?.role}
         <div class="truncate text-xs text-[var(--color-muted)]">{item.member.role}</div>

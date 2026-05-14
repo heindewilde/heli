@@ -1,9 +1,8 @@
 <script lang="ts">
   import { goto, invalidateAll } from '$app/navigation';
-  import { Trash2, Archive, Funnel, Settings, LayoutGrid, List as ListIcon } from 'lucide-svelte';
-  import PersonPicker from '$lib/components/PersonPicker.svelte';
-  import CompanyPicker from '$lib/components/CompanyPicker.svelte';
+  import { Trash2, Archive, Funnel, Folder, Settings, LayoutGrid, List as ListIcon } from 'lucide-svelte';
   import NotesEditor from '$lib/components/NotesEditor.svelte';
+  import PipelineAddPicker from '$lib/components/PipelineAddPicker.svelte';
   import PipelineBoard from '$lib/components/PipelineBoard.svelte';
   import PipelineList from '$lib/components/PipelineList.svelte';
   import StageEditor from '$lib/components/StageEditor.svelte';
@@ -32,19 +31,7 @@
   let view = $state<PipelineView>(pipeline.defaultView as PipelineView);
   let stageEditorOpen = $state(false);
 
-  type Person = { id: string; name: string; avatarUrl: string | null; role: string | null };
-  type Company = {
-    id: string;
-    name: string;
-    logoUrl: string | null;
-    faviconUrl: string | null;
-    domain: string | null;
-  };
-
-  let pickerPerson = $state<Person[]>([]);
-  let pickerCompany = $state<Company | null>(null);
-
-  async function patch(body: Record<string, unknown>): Promise<boolean> {
+async function patch(body: Record<string, unknown>): Promise<boolean> {
     const res = await fetch(`/api/pipelines/${pipeline.id}`, {
       method: 'PATCH',
       headers: { 'content-type': 'application/json' },
@@ -119,20 +106,23 @@
     await invalidateAll();
   }
 
-  async function onAddPerson(p: Person) {
-    pickerPerson = [];
-    await addItem('person', p.id);
-  }
-  async function onPickCompany(c: Company | null) {
-    pickerCompany = null;
-    if (c) await addItem('company', c.id);
-  }
-
   const totalItems = $derived(pipeline.items.length);
   const openItems = $derived(
     pipeline.items.filter((i) => {
       const s = pipeline.stages.find((s) => s.id === i.stageId);
       return s?.kind === 'open';
+    }).length
+  );
+  const wonItems = $derived(
+    pipeline.items.filter((i) => {
+      const s = pipeline.stages.find((s) => s.id === i.stageId);
+      return s?.kind === 'won';
+    }).length
+  );
+  const lostItems = $derived(
+    pipeline.items.filter((i) => {
+      const s = pipeline.stages.find((s) => s.id === i.stageId);
+      return s?.kind === 'lost';
     }).length
   );
 </script>
@@ -175,7 +165,8 @@
       <p class="mt-1 text-sm text-[var(--color-muted)]">
         {totalItems} {totalItems === 1 ? 'item' : 'items'}
         · {openItems} open
-        · {pipeline.stages.length} {pipeline.stages.length === 1 ? 'stage' : 'stages'}
+        · {wonItems} won
+        · {lostItems} lost
       </p>
     </div>
     <div class="flex items-center gap-1">
@@ -216,7 +207,7 @@
 
   {#if sync}
     <div class="flex items-center gap-2 rounded-[var(--radius-sm)] border border-[var(--color-highlight-border)] bg-[var(--color-highlight-bg)] px-3 py-2 text-xs">
-      <Funnel size={12} strokeWidth={2} class="shrink-0 text-[var(--color-muted)]" />
+      <Folder size={12} strokeWidth={2} class="shrink-0 text-[var(--color-muted)]" />
       <span class="text-[var(--color-muted)]">
         Synced with collection
         <a href={`/collections/${sync.collectionId}`} class="font-medium text-[var(--color-text)] underline underline-offset-2 hover:opacity-80">{sync.collectionName}</a>
@@ -245,28 +236,18 @@
     <StageEditor pipelineId={pipeline.id} stages={pipeline.stages} onClose={() => (stageEditorOpen = false)} />
   {/if}
 
-  <div class="grid gap-4 md:grid-cols-2">
-    <div class="flex flex-col gap-1 text-sm">
-      <span class="text-[var(--color-muted)]">Add a person</span>
-      <PersonPicker
-        selected={pickerPerson}
-        onAdd={onAddPerson}
-        onRemove={() => (pickerPerson = [])}
-      />
-    </div>
-    <div class="flex flex-col gap-1 text-sm">
-      <span class="text-[var(--color-muted)]">Add a company</span>
-      <CompanyPicker selected={pickerCompany} onPick={onPickCompany} />
-    </div>
-  </div>
-
   {#if pipeline.stages.length === 0}
     <div class="rounded-[var(--radius-md)] border border-dashed border-[var(--color-border)] bg-[var(--color-surface)] p-6 text-center text-sm text-[var(--color-muted)]">
       This pipeline has no stages yet. Open the gear icon to add some.
     </div>
-  {:else if view === 'kanban'}
-    <PipelineBoard {pipeline} onRemoveItem={removeItem} />
   {:else}
-    <PipelineList {pipeline} onRemoveItem={removeItem} />
+    <div class="w-72">
+      <PipelineAddPicker onAdd={addItem} />
+    </div>
+    {#if view === 'kanban'}
+      <PipelineBoard {pipeline} onRemoveItem={removeItem} />
+    {:else}
+      <PipelineList {pipeline} onRemoveItem={removeItem} />
+    {/if}
   {/if}
 </article>
