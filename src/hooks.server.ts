@@ -57,6 +57,24 @@ export const handle: Handle = async ({ event, resolve }) => {
   response.headers.set('X-Content-Type-Options', 'nosniff');
   response.headers.set('X-Frame-Options', 'DENY');
   response.headers.set('Referrer-Policy', 'strict-origin-when-cross-origin');
+  // Tiptap (the rich-text editor) uses inline styles and blob: URLs for image
+  // paste; SvelteKit hydration requires 'unsafe-inline' scripts. This policy
+  // blocks framing, plugin content, and non-https external resources while
+  // keeping all existing UI functionality intact.
+  response.headers.set(
+    'Content-Security-Policy',
+    [
+      "default-src 'self'",
+      "script-src 'self' 'unsafe-inline'",
+      "style-src 'self' 'unsafe-inline'",
+      "img-src 'self' data: https: blob:",
+      "font-src 'self' data:",
+      "connect-src 'self'",
+      "frame-ancestors 'none'",
+      "object-src 'none'",
+      "base-uri 'self'"
+    ].join('; ')
+  );
   if (!dev) {
     response.headers.set('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
   }
