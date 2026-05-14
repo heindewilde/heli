@@ -40,7 +40,7 @@
         Welcome{data.user.username ? `, ${data.user.username}` : ''}.
       </h1>
       <p class="text-sm text-[var(--color-muted)]">
-        Paste a profile or website link in the topbar to save it. Press <kbd class="rounded border border-[var(--color-border)] bg-[var(--color-surface)] px-1 text-[10px]">/</kbd> to search.
+        Paste a profile or website link in the topbar to save it.<span class="hidden sm:inline"> Press <kbd class="rounded border border-[var(--color-border)] bg-[var(--color-surface)] px-1 text-[10px]">/</kbd> to search.</span>
       </p>
     </header>
 
@@ -76,7 +76,7 @@
             <li>
               <a
                 href={`/projects/${p.id}`}
-                class="flex items-center gap-3 rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 hover:border-[var(--color-border-strong)]"
+                class="flex items-center gap-3 rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2.5 hover:border-[var(--color-border-strong)]"
               >
                 <span class="flex h-7 w-7 shrink-0 items-center justify-center rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-bg)] {overdue ? 'text-[var(--color-danger)]' : 'text-[var(--color-muted)]'}">
                   {#if overdue}

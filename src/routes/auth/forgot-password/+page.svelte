@@ -28,5 +28,5 @@
       >Send reset link</button>
     </form>
   {/if}
-  <a href="/auth" class="text-xs text-[var(--color-muted)] hover:underline">← Back to sign in</a>
+  <a href="/auth" class="inline-block py-2 text-xs text-[var(--color-muted)] hover:underline">← Back to sign in</a>
 </section>

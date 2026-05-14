@@ -158,7 +158,7 @@
     aria-modal="true"
     aria-label="Search"
     tabindex="-1"
-    class="fixed inset-0 z-50 flex items-start justify-center bg-black/40 px-4 pt-[12vh]"
+    class="fixed inset-0 z-50 flex items-start justify-center bg-black/40 px-4 pt-[5vh] sm:pt-[12vh]"
     onclick={(e) => { if (e.target === e.currentTarget) onClose(); }}
     onkeydown={onKey}
   >
@@ -184,7 +184,7 @@
       <div class="border-t border-[var(--color-border)]"></div>
 
       <!-- Results -->
-      <div class="max-h-[52vh] overflow-auto">
+      <div class="max-h-[70vh] overflow-auto sm:max-h-[52vh]">
         {#if items.length === 0}
           <p class="px-4 py-8 text-center text-xs text-[var(--color-muted)]">
             {emptyHint}
@@ -235,7 +235,7 @@
       </div>
 
       <!-- Footer -->
-      <div class="border-t border-[var(--color-border)] px-4 py-2 text-[10px] text-[var(--color-muted)]">
+      <div class="hidden border-t border-[var(--color-border)] px-4 py-2 text-[10px] text-[var(--color-muted)] sm:block">
         <kbd>↑↓</kbd> navigate · <kbd>enter</kbd> open · <kbd>esc</kbd> close
       </div>
     </div>

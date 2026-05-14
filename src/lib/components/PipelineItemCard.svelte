@@ -107,7 +107,7 @@
         type="button"
         title="Remove from pipeline"
         onclick={onRemove}
-        class="-mr-1 -mt-1 rounded-[var(--radius-sm)] p-1 text-[var(--color-subtle)] opacity-0 hover:bg-[var(--color-bg)] hover:text-[var(--color-danger)] group-hover:opacity-100"
+        class="-mr-1 -mt-1 rounded-[var(--radius-sm)] p-1 text-[var(--color-subtle)] opacity-0 hover:bg-[var(--color-bg)] hover:text-[var(--color-danger)] group-hover:opacity-100 [@media(hover:none)]:opacity-100"
       >
         <X size={12} strokeWidth={2} />
       </button>
@@ -117,6 +117,6 @@
     <p class="line-clamp-2 text-xs text-[var(--color-muted)]">{item.note}</p>
   {/if}
   {#if valueLabel}
-    <span class="tabular self-start rounded-full border border-[var(--color-border)] bg-[var(--color-surface-2)] px-2 py-0.5 text-[10px] font-medium text-[var(--color-text)]">{valueLabel}</span>
+    <span class="tabular self-start rounded-full border border-[var(--color-border)] bg-[var(--color-surface-2)] px-2 py-0.5 text-xs font-medium text-[var(--color-text)]">{valueLabel}</span>
   {/if}
 </div>

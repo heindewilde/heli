@@ -1,6 +1,6 @@
 <script lang="ts">
   import { invalidateAll } from '$app/navigation';
-
+  import { X } from 'lucide-svelte';
   import PipelineItemCard from './PipelineItemCard.svelte';
   import { toast } from '$lib/toasts.svelte';
   import type { PipelineDetail, PipelineItemRow } from '$lib/server/pipelines';
@@ -114,7 +114,58 @@
 </script>
 
 <div class="flex flex-col gap-2">
-  <div bind:this={scrollEl} class="flex gap-3 overflow-x-auto pb-2" ondragover={updateEdgeScroll}>
+  <!-- Mobile: vertical stages list. Drag-and-drop is desktop-only; use the
+       stage selector on each card to move items on touch devices. -->
+  <div class="sm:hidden flex flex-col gap-3">
+    {#each visibleStages as stage (stage.id)}
+      {@const items = itemsByStage.get(stage.id) ?? []}
+      <section
+        aria-label={`${stage.name} stage`}
+        class="rounded-[var(--radius-md)] border p-3 {!stage.color && stage.kind === 'open' ? 'border-[var(--color-border)] bg-[var(--color-surface)]' : ''}"
+        style={stageColumnStyle(stage)}
+      >
+        <header class="mb-2 flex items-center justify-between">
+          <h3 class="text-xs font-medium uppercase tracking-wide text-[var(--color-subtle)]">{stage.name}</h3>
+          <span class="text-xs text-[var(--color-muted)]">{items.length}</span>
+        </header>
+        {#if items.length === 0}
+          <p class="text-xs italic text-[var(--color-subtle)]">No items</p>
+        {:else}
+          <div class="flex flex-col gap-2">
+            {#each items as item (item.id)}
+              {@const itemHref = item.kind === 'person' ? `/people/${item.refId}` : `/companies/${item.refId}`}
+              <div class="flex items-center gap-2 rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-bg)] px-3 py-2.5">
+                <a href={itemHref} class="min-w-0 flex-1 truncate text-sm font-medium text-[var(--color-text)]">
+                  {item.member?.name ?? '(missing)'}
+                </a>
+                <select
+                  value={item.stageId}
+                  onchange={(e) => moveItem(item.id, (e.currentTarget as HTMLSelectElement).value)}
+                  class="rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-transparent py-1.5 pl-1 pr-1 text-xs outline-none"
+                  aria-label="Move to stage"
+                >
+                  {#each stages as s (s.id)}
+                    <option value={s.id}>{s.name}</option>
+                  {/each}
+                </select>
+                {#if onRemoveItem}
+                  <button
+                    type="button"
+                    title="Remove from pipeline"
+                    onclick={() => onRemoveItem!(item.id)}
+                    class="rounded-[var(--radius-sm)] p-1.5 text-[var(--color-subtle)] hover:bg-[var(--color-surface)] hover:text-[var(--color-danger)]"
+                  ><X size={14} strokeWidth={2} /></button>
+                {/if}
+              </div>
+            {/each}
+          </div>
+        {/if}
+      </section>
+    {/each}
+  </div>
+
+  <!-- Desktop: horizontal kanban board with drag-and-drop -->
+  <div bind:this={scrollEl} class="hidden sm:flex gap-3 overflow-x-auto pb-2" ondragover={updateEdgeScroll}>
     {#each visibleStages as stage (stage.id)}
       {@const items = itemsByStage.get(stage.id) ?? []}
       {@const hot = dragOverStage === stage.id}

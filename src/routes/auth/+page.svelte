@@ -407,7 +407,7 @@
     align-items: center;
     justify-content: center;
     gap: 0.375rem;
-    padding: 0.5rem;
+    padding: 0.75rem 0.5rem;
     font-size: 0.875rem;
     font-family: inherit;
     font-weight: 500;

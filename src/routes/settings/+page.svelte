@@ -218,7 +218,7 @@
         type="button"
         onclick={saveUsername}
         disabled={saving === 'username'}
-        class="self-start rounded-[var(--radius-sm)] bg-[var(--color-accent)] transition-colors hover:bg-[var(--color-accent-hover)] px-3 py-1.5 text-sm font-medium text-[var(--color-accent-fg)] disabled:opacity-60"
+        class="self-start rounded-[var(--radius-sm)] bg-[var(--color-accent)] transition-colors hover:bg-[var(--color-accent-hover)] px-3 py-2 text-sm font-medium text-[var(--color-accent-fg)] disabled:opacity-60"
       >Save username</button>
     </div>
 
@@ -249,7 +249,7 @@
         type="button"
         onclick={saveEmail}
         disabled={saving === 'email'}
-        class="self-start rounded-[var(--radius-sm)] bg-[var(--color-accent)] transition-colors hover:bg-[var(--color-accent-hover)] px-3 py-1.5 text-sm font-medium text-[var(--color-accent-fg)] disabled:opacity-60"
+        class="self-start rounded-[var(--radius-sm)] bg-[var(--color-accent)] transition-colors hover:bg-[var(--color-accent-hover)] px-3 py-2 text-sm font-medium text-[var(--color-accent-fg)] disabled:opacity-60"
       >Update email</button>
     </div>
 
@@ -275,7 +275,7 @@
         type="button"
         onclick={savePassword}
         disabled={saving === 'password'}
-        class="self-start rounded-[var(--radius-sm)] bg-[var(--color-accent)] transition-colors hover:bg-[var(--color-accent-hover)] px-3 py-1.5 text-sm font-medium text-[var(--color-accent-fg)] disabled:opacity-60"
+        class="self-start rounded-[var(--radius-sm)] bg-[var(--color-accent)] transition-colors hover:bg-[var(--color-accent-hover)] px-3 py-2 text-sm font-medium text-[var(--color-accent-fg)] disabled:opacity-60"
       >Update password</button>
     </div>
 
@@ -290,7 +290,7 @@
         type="button"
         onclick={signOutOthers}
         disabled={saving === 'others'}
-        class="self-start rounded-[var(--radius-sm)] border border-[var(--color-border)] px-3 py-1.5 text-sm hover:bg-[var(--color-bg)] disabled:opacity-60"
+        class="self-start rounded-[var(--radius-sm)] border border-[var(--color-border)] px-3 py-2 text-sm hover:bg-[var(--color-bg)] disabled:opacity-60"
       >Sign out other devices</button>
     </div>
   </section>
@@ -315,7 +315,7 @@
       type="button"
       onclick={deleteAccount}
       disabled={saving === 'delete' || !deletePwd}
-      class="self-start rounded-[var(--radius-sm)] bg-[var(--color-danger)] px-3 py-1.5 text-sm font-medium text-white disabled:opacity-60"
+      class="self-start rounded-[var(--radius-sm)] bg-[var(--color-danger)] px-3 py-2 text-sm font-medium text-white disabled:opacity-60"
     >Delete account permanently</button>
   </section>
 </article>

@@ -74,7 +74,7 @@
       {sub ?? domain ?? ''}
     </span>
   </span>
-  <span class="flex shrink-0 items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100 {selected ? 'opacity-100' : ''}">
+  <span class="flex shrink-0 items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100 [@media(hover:none)]:opacity-100 {selected ? 'opacity-100' : ''}">
     {#if onFavorite}
       <button
         type="button"

@@ -290,7 +290,7 @@
          popover for inline editing without table-cell layout quirks. -->
     <div class="overflow-hidden rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)] shadow-[var(--shadow-xs)]">
       <div
-        class="grid items-center gap-3 border-b border-[var(--color-border)] bg-[var(--color-surface-2)] px-3 py-2 text-[var(--color-subtle)]"
+        class="hidden md:grid items-center gap-3 border-b border-[var(--color-border)] bg-[var(--color-surface-2)] px-3 py-2 text-[var(--color-subtle)]"
         style="grid-template-columns: 24px minmax(0,1.5fr) minmax(0,1.1fr) minmax(0,0.9fr) 150px minmax(0,1fr);"
       >
         <span class="cap-label">·</span>
@@ -306,10 +306,37 @@
           {@const tags = data.itemTags[person.id] ?? []}
           {@const currentStatusId = optimisticStatus[person.id] !== undefined ? optimisticStatus[person.id] : person.statusId}
           {@const sel = i === selected}
-          <li>
+          <li data-entity-row>
+            <!-- Mobile card (< md) -->
+            <div class="md:hidden group relative flex items-center gap-2 border-b border-[var(--color-border)] px-3 py-3 transition-colors last:border-b-0 {sel ? 'bg-[var(--color-highlight-bg)]' : 'hover:bg-[var(--color-row-hover)]'} {person.isArchived ? 'opacity-60' : ''}">
+              <PriorityFlag value={(person.priority as Priority) ?? null} onChange={(p) => setPriority(person.id, p)} />
+              <a href={`/people/${person.id}`} class="flex min-w-0 flex-1 items-center gap-3">
+                <span class="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-full border border-[var(--color-border)] bg-[var(--color-surface)] text-xs font-medium text-[var(--color-muted)]">
+                  {#if person.avatarUrl}
+                    <img src={person.avatarUrl} alt="" loading="lazy" class="h-full w-full object-cover" />
+                  {:else}
+                    {initials(person.name) || '·'}
+                  {/if}
+                </span>
+                <span class="min-w-0 flex-1">
+                  <span class="flex items-center gap-1.5">
+                    <span class="truncate text-sm font-medium text-[var(--color-text)]">{person.name}</span>
+                    {#if person.isFavorite}
+                      <Star size={11} strokeWidth={2} fill="currentColor" class="shrink-0 text-[var(--color-warning)]" />
+                    {/if}
+                  </span>
+                  {#if person.companyName}
+                    <span class="block truncate text-xs text-[var(--color-muted)]">{person.companyName}</span>
+                  {:else if person.role}
+                    <span class="block truncate text-xs text-[var(--color-muted)]">{person.role}</span>
+                  {/if}
+                </span>
+              </a>
+              <StatusCell value={currentStatusId} statuses={statuses} scope="person" onChange={(s) => setStatus(person.id, s)} onStatusesChange={(next) => (statuses = next)} />
+            </div>
+            <!-- Desktop row (>= md) -->
             <div
-              data-entity-row
-              class="group relative grid items-center gap-3 border-b border-[var(--color-border)] px-3 transition-colors last:border-b-0 {sel ? 'bg-[var(--color-highlight-bg)]' : 'hover:bg-[var(--color-row-hover)]'} {person.isArchived ? 'opacity-60' : ''}"
+              class="group relative hidden md:grid items-center gap-3 border-b border-[var(--color-border)] px-3 transition-colors last:border-b-0 {sel ? 'bg-[var(--color-highlight-bg)]' : 'hover:bg-[var(--color-row-hover)]'} {person.isArchived ? 'opacity-60' : ''}"
               style="grid-template-columns: 24px minmax(0,1.5fr) minmax(0,1.1fr) minmax(0,0.9fr) 150px minmax(0,1fr); min-height: 56px; padding-top: 8px; padding-bottom: 8px;"
             >
               <PriorityFlag
@@ -365,7 +392,7 @@
                   onStatusesChange={(next) => (statuses = next)}
                 />
                 {#if person.lastAt}
-                  <span class="tabular pl-1 text-[11px] text-[var(--color-subtle)]">{formatLastSeen(person.lastAt)}</span>
+                  <span class="tabular pl-1 text-xs text-[var(--color-subtle)]">{formatLastSeen(person.lastAt)}</span>
                 {/if}
               </div>
 
@@ -373,7 +400,7 @@
                 {#each tags as t (t.id)}
                   <a
                     href={buildUrl({ tag: t.slug })}
-                    class="rounded-full border border-[var(--color-border)] bg-[var(--color-surface-2)] px-1.5 py-0.5 text-[10px] text-[var(--color-muted)] transition-colors hover:text-[var(--color-text)]"
+                    class="rounded-full border border-[var(--color-border)] bg-[var(--color-surface-2)] px-1.5 py-0.5 text-xs text-[var(--color-muted)] transition-colors hover:text-[var(--color-text)]"
                   >{t.name}</a>
                 {/each}
                 <RowTagAdder
@@ -393,7 +420,7 @@
 
   <!-- Row actions reachable via the detail page; we keep the list dense and
        defer favorite/archive/delete to the keyboard (* / # / del prompt). -->
-  <p class="text-[11px] text-[var(--color-subtle)]">
+  <p class="hidden sm:block text-[11px] text-[var(--color-subtle)]">
     Tip: <kbd class="rounded border border-[var(--color-border)] bg-[var(--color-surface)] px-1">j/k</kbd> navigate ·
     <kbd class="rounded border border-[var(--color-border)] bg-[var(--color-surface)] px-1">↵</kbd> open ·
     <kbd class="rounded border border-[var(--color-border)] bg-[var(--color-surface)] px-1">*</kbd> favorite ·

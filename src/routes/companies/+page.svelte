@@ -276,7 +276,7 @@
   {:else}
     <div class="overflow-hidden rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)] shadow-[var(--shadow-xs)]">
       <div
-        class="grid items-center gap-4 border-b border-[var(--color-border)] bg-[var(--color-surface-2)] px-3 py-2 text-[var(--color-subtle)]"
+        class="hidden md:grid items-center gap-4 border-b border-[var(--color-border)] bg-[var(--color-surface-2)] px-3 py-2 text-[var(--color-subtle)]"
         style="grid-template-columns: 24px minmax(0,2fr) minmax(0,1.3fr) 160px minmax(0,1.2fr);"
       >
         <span class="cap-label">·</span>
@@ -291,10 +291,29 @@
           {@const tags = data.itemTags[company.id] ?? []}
           {@const currentStatusId = optimisticStatus[company.id] !== undefined ? optimisticStatus[company.id] : company.statusId}
           {@const sel = i === selected}
-          <li>
+          <li data-entity-row>
+            <!-- Mobile card (< md) -->
+            <div class="md:hidden group relative flex items-center gap-2 border-b border-[var(--color-border)] px-3 py-3 transition-colors last:border-b-0 {sel ? 'bg-[var(--color-highlight-bg)]' : 'hover:bg-[var(--color-row-hover)]'} {company.isArchived ? 'opacity-60' : ''}">
+              <PriorityFlag value={(company.priority as Priority) ?? null} onChange={(p) => setPriority(company.id, p)} />
+              <a href={`/companies/${company.id}`} class="flex min-w-0 flex-1 items-center gap-3">
+                <CompanyLogo domain={company.domain} fallbackUrl={company.logoUrl ?? company.faviconUrl} name={company.name} size={36} />
+                <span class="min-w-0 flex-1">
+                  <span class="flex items-center gap-1.5">
+                    <span class="truncate text-sm font-medium text-[var(--color-text)]">{company.name}</span>
+                    {#if company.isFavorite}
+                      <Star size={11} strokeWidth={2} fill="currentColor" class="shrink-0 text-[var(--color-warning)]" />
+                    {/if}
+                  </span>
+                  {#if company.domain}
+                    <span class="block truncate text-xs text-[var(--color-muted)]">{company.domain}</span>
+                  {/if}
+                </span>
+              </a>
+              <StatusCell value={currentStatusId} statuses={statuses} scope="company" onChange={(s) => setStatus(company.id, s)} onStatusesChange={(next) => (statuses = next)} />
+            </div>
+            <!-- Desktop row (>= md) -->
             <div
-              data-entity-row
-              class="group relative grid items-center gap-4 border-b border-[var(--color-border)] px-3 transition-colors last:border-b-0 {sel ? 'bg-[var(--color-highlight-bg)]' : 'hover:bg-[var(--color-row-hover)]'} {company.isArchived ? 'opacity-60' : ''}"
+              class="group relative hidden md:grid items-center gap-4 border-b border-[var(--color-border)] px-3 transition-colors last:border-b-0 {sel ? 'bg-[var(--color-highlight-bg)]' : 'hover:bg-[var(--color-row-hover)]'} {company.isArchived ? 'opacity-60' : ''}"
               style="grid-template-columns: 24px minmax(0,2fr) minmax(0,1.3fr) 160px minmax(0,1.2fr); min-height: 56px; padding-top: 8px; padding-bottom: 8px;"
             >
               <PriorityFlag
@@ -340,7 +359,7 @@
                   onStatusesChange={(next) => (statuses = next)}
                 />
                 {#if company.lastAt}
-                  <span class="tabular pl-1 text-[11px] text-[var(--color-subtle)]">{formatLastSeen(company.lastAt)}</span>
+                  <span class="tabular pl-1 text-xs text-[var(--color-subtle)]">{formatLastSeen(company.lastAt)}</span>
                 {/if}
               </div>
 
@@ -348,7 +367,7 @@
                 {#each tags as t (t.id)}
                   <a
                     href={buildUrl({ tag: t.slug })}
-                    class="rounded-full border border-[var(--color-border)] bg-[var(--color-surface-2)] px-1.5 py-0.5 text-[10px] text-[var(--color-muted)] transition-colors hover:text-[var(--color-text)]"
+                    class="rounded-full border border-[var(--color-border)] bg-[var(--color-surface-2)] px-1.5 py-0.5 text-xs text-[var(--color-muted)] transition-colors hover:text-[var(--color-text)]"
                   >{t.name}</a>
                 {/each}
                 <RowTagAdder
@@ -366,7 +385,7 @@
     </div>
   {/if}
 
-  <p class="text-[11px] text-[var(--color-subtle)]">
+  <p class="hidden sm:block text-[11px] text-[var(--color-subtle)]">
     Tip: <kbd class="rounded border border-[var(--color-border)] bg-[var(--color-surface)] px-1">j/k</kbd> navigate ·
     <kbd class="rounded border border-[var(--color-border)] bg-[var(--color-surface)] px-1">↵</kbd> open ·
     <kbd class="rounded border border-[var(--color-border)] bg-[var(--color-surface)] px-1">*</kbd> favorite ·

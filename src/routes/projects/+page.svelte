@@ -87,7 +87,7 @@
           value={data.sort}
           onchange={(e) => goto(buildUrl({ sort: (e.currentTarget as HTMLSelectElement).value }), { replaceState: true, keepFocus: true, noScroll: true })}
           disabled={!!data.q}
-          class="bg-transparent py-1 pl-1 pr-1 text-xs outline-none disabled:opacity-60"
+          class="bg-transparent py-2 pl-1 pr-1 text-xs outline-none disabled:opacity-60"
           title={data.q ? 'Sort is fixed to relevance while searching' : 'Sort by'}
         >
           <option value="updated">Recently updated</option>
@@ -99,7 +99,7 @@
       </label>
       <a
         href="/projects/new"
-        class="inline-flex items-center gap-1 rounded-[var(--radius-sm)] bg-[var(--color-accent)] transition-colors hover:bg-[var(--color-accent-hover)] px-3 py-1.5 text-sm font-medium text-[var(--color-accent-fg)]"
+        class="inline-flex items-center gap-1 rounded-[var(--radius-sm)] bg-[var(--color-accent)] transition-colors hover:bg-[var(--color-accent-hover)] px-3 py-2 text-sm font-medium text-[var(--color-accent-fg)]"
       >
         <Plus size={14} strokeWidth={2} />
         New project

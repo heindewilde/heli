@@ -671,6 +671,16 @@
     }
   }
 
+  .footer a {
+    padding: 0.375rem 0.25rem;
+  }
+
+  @media (max-width: 640px) {
+    .features-grid {
+      grid-template-columns: 1fr;
+    }
+  }
+
   @media (max-width: 560px) {
     .nav {
       padding: 1rem 1.25rem;
@@ -682,14 +692,6 @@
 
     .hero {
       padding: 3rem 0 3.5rem;
-    }
-
-    .btn-ghost {
-      display: none;
-    }
-
-    .features-grid {
-      grid-template-columns: 1fr;
     }
 
     .footer {

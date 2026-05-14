@@ -114,7 +114,7 @@
         <select
           value={data.sort}
           onchange={(e) => goto(buildUrl({ sort: (e.currentTarget as HTMLSelectElement).value }), { replaceState: true, keepFocus: true, noScroll: true })}
-          class="bg-transparent py-1 pl-1 pr-1 text-xs outline-none"
+          class="bg-transparent py-2 pl-1 pr-1 text-xs outline-none"
         >
           <option value="updated">Recently updated</option>
           <option value="recent">Recently added</option>
@@ -123,7 +123,7 @@
       </label>
       <a
         href="/pipelines/new"
-        class="inline-flex items-center gap-1 rounded-[var(--radius-sm)] bg-[var(--color-accent)] transition-colors hover:bg-[var(--color-accent-hover)] px-3 py-1.5 text-sm font-medium text-[var(--color-accent-fg)]"
+        class="inline-flex items-center gap-1 rounded-[var(--radius-sm)] bg-[var(--color-accent)] transition-colors hover:bg-[var(--color-accent-hover)] px-3 py-2 text-sm font-medium text-[var(--color-accent-fg)]"
       >
         <Plus size={14} strokeWidth={2} />
         New pipeline
