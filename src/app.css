@@ -10,9 +10,9 @@
 }
 
 @font-face {
-  font-family: 'Caveat';
-  src: url('/fonts/Caveat-600.woff2') format('woff2');
-  font-weight: 600;
+  font-family: 'Patrick Hand';
+  src: url('/fonts/PatrickHand-400.woff2') format('woff2');
+  font-weight: 400;
   font-display: swap;
   font-style: normal;
 }

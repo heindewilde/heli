@@ -509,14 +509,13 @@
   }
 
   .handwrite {
-    font-family: 'Caveat', cursive;
-    font-weight: 600;
-    /* Caveat has a smaller x-height than Geist — bump up to match the cap height */
-    font-size: 1.25em;
+    font-family: 'Patrick Hand', cursive;
+    font-weight: 400;
+    font-size: 1.15em;
     letter-spacing: 0;
     color: #4b6ea8;
     display: inline-block;
-    transform: translateY(0.05em) rotate(-2deg);
+    transform: translateY(0.03em) rotate(-2deg);
     transform-origin: center;
     margin: 0 0.04em;
   }
