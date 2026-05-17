@@ -16,7 +16,7 @@
   } from 'lucide-svelte';
   import { onMount } from 'svelte';
 
-  const GITHUB_URL = 'https://github.com';
+  const GITHUB_URL = 'https://github.com/heindewilde/heli';
 
   let isDark = $state(false);
   onMount(() => {
@@ -105,11 +105,8 @@
           <Moon size={16} strokeWidth={2} />
         {/if}
       </button>
-      <a class="icon-btn" href={GITHUB_URL} target="_blank" rel="noreferrer noopener" aria-label="GitHub repository">
-        <Github size={16} strokeWidth={2} />
-      </a>
       <a class="btn-ghost" href="/auth">Sign in</a>
-      <a class="btn-primary" href="/auth?mode=register">Get started</a>
+      <a class="btn-primary" href="/auth?mode=register">Sign up</a>
     </nav>
   </header>
 
@@ -136,7 +133,6 @@
         </a>
       </div>
 
-      <p class="hero-note">Free to start.</p>
     </section>
 
     <section class="features" aria-label="Features">
@@ -155,9 +151,9 @@
   </main>
 
   <footer class="footer">
-    <span class="footer-brand">heli</span>
+    <span class="footer-brand">🚁 heli</span>
     <span class="footer-sep">·</span>
-    <span>A calmer CRM for the people you care about.</span>
+    <span>The CRM for freelancers and small businesses</span>
     <span class="footer-spacer"></span>
     <a href={GITHUB_URL} target="_blank" rel="noreferrer noopener">GitHub</a>
     <a href="/auth">Sign in</a>
