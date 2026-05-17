@@ -4,8 +4,14 @@ import { db } from '$lib/server/db';
 import { people, companies, interactions as interactionsTable, projects } from '$lib/server/schema';
 import { listInteractions } from '$lib/server/interactions-query';
 
-export const load: PageServerLoad = async ({ locals }) => {
-  if (!locals.user) return { user: null };
+export const load: PageServerLoad = async ({ locals, setHeaders }) => {
+  if (!locals.user) {
+    // Landing page is identical for every logged-out visitor — let an upstream
+    // CDN serve it from the edge. Browsers always revalidate so a deploy is
+    // picked up immediately; shared caches hold it for 5 min.
+    setHeaders({ 'cache-control': 'public, max-age=0, s-maxage=300' });
+    return { user: null };
+  }
   const d = db(locals.user.region);
   const fourteenDaysAgo = Date.now() - 14 * 86_400_000;
   const monthStart = new Date();
