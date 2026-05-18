@@ -16,7 +16,7 @@
     name: APP_NAME,
     description: APP_DESCRIPTION,
     applicationCategory: 'BusinessApplication',
-    operatingSystem: 'Web, self-hostable on Linux/macOS',
+    operatingSystem: 'Web Browser',
     url: `https://${APP_DOMAIN}`,
     license: 'https://www.gnu.org/licenses/agpl-3.0.html',
     offers: { '@type': 'Offer', price: '0', priceCurrency: 'USD' },
