@@ -13,10 +13,13 @@
   import { bindKeys, isTypingTarget } from '$lib/keyboard.svelte';
   import { toast } from '$lib/toasts.svelte';
   import { saveErrorMessage } from '$lib/save-errors';
+  import { APP_NAME, APP_DOMAIN, APP_TAGLINE } from '$lib/branding';
 
   let { data, children } = $props();
   const user = $derived(data.user);
   const reminders = $derived(data.reminders ?? []);
+
+  const canonicalUrl = $derived(`https://${APP_DOMAIN}${page.url.pathname}`);
 
   let saveBar = $state<SaveBar | undefined>(undefined);
   let paletteOpen = $state(false);
@@ -147,6 +150,22 @@
     return () => cleanups.forEach((c) => c());
   });
 </script>
+
+<svelte:head>
+  <title>{APP_NAME} — {APP_TAGLINE}</title>
+  <meta name="description" content={APP_TAGLINE} />
+  <link rel="canonical" href={canonicalUrl} />
+  <meta property="og:type" content="website" />
+  <meta property="og:site_name" content={APP_NAME} />
+  <meta property="og:title" content="{APP_NAME} — {APP_TAGLINE}" />
+  <meta property="og:description" content={APP_TAGLINE} />
+  <meta property="og:url" content={canonicalUrl} />
+  <meta property="og:image" content="https://{APP_DOMAIN}/icons/icon-512.png" />
+  <meta name="twitter:card" content="summary" />
+  <meta name="twitter:title" content="{APP_NAME} — {APP_TAGLINE}" />
+  <meta name="twitter:description" content={APP_TAGLINE} />
+  <meta name="twitter:image" content="https://{APP_DOMAIN}/icons/icon-512.png" />
+</svelte:head>
 
 <div class="bg-[var(--color-bg)] text-[var(--color-text)] {user ? 'h-screen overflow-hidden' : ''}">
   {#if user}
