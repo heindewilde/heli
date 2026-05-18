@@ -1,8 +1,12 @@
 services:
   heli:
+    # Default: pull the published image. To build from source (e.g. when
+    # iterating on a fork), run `docker compose up -d --build`.
+    image: ghcr.io/heindewilde/heli:latest
     build: .
     container_name: heli
     restart: unless-stopped
+    pull_policy: always
     ports:
       - "127.0.0.1:3000:3000"
     volumes:
