@@ -1,7 +1,7 @@
 {
   "name": "Heli",
   "short_name": "Heli",
-  "description": "Simple, lightweight, and surprisingly powerful. An open-source CRM that tracks contacts, companies, interactions, and deals.",
+  "description": "Simple, lightweight, and surprisingly powerful. An open-source CRM that keeps clients, deals, and projects organized in one calm workspace.",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#f6f8fc",
