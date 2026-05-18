@@ -54,38 +54,35 @@ ufw --force enable
 Still on the VPS:
 
 ```bash
-# Persistent data directory (database + uploaded avatars)
-mkdir -p /srv/heli/data/avatars
+# Clone the repo (Dockerfile and docker-compose.yml live here)
+git clone --depth 1 https://github.com/heindewilde/heli.git /srv/heli
+cd /srv/heli
 
-# Build the image from the public repo
-git clone --depth 1 https://github.com/heindewilde/heli.git /opt/heli
-docker build -t heli:latest /opt/heli
+# Create your .env (replace crm.example.com with your domain)
+cat > .env <<EOF
+ORIGIN=https://crm.example.com
+INBOUND_EMAIL_SECRET=$(openssl rand -hex 32)
+EOF
 
-# Generate one secret used to sign inbound-email URLs
-INBOUND_SECRET=$(openssl rand -hex 32)
-
-# Run it (bound to localhost — Caddy will reverse-proxy)
-docker run -d --name heli --restart unless-stopped \
-  -p 127.0.0.1:3000:3000 \
-  -v /srv/heli/data:/data \
-  -e PORT=3000 \
-  -e NODE_ENV=production \
-  -e ORIGIN=https://crm.example.com \
-  -e DB_PATH=/data/heli.db \
-  -e AVATARS_DIR=/data/avatars \
-  -e INBOUND_EMAIL_SECRET="$INBOUND_SECRET" \
-  heli:latest
+# Build and start
+docker compose up -d --build
 ```
 
-### Optional environment variables
+That's it. The database and uploaded avatars live in `/srv/heli/data/`
+(created automatically on first start) and persist across restarts and
+upgrades.
 
-| Variable             | What it does                                        |
-| -------------------- | --------------------------------------------------- |
-| `PUBLIC_LOGODEV_KEY` | Pretty company logos via [logo.dev](https://logo.dev). Free tier exists. Without it, logos fall back to fetched OG images or initials. |
-| `SQLITE_CACHE_MB`    | SQLite page cache. Default `16`. Lower it on a tiny VPS. |
-| `SQLITE_MMAP_MB`     | SQLite mmap window. Default `64`. Same.             |
+### Optional `.env` settings
 
-Pass with `-e VAR=value` on the `docker run` line.
+| Variable               | What it does                                                                                       |
+| ---------------------- | -------------------------------------------------------------------------------------------------- |
+| `PUBLIC_LOGODEV_KEY`   | Pretty company logos via [logo.dev](https://logo.dev). Free tier exists. Falls back to OG / initials. |
+| `DISABLE_REGISTRATION` | Set to `1` after creating your admin account to block further sign-ups.                            |
+| `SQLITE_CACHE_MB`      | SQLite page cache, MB. Default `16`. Lower for tiny VPSes.                                          |
+| `SQLITE_MMAP_MB`       | SQLite mmap window, MB. Default `64`. Same.                                                         |
+
+Add them on their own lines in `.env` and run `docker compose up -d` again
+to pick up changes.
 
 ## 4. Configure Caddy
 
@@ -117,11 +114,16 @@ your first account — the first signup becomes the admin.
 ## 5. Lock down further sign-ups
 
 Most personal/team installs want signup disabled after the first user.
-Add `-e DISABLE_REGISTRATION=1` to the `docker run` line and restart:
+Add this line to `.env`:
 
 ```bash
-docker rm -f heli
-docker run -d ... -e DISABLE_REGISTRATION=1 ... heli:latest
+DISABLE_REGISTRATION=1
+```
+
+Then:
+
+```bash
+docker compose up -d
 ```
 
 (If the `users` table is empty, registration is allowed regardless — so
@@ -131,12 +133,14 @@ you can't lock yourself out before signing up.)
 
 ## Backups
 
-Heli is one SQLite file plus a folder of cached images. Back them up with:
+Heli is one SQLite file plus a folder of cached images:
 
 ```bash
+cd /srv/heli
 # Hot backup (safe while the app is running)
-sqlite3 /srv/heli/data/heli.db ".backup /srv/heli/backup-$(date +%F).db"
-tar czf /srv/heli/backup-$(date +%F)-avatars.tgz -C /srv/heli/data avatars
+docker compose exec heli sqlite3 /data/heli.db \
+  ".backup /data/backup-$(date +%F).db"
+tar czf backup-$(date +%F)-avatars.tgz -C data avatars
 ```
 
 Rsync the resulting files off-box (S3, another VPS, your laptop) on a
@@ -145,20 +149,13 @@ cron schedule of your liking.
 ## Upgrading
 
 ```bash
-cd /opt/heli && git pull
-docker build -t heli:latest .
-docker rm -f heli && docker run -d --name heli --restart unless-stopped \
-  -p 127.0.0.1:3000:3000 -v /srv/heli/data:/data \
-  -e PORT=3000 -e NODE_ENV=production \
-  -e ORIGIN=https://crm.example.com \
-  -e DB_PATH=/data/heli.db -e AVATARS_DIR=/data/avatars \
-  -e INBOUND_EMAIL_SECRET="$(cat /srv/heli/inbound-secret 2>/dev/null || \
-       (openssl rand -hex 32 | tee /srv/heli/inbound-secret))" \
-  heli:latest
+cd /srv/heli
+git pull
+docker compose up -d --build
 ```
 
-(Save your env vars to a file once and source it before `docker run` if
-you'd rather not paste them every time.)
+Compose only restarts containers whose image or config changed, so
+upgrades typically incur 5–10 seconds of downtime.
 
 ## Resource usage
 
@@ -173,13 +170,13 @@ The default `512 MB` memory limit on a CPX22 is plenty. If you go below
 
 ## Troubleshooting
 
-| Symptom                                  | Check                                                                 |
-| ---------------------------------------- | --------------------------------------------------------------------- |
-| `curl https://...` times out             | DNS not resolving yet; firewall blocking 80/443; Caddy not running.   |
-| TLS error / "no cert"                    | Caddy needs ports 80 *and* 443 open and DNS pointing at the VPS.       |
-| 502 from Caddy                           | Container not running. `docker ps`, then `docker logs heli`.           |
-| Avatars 404 after a redeploy             | Confirm `-v /srv/heli/data:/data` is on the `docker run` command.      |
-| "Please select a data region" on signup  | You're on an old build. Pull `main` and rebuild.                       |
+| Symptom                                  | Check                                                                                  |
+| ---------------------------------------- | -------------------------------------------------------------------------------------- |
+| `curl https://...` times out             | DNS not resolving yet; firewall blocking 80/443; Caddy not running.                    |
+| TLS error / "no cert"                    | Caddy needs ports 80 *and* 443 open and DNS pointing at the VPS.                       |
+| 502 from Caddy                           | Container not running. `docker compose ps`, then `docker compose logs heli`.           |
+| Avatars 404 after a redeploy             | The bind mount is gone. Check `docker compose config` and that `./data` still exists.  |
+| "Please select a data region" on signup  | You're on an old build. `git pull && docker compose up -d --build`.                    |
 
-For anything else, `docker logs -f heli` and the systemd Caddy logs
-(`journalctl -u caddy -f`) are the first places to look.
+For anything else, `docker compose logs -f heli` and the systemd Caddy
+logs (`journalctl -u caddy -f`) are the first places to look.
