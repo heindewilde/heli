@@ -1,7 +1,7 @@
 {
   "name": "Heli",
   "short_name": "Heli",
-  "description": "Paste a LinkedIn profile or company link — Heli enriches it, logs every interaction, and surfaces follow-ups.",
+  "description": "Simple, lightweight, and surprisingly powerful. An open-source CRM that tracks contacts, companies, interactions, and deals.",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#f6f8fc",
