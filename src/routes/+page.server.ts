@@ -1,8 +1,9 @@
 import { and, asc, desc, eq, gte, ne, or, sql } from 'drizzle-orm';
 import type { PageServerLoad } from './$types';
-import { db } from '$lib/server/db';
+import { db, isMultiRegion } from '$lib/server/db';
 import { people, companies, interactions as interactionsTable, projects } from '$lib/server/schema';
 import { listInteractions } from '$lib/server/interactions-query';
+import { isFirstUser } from '$lib/server/auth';
 
 export const load: PageServerLoad = async ({ locals, setHeaders }) => {
   if (!locals.user) {
@@ -10,7 +11,13 @@ export const load: PageServerLoad = async ({ locals, setHeaders }) => {
     // CDN serve it from the edge. Browsers always revalidate so a deploy is
     // picked up immediately; shared caches hold it for 5 min.
     setHeaders({ 'cache-control': 'public, max-age=0, s-maxage=300' });
-    return { user: null };
+    return {
+      user: null,
+      authConfig: {
+        registrationDisabled: process.env.DISABLE_REGISTRATION === '1' && !(await isFirstUser()),
+        multiRegion: isMultiRegion()
+      }
+    };
   }
   const d = db(locals.user.region);
   const fourteenDaysAgo = Date.now() - 14 * 86_400_000;

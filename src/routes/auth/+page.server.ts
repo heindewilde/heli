@@ -51,7 +51,7 @@ export const actions: Actions = {
     const data = await request.formData();
     const email = String(data.get('email') ?? '');
     const password = String(data.get('password') ?? '');
-    const username = String(data.get('username') ?? '') || null;
+    const username = String(data.get('username') ?? '');
     const regionRaw = data.get('region');
     const next = safeNext(String(data.get('next') ?? '') || url.searchParams.get('next'));
 
@@ -81,7 +81,9 @@ export const actions: Actions = {
               ? 'Please enter a valid email address.'
               : err.code === 'invalid_password'
                 ? 'Password must be 8–72 characters.'
-                : 'Could not create your account.';
+                : err.code === 'invalid_username'
+                  ? 'Please choose a username.'
+                  : 'Could not create your account.';
         return fail(400, { mode: 'register', email, username, error: message });
       }
       throw err;
