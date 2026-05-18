@@ -32,3 +32,6 @@ services:
     command: --label-enable --cleanup --interval 21600
     environment:
       TZ: UTC
+      # Recent Docker daemons reject Watchtower's default client API version.
+      # Pin to a version both sides understand.
+      DOCKER_API_VERSION: "1.45"
