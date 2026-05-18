@@ -41,6 +41,12 @@ function assertPassword(password: string): void {
   }
 }
 
+function assertUsername(username: string): void {
+  if (username.length < 1 || username.length > 50) {
+    throw new AuthError('invalid_username', 'Username must be 1–50 characters');
+  }
+}
+
 export async function userCount(region?: string): Promise<number> {
   const rows = await db(region).select({ id: users.id }).from(users).limit(2);
   return rows.length;
@@ -69,12 +75,14 @@ async function createSession(userId: string, region: string): Promise<{ id: stri
 export async function register(input: {
   email: string;
   password: string;
-  username?: string | null;
+  username: string;
   region?: string;
 }): Promise<{ user: AuthUser; sessionId: string; expiresAt: number }> {
   const email = normalizeEmail(input.email);
   assertEmail(email);
   assertPassword(input.password);
+  const username = input.username.trim();
+  assertUsername(username);
   const region = input.region ?? defaultRegion();
 
   const existingRouting = await primaryDb()
@@ -89,7 +97,6 @@ export async function register(input: {
   const passwordHash = await bcrypt.hash(input.password, BCRYPT_ROUNDS);
   const id = createId();
   const now = Date.now();
-  const username = input.username?.trim() || null;
 
   await db(region).insert(users).values({
     id,

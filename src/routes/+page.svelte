@@ -172,7 +172,7 @@
   </section>
   {/if}
 {:else}
-  <Landing />
+  <Landing authConfig={data.authConfig} />
 {/if}
 
 <svelte:head>
