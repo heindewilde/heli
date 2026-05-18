@@ -52,13 +52,20 @@ Edit `/srv/heli/.env`, then `cd /srv/heli && docker compose up -d`. Knobs:
 
 ## Upgrade
 
+Updates are applied **automatically** — a Watchtower sidecar checks
+GHCR every 6 hours and rolls the Heli container when a new image is
+published. There's nothing to do.
+
+If you'd rather upgrade manually, comment out the `watchtower` service
+in `docker-compose.yml` and run this when you want a new version:
+
 ```bash
 cd /srv/heli && docker compose pull && docker compose up -d
 ```
 
-A new image is published on every push to `main`. Pinning to a stable
-version? Edit `docker-compose.yml` and replace `:latest` with `:1.0.0`
-(or any tag from https://github.com/heindewilde/heli/pkgs/container/heli).
+To pin to a specific version (never auto-upgrade past it), edit
+`docker-compose.yml` and replace `:latest` with `:1.0.0` (or any tag
+from https://github.com/heindewilde/heli/pkgs/container/heli).
 
 ## Backup
 

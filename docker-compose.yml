@@ -17,3 +17,18 @@ services:
       NODE_ENV: production
       DB_PATH: /data/heli.db
       AVATARS_DIR: /data/avatars
+    labels:
+      com.centurylinklabs.watchtower.enable: "true"
+
+  # Watches the registry and rolls Heli to the latest image automatically.
+  # Scoped via the label above so it never touches anything else on the host.
+  # Disable by commenting this service out and running `docker compose up -d`.
+  watchtower:
+    image: containrrr/watchtower:latest
+    container_name: heli-watchtower
+    restart: unless-stopped
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    command: --label-enable --cleanup --interval 21600
+    environment:
+      TZ: UTC
