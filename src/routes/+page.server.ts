@@ -1,4 +1,5 @@
 import { and, asc, desc, eq, gte, ne, or, sql } from 'drizzle-orm';
+import { redirect } from '@sveltejs/kit';
 import type { PageServerLoad } from './$types';
 import { db, isMultiRegion } from '$lib/server/db';
 import { people, companies, interactions as interactionsTable, projects } from '$lib/server/schema';
@@ -7,6 +8,11 @@ import { isRegistrationDisabled } from '$lib/server/auth';
 
 export const load: PageServerLoad = async ({ locals, setHeaders }) => {
   if (!locals.user) {
+    // Self-host installs have no marketing landing — send straight to /auth.
+    // Cloud (heli.so) sets SHOW_LANDING=1 to keep the landing page.
+    if (process.env.SHOW_LANDING !== '1') {
+      throw redirect(303, '/auth');
+    }
     // Landing page is identical for every logged-out visitor — let an upstream
     // CDN serve it from the edge. Browsers always revalidate so a deploy is
     // picked up immediately; shared caches hold it for 5 min.
