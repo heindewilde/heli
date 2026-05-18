@@ -1,7 +1,7 @@
 {
   "name": "Heli",
   "short_name": "Heli",
-  "description": "A calmer CRM for the people you care about",
+  "description": "A simple, open-source CRM for freelancers and small businesses.",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#f6f8fc",

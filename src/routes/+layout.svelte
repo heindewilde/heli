@@ -13,7 +13,7 @@
   import { bindKeys, isTypingTarget } from '$lib/keyboard.svelte';
   import { toast } from '$lib/toasts.svelte';
   import { saveErrorMessage } from '$lib/save-errors';
-  import { APP_NAME, APP_DOMAIN, APP_TAGLINE } from '$lib/branding';
+  import { APP_NAME, APP_DOMAIN, APP_TAGLINE, APP_DESCRIPTION } from '$lib/branding';
 
   let { data, children } = $props();
   const user = $derived(data.user);
@@ -153,17 +153,17 @@
 
 <svelte:head>
   <title>{APP_NAME} — {APP_TAGLINE}</title>
-  <meta name="description" content={APP_TAGLINE} />
+  <meta name="description" content={APP_DESCRIPTION} />
   <link rel="canonical" href={canonicalUrl} />
   <meta property="og:type" content="website" />
   <meta property="og:site_name" content={APP_NAME} />
   <meta property="og:title" content="{APP_NAME} — {APP_TAGLINE}" />
-  <meta property="og:description" content={APP_TAGLINE} />
+  <meta property="og:description" content={APP_DESCRIPTION} />
   <meta property="og:url" content={canonicalUrl} />
   <meta property="og:image" content="https://{APP_DOMAIN}/icons/icon-512.png" />
   <meta name="twitter:card" content="summary" />
   <meta name="twitter:title" content="{APP_NAME} — {APP_TAGLINE}" />
-  <meta name="twitter:description" content={APP_TAGLINE} />
+  <meta name="twitter:description" content={APP_DESCRIPTION} />
   <meta name="twitter:image" content="https://{APP_DOMAIN}/icons/icon-512.png" />
 </svelte:head>
 
