@@ -120,7 +120,7 @@
     />
   </div>
 
-  {#if mode === 'register'}
+  {#if mode === 'register' && data.multiRegion}
     <div class="field" role="group" aria-labelledby="af-region-label">
       <span id="af-region-label" class="group-label">Choose where your data is stored</span>
       <input type="hidden" name="region" value={selectedRegion} />
