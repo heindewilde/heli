@@ -14,6 +14,7 @@
   import { toast } from '$lib/toasts.svelte';
   import { saveErrorMessage } from '$lib/save-errors';
   import { APP_NAME, APP_DOMAIN, APP_TAGLINE, APP_DESCRIPTION } from '$lib/branding';
+  import { VERSION } from '$lib/version';
 
   let { data, children } = $props();
   const user = $derived(data.user);
@@ -275,6 +276,9 @@
       </nav>
       <div class="mt-4 border-t border-[var(--color-border)] pt-3">
         <RemindersPopover items={reminders} />
+      </div>
+      <div class="absolute bottom-3 left-4 right-4 text-[10px] text-[var(--color-subtle)]">
+        <span title="Heli version">v{VERSION}</span>
       </div>
     </aside>
 
