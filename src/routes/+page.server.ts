@@ -3,7 +3,7 @@ import type { PageServerLoad } from './$types';
 import { db, isMultiRegion } from '$lib/server/db';
 import { people, companies, interactions as interactionsTable, projects } from '$lib/server/schema';
 import { listInteractions } from '$lib/server/interactions-query';
-import { isFirstUser } from '$lib/server/auth';
+import { isRegistrationDisabled } from '$lib/server/auth';
 
 export const load: PageServerLoad = async ({ locals, setHeaders }) => {
   if (!locals.user) {
@@ -14,7 +14,7 @@ export const load: PageServerLoad = async ({ locals, setHeaders }) => {
     return {
       user: null,
       authConfig: {
-        registrationDisabled: process.env.DISABLE_REGISTRATION === '1' && !(await isFirstUser()),
+        registrationDisabled: await isRegistrationDisabled(),
         multiRegion: isMultiRegion()
       }
     };

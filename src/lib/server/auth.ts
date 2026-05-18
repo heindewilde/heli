@@ -56,6 +56,16 @@ export async function isFirstUser(): Promise<boolean> {
   return (await userCount()) === 0;
 }
 
+// Self-host safe default: once at least one account exists, signups are closed
+// unless the operator opts back in with ENABLE_REGISTRATION=1. The legacy
+// DISABLE_REGISTRATION=1 remains a hard kill switch and still wins if set.
+// The first signup is always allowed so an empty install can bootstrap.
+export async function isRegistrationDisabled(): Promise<boolean> {
+  if (process.env.DISABLE_REGISTRATION === '1') return true;
+  if (await isFirstUser()) return false;
+  return process.env.ENABLE_REGISTRATION !== '1';
+}
+
 async function lookupRegion(email: string): Promise<string> {
   const row = await primaryDb()
     .select()

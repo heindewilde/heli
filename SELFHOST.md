@@ -78,6 +78,53 @@ tar czf backup-$(date +%F)-avatars.tgz -C data avatars
 Rsync the resulting files off-box (S3, another VPS, your laptop) on
 whatever schedule fits.
 
+## Restore
+
+Stop Heli, swap the file in, start Heli:
+
+```bash
+cd /srv/heli
+docker compose down
+cp /path/to/backup-YYYY-MM-DD.db data/heli.db
+tar xzf /path/to/backup-YYYY-MM-DD-avatars.tgz -C data
+docker compose up -d
+```
+
+Test the restore on a throwaway box at least once before you need it.
+
+## Email (password resets, inbound email)
+
+By default, password-reset links only print to the container logs.
+Wire up [Resend](https://resend.com) (free tier: 3000 emails/mo) to
+actually deliver them. Add to `/srv/heli/.env`:
+
+```bash
+RESEND_API_KEY=re_xxx
+EMAIL_FROM=Heli <hello@yourdomain.com>   # must be a verified Resend sender
+```
+
+Then `cd /srv/heli && docker compose up -d` to pick them up.
+
+If you're locked out and haven't set up email, get a reset link by
+tailing the container while triggering "Forgot password":
+
+```bash
+docker compose logs -f heli | grep -i reset
+```
+
+## Registration
+
+Once your admin account exists, **registration is closed by default**
+on a self-host. To allow new accounts (e.g. for a small team), add to
+`.env`:
+
+```bash
+ENABLE_REGISTRATION=1
+```
+
+To hard-disable even the first-user bootstrap (e.g. on a sealed install)
+set `DISABLE_REGISTRATION=1` — that overrides everything.
+
 ## Troubleshooting
 
 | Symptom                                  | Check                                                          |

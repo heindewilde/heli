@@ -1,7 +1,6 @@
 import { fail, redirect } from '@sveltejs/kit';
 import type { Actions, PageServerLoad } from './$types';
-import { register, login, AuthError } from '$lib/server/auth';
-import { isFirstUser } from '$lib/server/auth';
+import { register, login, AuthError, isRegistrationDisabled } from '$lib/server/auth';
 import { setSessionCookie } from '$lib/server/cookies';
 import { checkRateLimit, LIMITS, RateLimitError } from '$lib/server/rate-limit';
 import { isMultiRegion, isValidRegion } from '$lib/server/db';
@@ -20,7 +19,7 @@ export const load: PageServerLoad = async ({ locals, url }) => {
   return {
     mode: url.searchParams.get('mode') === 'register' ? 'register' : 'login',
     next,
-    registrationDisabled: process.env.DISABLE_REGISTRATION === '1' && !(await isFirstUser()),
+    registrationDisabled: await isRegistrationDisabled(),
     multiRegion: isMultiRegion()
   };
 };
@@ -55,7 +54,7 @@ export const actions: Actions = {
     const regionRaw = data.get('region');
     const next = safeNext(String(data.get('next') ?? '') || url.searchParams.get('next'));
 
-    if (process.env.DISABLE_REGISTRATION === '1' && !(await isFirstUser())) {
+    if (await isRegistrationDisabled()) {
       return fail(403, { mode: 'register', email, username, error: 'Registration is disabled.' });
     }
 
