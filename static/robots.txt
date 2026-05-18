@@ -1,2 +1,15 @@
 User-agent: *
-Disallow:
+Allow: /
+Allow: /auth
+Disallow: /api/
+Disallow: /people
+Disallow: /companies
+Disallow: /interactions
+Disallow: /collections
+Disallow: /pipelines
+Disallow: /projects
+Disallow: /save
+Disallow: /settings
+Disallow: /health
+
+Sitemap: https://heli.so/sitemap.xml

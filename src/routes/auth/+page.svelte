@@ -12,6 +12,7 @@
     FolderKanban
   } from 'lucide-svelte';
   import { untrack } from 'svelte';
+  import { APP_NAME } from '$lib/branding';
 
   let { data, form } = $props();
   let mode = $state<'login' | 'register'>(
@@ -45,7 +46,8 @@
 </script>
 
 <svelte:head>
-  <title>{mode === 'login' ? 'Sign in' : 'Create account'} — Heli</title>
+  <title>{mode === 'login' ? 'Sign in' : 'Create account'} — {APP_NAME}</title>
+  <meta name="robots" content="noindex" />
 </svelte:head>
 
 <div class="auth-page">

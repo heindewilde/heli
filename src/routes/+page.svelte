@@ -6,6 +6,22 @@
   import { Users, Building2, MessagesSquare, FolderKanban, Loader2, AlertTriangle, Calendar } from 'lucide-svelte';
   import { invalidateAll } from '$app/navigation';
   import { pollWhile } from '$lib/polling';
+  import { APP_NAME, APP_DOMAIN, APP_DESCRIPTION } from '$lib/branding';
+
+  const LANDING_TITLE = `${APP_NAME} — Open Source CRM for Freelancers & Small Businesses`;
+  // Escape `<` so a stray closing-script tag in any field cannot break out of the JSON-LD block.
+  const softwareSchemaJson = JSON.stringify({
+    '@context': 'https://schema.org',
+    '@type': 'SoftwareApplication',
+    name: APP_NAME,
+    description: APP_DESCRIPTION,
+    applicationCategory: 'BusinessApplication',
+    operatingSystem: 'Web, self-hostable on Linux/macOS',
+    url: `https://${APP_DOMAIN}`,
+    license: 'https://www.gnu.org/licenses/agpl-3.0.html',
+    offers: { '@type': 'Offer', price: '0', priceCurrency: 'USD' },
+    publisher: { '@type': 'Organization', name: APP_NAME, url: `https://${APP_DOMAIN}` }
+  }).replace(/</g, '\\u003c');
 
   let { data } = $props();
 
@@ -158,3 +174,12 @@
 {:else}
   <Landing />
 {/if}
+
+<svelte:head>
+  {#if !data.user}
+    <title>{LANDING_TITLE}</title>
+    <meta property="og:title" content={LANDING_TITLE} />
+    <meta name="twitter:title" content={LANDING_TITLE} />
+    {@html `<script type="application/ld+json">${softwareSchemaJson}<\/script>`}
+  {/if}
+</svelte:head>

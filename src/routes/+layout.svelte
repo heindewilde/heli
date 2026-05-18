@@ -160,11 +160,15 @@
   <meta property="og:title" content="{APP_NAME} — {APP_TAGLINE}" />
   <meta property="og:description" content={APP_DESCRIPTION} />
   <meta property="og:url" content={canonicalUrl} />
-  <meta property="og:image" content="https://{APP_DOMAIN}/icons/icon-512.png" />
-  <meta name="twitter:card" content="summary" />
+  <meta property="og:image" content="https://{APP_DOMAIN}/og-image.png" />
+  <meta property="og:image:width" content="1200" />
+  <meta property="og:image:height" content="630" />
+  <meta property="og:image:alt" content="{APP_NAME} — {APP_TAGLINE}" />
+  <meta name="twitter:card" content="summary_large_image" />
   <meta name="twitter:title" content="{APP_NAME} — {APP_TAGLINE}" />
   <meta name="twitter:description" content={APP_DESCRIPTION} />
-  <meta name="twitter:image" content="https://{APP_DOMAIN}/icons/icon-512.png" />
+  <meta name="twitter:image" content="https://{APP_DOMAIN}/og-image.png" />
+  <meta name="twitter:image:alt" content="{APP_NAME} — {APP_TAGLINE}" />
 </svelte:head>
 
 <div class="bg-[var(--color-bg)] text-[var(--color-text)] {user ? 'h-screen overflow-hidden' : ''}">
