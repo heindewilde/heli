@@ -154,6 +154,7 @@
 <svelte:head>
   <title>{APP_NAME} — {APP_TAGLINE}</title>
   <meta name="description" content={APP_DESCRIPTION} />
+  <meta name="apple-mobile-web-app-title" content={APP_NAME} />
   <link rel="canonical" href={canonicalUrl} />
   <meta property="og:type" content="website" />
   <meta property="og:site_name" content={APP_NAME} />
