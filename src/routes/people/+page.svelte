@@ -31,8 +31,34 @@
   // synchronously (optimistic), then PATCH; rollback on error.
   // svelte-ignore state_referenced_locally
   const cache = createListCache<Row>(data.items);
-  $effect(() => cache.hydrate(data.items));
+  // Re-hydrate from SSR whenever the server load returns a fresh items array
+  // (filter change, sort change, after invalidateAll). When this happens we
+  // also reset the load-more cursor to whatever the new server view exposes.
+  $effect(() => {
+    cache.hydrate(data.items);
+    nextCursor = data.nextCursor;
+  });
   const rows = $derived(cache.items);
+
+  // svelte-ignore state_referenced_locally
+  let nextCursor = $state<string | null>(data.nextCursor);
+  let loadingMore = $state(false);
+
+  async function loadMore() {
+    if (!nextCursor || loadingMore) return;
+    loadingMore = true;
+    try {
+      const res = await fetch(`/api/people/list?cursor=${encodeURIComponent(nextCursor)}`);
+      if (!res.ok) { toast.danger('Could not load more'); return; }
+      const body = (await res.json()) as { items: Row[]; nextCursor: string | null };
+      cache.appendMany(body.items);
+      nextCursor = body.nextCursor;
+    } catch {
+      toast.danger('Could not load more');
+    } finally {
+      loadingMore = false;
+    }
+  }
   // Statuses are read from `data` directly; inline-create triggers an
   // invalidateAll so the next render reflects the new option.
   let statuses = $derived<StatusRow[]>(data.statuses);
@@ -431,6 +457,23 @@
         {/each}
       </ul>
     </div>
+    {#if nextCursor}
+      <div class="flex justify-center">
+        <button
+          type="button"
+          onclick={loadMore}
+          disabled={loadingMore}
+          class="inline-flex items-center gap-1.5 rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-1.5 text-xs text-[var(--color-muted)] transition-colors hover:border-[var(--color-border-strong)] hover:text-[var(--color-text)] disabled:opacity-60"
+        >
+          {#if loadingMore}
+            <Loader2 size={12} strokeWidth={2} class="animate-spin" />
+            Loading…
+          {:else}
+            Load more
+          {/if}
+        </button>
+      </div>
+    {/if}
   {/if}
 
   <!-- Row actions reachable via the detail page; we keep the list dense and

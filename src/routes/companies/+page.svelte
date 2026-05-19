@@ -28,9 +28,32 @@
   let selected = $state(0);
   // svelte-ignore state_referenced_locally
   const cache = createListCache<Row>(data.items);
-  $effect(() => cache.hydrate(data.items));
+  $effect(() => {
+    cache.hydrate(data.items);
+    nextCursor = data.nextCursor;
+  });
   const rows = $derived(cache.items);
   let statuses = $derived<StatusRow[]>(data.statuses);
+
+  // svelte-ignore state_referenced_locally
+  let nextCursor = $state<string | null>(data.nextCursor);
+  let loadingMore = $state(false);
+
+  async function loadMore() {
+    if (!nextCursor || loadingMore) return;
+    loadingMore = true;
+    try {
+      const res = await fetch(`/api/companies/list?cursor=${encodeURIComponent(nextCursor)}`);
+      if (!res.ok) { toast.danger('Could not load more'); return; }
+      const body = (await res.json()) as { items: Row[]; nextCursor: string | null };
+      cache.appendMany(body.items);
+      nextCursor = body.nextCursor;
+    } catch {
+      toast.danger('Could not load more');
+    } finally {
+      loadingMore = false;
+    }
+  }
 
   let showAdd = $state(false);
   let addName = $state('');
@@ -387,6 +410,23 @@
         {/each}
       </ul>
     </div>
+    {#if nextCursor}
+      <div class="flex justify-center">
+        <button
+          type="button"
+          onclick={loadMore}
+          disabled={loadingMore}
+          class="inline-flex items-center gap-1.5 rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-1.5 text-xs text-[var(--color-muted)] transition-colors hover:border-[var(--color-border-strong)] hover:text-[var(--color-text)] disabled:opacity-60"
+        >
+          {#if loadingMore}
+            <Loader2 size={12} strokeWidth={2} class="animate-spin" />
+            Loading…
+          {:else}
+            Load more
+          {/if}
+        </button>
+      </div>
+    {/if}
   {/if}
 
   <p class="hidden sm:block text-[11px] text-[var(--color-subtle)]">

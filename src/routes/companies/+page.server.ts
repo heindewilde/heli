@@ -12,6 +12,14 @@ import {
 } from '$lib/server/tags';
 import { listStatuses } from '$lib/server/statuses';
 import { sqlOr } from '$lib/server/sql-helpers';
+import {
+  COMPANY_ROW_COLS,
+  companyLastInteractionJoin,
+  type CompanyRow
+} from '$lib/server/companies-rows';
+import { encodeCursor } from '$lib/server/cursor';
+
+const PAGE_SIZE = 50;
 
 const SORTS = new Set(['recent', 'updated', 'name', 'lastInteraction', 'priority', 'status']);
 
@@ -70,44 +78,23 @@ export const load: PageServerLoad = async ({ locals, url }) => {
           statuses,
           items: [],
           itemTags: {} as Record<string, { id: string; name: string; slug: string }[]>,
-          total: 0
+          total: 0,
+          nextCursor: null
         };
       }
     }
   }
 
-  type Row = {
-    id: string;
-    name: string;
-    description: string | null;
-    url: string | null;
-    domain: string | null;
-    logoUrl: string | null;
-    faviconUrl: string | null;
-    industry: string | null;
-    sizeBand: string | null;
-    location: string | null;
-    priority: number | null;
-    statusId: string | null;
-    isFavorite: number;
-    isArchived: number;
-    source: string | null;
-    createdAt: number;
-    updatedAt: number;
-    lastAt: number | null;
-  };
-
-  const SELECT_COLS = sql`
-    c.id, c.name, c.description, c.url, c.domain,
-    c.logo_url AS logoUrl, c.favicon_url AS faviconUrl,
-    c.industry, c.size_band AS sizeBand, c.location,
-    c.priority, c.status_id AS statusId,
-    c.is_favorite AS isFavorite, c.is_archived AS isArchived,
-    c.source, c.created_at AS createdAt, c.updated_at AS updatedAt,
-    li.last_at AS lastAt
-  `;
-
   const userId = locals.user.id;
+  // Only the default unfiltered view exposes a cursor for Load More.
+  const isDefaultView =
+    !fts &&
+    !archived &&
+    !favorite &&
+    !tagFilterIds &&
+    !priorityFilter &&
+    !statusFilter &&
+    sort === 'recent';
   const tagInClause = tagFilterIds
     ? sql`AND c.id IN (${sql.join(
         tagFilterIds.map((id) => sql`${id}`),
@@ -130,16 +117,7 @@ export const load: PageServerLoad = async ({ locals, url }) => {
       ])
     : sql``;
 
-  // Companies link directly to interactions via i.company_id (no junction
-  // table on this side).
-  const LAST_INTERACTION_JOIN = sql`
-    LEFT JOIN (
-      SELECT i.company_id AS cid, MAX(i.occurred_at) AS last_at
-      FROM interactions i
-      WHERE i.user_id = ${userId}
-      GROUP BY i.company_id
-    ) li ON li.cid = c.id
-  `;
+  const LAST_INTERACTION_JOIN = companyLastInteractionJoin(userId);
 
   let orderClause;
   if (sort === 'name') orderClause = sql`c.name COLLATE NOCASE ASC`;
@@ -149,10 +127,12 @@ export const load: PageServerLoad = async ({ locals, url }) => {
   else if (sort === 'status') orderClause = sql`(c.status_id IS NULL), c.status_id ASC, c.created_at DESC`;
   else orderClause = sql`c.created_at DESC`;
 
-  let items: Row[];
+  const fetchLimit = isDefaultView ? PAGE_SIZE + 1 : PAGE_SIZE;
+
+  let items: CompanyRow[];
   if (fts) {
-    items = await d.all<Row>(sql`
-      SELECT ${SELECT_COLS}
+    items = await d.all<CompanyRow>(sql`
+      SELECT ${COMPANY_ROW_COLS}
       FROM companies c
       JOIN companies_fts f ON f.rowid = c.rowid
       ${LAST_INTERACTION_JOIN}
@@ -164,11 +144,11 @@ export const load: PageServerLoad = async ({ locals, url }) => {
         ${priorityClause}
         ${statusClause}
       ORDER BY rank
-      LIMIT 50
+      LIMIT ${fetchLimit}
     `);
   } else {
-    items = await d.all<Row>(sql`
-      SELECT ${SELECT_COLS}
+    items = await d.all<CompanyRow>(sql`
+      SELECT ${COMPANY_ROW_COLS}
       FROM companies c
       ${LAST_INTERACTION_JOIN}
       WHERE c.user_id = ${userId}
@@ -178,8 +158,15 @@ export const load: PageServerLoad = async ({ locals, url }) => {
         ${priorityClause}
         ${statusClause}
       ORDER BY ${orderClause}
-      LIMIT 50
+      LIMIT ${fetchLimit}
     `);
+  }
+
+  let nextCursor: string | null = null;
+  if (isDefaultView && items.length > PAGE_SIZE) {
+    const lastVisible = items[PAGE_SIZE - 1];
+    nextCursor = encodeCursor(lastVisible.createdAt, lastVisible.id);
+    items = items.slice(0, PAGE_SIZE);
   }
 
   // Four independent reads; fan out to cut libSQL round-trips.
@@ -208,6 +195,7 @@ export const load: PageServerLoad = async ({ locals, url }) => {
     statuses,
     items,
     itemTags,
-    total: Number(totalRow?.n ?? 0)
+    total: Number(totalRow?.n ?? 0),
+    nextCursor
   };
 };

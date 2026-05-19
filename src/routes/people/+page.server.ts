@@ -12,6 +12,14 @@ import {
 } from '$lib/server/tags';
 import { listStatuses } from '$lib/server/statuses';
 import { sqlOr } from '$lib/server/sql-helpers';
+import {
+  PERSON_ROW_COLS,
+  personLastInteractionJoin,
+  type PersonRow
+} from '$lib/server/people-rows';
+import { encodeCursor } from '$lib/server/cursor';
+
+const PAGE_SIZE = 50;
 
 // Allowed sort keys. Anything else falls back to 'recent'.
 const SORTS = new Set(['recent', 'updated', 'name', 'lastInteraction', 'priority', 'status']);
@@ -73,52 +81,25 @@ export const load: PageServerLoad = async ({ locals, url }) => {
           statuses,
           items: [],
           itemTags: {} as Record<string, { id: string; name: string; slug: string }[]>,
-          total: 0
+          total: 0,
+          nextCursor: null
         };
       }
     }
   }
 
-  type Row = {
-    id: string;
-    name: string;
-    role: string | null;
-    companyId: string | null;
-    companyName: string | null;
-    companyDomain: string | null;
-    companyFaviconUrl: string | null;
-    companyLogoUrl: string | null;
-    url: string | null;
-    domain: string | null;
-    email: string | null;
-    avatarUrl: string | null;
-    faviconUrl: string | null;
-    priority: number | null;
-    statusId: string | null;
-    isFavorite: number;
-    isArchived: number;
-    source: string | null;
-    createdAt: number;
-    updatedAt: number;
-    lastAt: number | null;
-  };
-
-  // Single source of truth for the column projection. The two query branches
-  // (FTS vs structured) both join the same companies left-join and the same
-  // interaction-max subquery so the row shape is identical.
-  const SELECT_COLS = sql`
-    p.id, p.name, p.role, p.company_id AS companyId,
-    co.name AS companyName, co.domain AS companyDomain,
-    co.favicon_url AS companyFaviconUrl, co.logo_url AS companyLogoUrl,
-    p.url, p.domain, p.email,
-    p.avatar_url AS avatarUrl, p.favicon_url AS faviconUrl,
-    p.priority, p.status_id AS statusId,
-    p.is_favorite AS isFavorite, p.is_archived AS isArchived,
-    p.source, p.created_at AS createdAt, p.updated_at AS updatedAt,
-    li.last_at AS lastAt
-  `;
-
   const userId = locals.user.id;
+  // Detect "default unfiltered view" — only in this state is cursor pagination
+  // valid for the API's Load More endpoint. Filtered/sorted/searched views
+  // ship the first 50 and don't expose a cursor.
+  const isDefaultView =
+    !fts &&
+    !archived &&
+    !favorite &&
+    !tagFilterIds &&
+    !priorityFilter &&
+    !statusFilter &&
+    sort === 'recent';
   const tagInClause = tagFilterIds
     ? sql`AND p.id IN (${sql.join(
         tagFilterIds.map((id) => sql`${id}`),
@@ -141,14 +122,7 @@ export const load: PageServerLoad = async ({ locals, url }) => {
       ])
     : sql``;
 
-  const LAST_INTERACTION_JOIN = sql`
-    LEFT JOIN (
-      SELECT ip.person_id AS pid, MAX(i.occurred_at) AS last_at
-      FROM interaction_people ip
-      JOIN interactions i ON i.id = ip.interaction_id AND i.user_id = ${userId}
-      GROUP BY ip.person_id
-    ) li ON li.pid = p.id
-  `;
+  const LAST_INTERACTION_JOIN = personLastInteractionJoin(userId);
 
   // ORDER BY clause built per sort key. NULLs handled inline.
   let orderClause;
@@ -159,10 +133,14 @@ export const load: PageServerLoad = async ({ locals, url }) => {
   else if (sort === 'status') orderClause = sql`(p.status_id IS NULL), p.status_id ASC, p.created_at DESC`;
   else orderClause = sql`p.created_at DESC`;
 
-  let items: Row[];
+  // Peek one extra row to detect whether there's a next page worth of data
+  // for the default unfiltered view (used to set `nextCursor` below).
+  const fetchLimit = isDefaultView ? PAGE_SIZE + 1 : PAGE_SIZE;
+
+  let items: PersonRow[];
   if (fts) {
-    items = await d.all<Row>(sql`
-      SELECT ${SELECT_COLS}
+    items = await d.all<PersonRow>(sql`
+      SELECT ${PERSON_ROW_COLS}
       FROM people p
       JOIN people_fts f ON f.rowid = p.rowid
       LEFT JOIN companies co ON co.id = p.company_id
@@ -175,11 +153,11 @@ export const load: PageServerLoad = async ({ locals, url }) => {
         ${priorityClause}
         ${statusClause}
       ORDER BY rank
-      LIMIT 50
+      LIMIT ${fetchLimit}
     `);
   } else {
-    items = await d.all<Row>(sql`
-      SELECT ${SELECT_COLS}
+    items = await d.all<PersonRow>(sql`
+      SELECT ${PERSON_ROW_COLS}
       FROM people p
       LEFT JOIN companies co ON co.id = p.company_id
       ${LAST_INTERACTION_JOIN}
@@ -190,8 +168,15 @@ export const load: PageServerLoad = async ({ locals, url }) => {
         ${priorityClause}
         ${statusClause}
       ORDER BY ${orderClause}
-      LIMIT 50
+      LIMIT ${fetchLimit}
     `);
+  }
+
+  let nextCursor: string | null = null;
+  if (isDefaultView && items.length > PAGE_SIZE) {
+    const lastVisible = items[PAGE_SIZE - 1];
+    nextCursor = encodeCursor(lastVisible.createdAt, lastVisible.id);
+    items = items.slice(0, PAGE_SIZE);
   }
 
   // Four independent reads; fan out to cut libSQL round-trips.
@@ -220,7 +205,8 @@ export const load: PageServerLoad = async ({ locals, url }) => {
     statuses,
     items,
     itemTags,
-    total: Number(totalRow?.n ?? 0)
+    total: Number(totalRow?.n ?? 0),
+    nextCursor
   };
 };
 

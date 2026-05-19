@@ -26,6 +26,7 @@ export interface ListCache<T extends { id: string }> {
   hydrate(next: T[]): void;
   patch(id: string, updates: Partial<T>): () => void;
   insert(item: T, position?: 'start' | 'end'): () => void;
+  appendMany(extra: T[]): void;
   remove(id: string): () => void;
 }
 
@@ -53,6 +54,14 @@ export function createListCache<T extends { id: string }>(initial: T[]): ListCac
       return () => {
         items = items.filter((x) => x.id !== item.id);
       };
+    },
+    appendMany(extra) {
+      if (extra.length === 0) return;
+      // De-dupe by id so a hydrate-mid-load-more can't double-append.
+      const known = new Set(items.map((x) => x.id));
+      const fresh = extra.filter((x) => !known.has(x.id));
+      if (fresh.length === 0) return;
+      items = [...items, ...fresh];
     },
     remove(id) {
       const idx = items.findIndex((x) => x.id === id);
