@@ -5,12 +5,13 @@ import {
   PROJECT_STATUSES,
   type ProjectStatus
 } from '$lib/server/schema';
+import { jsonWithEtag } from '$lib/server/cache';
 
 function isStatusOrAll(v: unknown): v is ProjectStatus | 'all' {
   return v === 'all' || (typeof v === 'string' && (PROJECT_STATUSES as readonly string[]).includes(v));
 }
 
-export const GET: RequestHandler = async ({ url, locals }) => {
+export const GET: RequestHandler = async ({ url, locals, request }) => {
   if (!locals.user) throw error(401, 'unauthorized');
   const q = url.searchParams.get('q')?.trim() ?? '';
   const limitParam = Number.parseInt(url.searchParams.get('limit') ?? '', 10);
@@ -27,7 +28,7 @@ export const GET: RequestHandler = async ({ url, locals }) => {
       q,
       Number.isFinite(limitParam) ? Math.min(Math.max(limitParam, 1), 50) : 8
     );
-    return json({ items });
+    return jsonWithEtag(request, { items });
   }
 
   const status = isStatusOrAll(statusParam) ? statusParam : 'active';
@@ -48,7 +49,7 @@ export const GET: RequestHandler = async ({ url, locals }) => {
     sort,
     limit: 200
   });
-  return json({ items });
+  return jsonWithEtag(request, { items });
 };
 
 export const POST: RequestHandler = async ({ request, locals }) => {

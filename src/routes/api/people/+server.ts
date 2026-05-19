@@ -5,8 +5,9 @@ import { people } from '$lib/server/schema';
 import { ftsQuery } from '$lib/server/search';
 import { savePerson, type ManualPersonInput } from '$lib/server/savePerson';
 import { sanitizePlainText } from '$lib/server/sanitize';
+import { jsonWithEtag } from '$lib/server/cache';
 
-export const GET: RequestHandler = async ({ url, locals }) => {
+export const GET: RequestHandler = async ({ url, locals, request }) => {
   if (!locals.user) throw error(401, 'unauthorized');
   const q = url.searchParams.get('q')?.trim() ?? '';
   const limit = Math.min(Number.parseInt(url.searchParams.get('limit') ?? '20', 10) || 20, 100);
@@ -66,7 +67,7 @@ export const GET: RequestHandler = async ({ url, locals }) => {
       .limit(limit);
   }
 
-  return json({ items: rows });
+  return jsonWithEtag(request, { items: rows });
 };
 
 export const POST: RequestHandler = async ({ request, locals }) => {

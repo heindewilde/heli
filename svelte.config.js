@@ -18,5 +18,5 @@ const csp = {
 
 export default {
   preprocess: vitePreprocess(),
-  kit: { adapter: adapter(), csp }
+  kit: { adapter: adapter({ precompress: true }), csp }
 };

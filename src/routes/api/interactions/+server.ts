@@ -1,8 +1,9 @@
 import { error, json, type RequestHandler } from '@sveltejs/kit';
 import { listInteractions } from '$lib/server/interactions-query';
 import { createInteraction, isInteractionType } from '$lib/server/saveInteraction';
+import { jsonWithEtag } from '$lib/server/cache';
 
-export const GET: RequestHandler = async ({ url, locals }) => {
+export const GET: RequestHandler = async ({ url, locals, request }) => {
   if (!locals.user) throw error(401, 'unauthorized');
   const limit = Math.min(Number.parseInt(url.searchParams.get('limit') ?? '200', 10) || 200, 500);
   const items = await listInteractions(locals.user.id, locals.user.region, {
@@ -14,7 +15,7 @@ export const GET: RequestHandler = async ({ url, locals }) => {
     to: parseTs(url.searchParams.get('to')),
     limit
   });
-  return json({ items });
+  return jsonWithEtag(request, { items });
 };
 
 function parseTs(v: string | null): number | undefined {

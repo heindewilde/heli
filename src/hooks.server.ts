@@ -4,6 +4,7 @@ import { initDb } from '$lib/server/db';
 import { migrate } from '$lib/server/migrate';
 import { validateSession, SESSION_COOKIE } from '$lib/server/auth';
 import { checkRateLimit, LIMITS, RateLimitError } from '$lib/server/rate-limit';
+import { setPrivate, maybeCompress } from '$lib/server/cache';
 
 const ready = (async () => {
   await initDb();
@@ -65,6 +66,14 @@ export const handle: Handle = async ({ event, resolve }) => {
 
   const response = await resolve(event);
 
+  // Default any response that hasn't set its own Cache-Control to private/
+  // no-store + Vary: Cookie. Routes that opt-in to caching (landing page,
+  // avatars, install page, list APIs via cache.ts helpers) already set their
+  // own header and are left untouched.
+  if (!response.headers.has('Cache-Control')) {
+    setPrivate(response);
+  }
+
   response.headers.set('X-Content-Type-Options', 'nosniff');
   response.headers.set('X-Frame-Options', 'DENY');
   response.headers.set('Referrer-Policy', 'strict-origin-when-cross-origin');
@@ -89,5 +98,5 @@ export const handle: Handle = async ({ event, resolve }) => {
   if (!dev) {
     response.headers.set('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
   }
-  return response;
+  return maybeCompress(response, event.request.headers.get('accept-encoding'));
 };
