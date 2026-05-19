@@ -32,6 +32,10 @@ const PROTECTED_PATTERNS = [
 
 export const handle: Handle = async ({ event, resolve }) => {
   await ready;
+  // In dev, emit a Server-Timing header so DevTools' Network panel shows the
+  // total time the server spent on each request. Cheap to compute; the
+  // window flips off in production so we don't leak timings to clients.
+  const startedAt = dev ? performance.now() : 0;
   const cookie = event.cookies.get(SESSION_COOKIE);
   if (cookie) {
     const session = await validateSession(cookie);
@@ -97,6 +101,11 @@ export const handle: Handle = async ({ event, resolve }) => {
   );
   if (!dev) {
     response.headers.set('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
+  } else {
+    response.headers.set(
+      'Server-Timing',
+      `total;dur=${(performance.now() - startedAt).toFixed(1)}`
+    );
   }
   return maybeCompress(response, event.request.headers.get('accept-encoding'));
 };

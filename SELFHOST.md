@@ -50,6 +50,72 @@ Edit `/srv/heli/.env`, then `cd /srv/heli && docker compose up -d`. Knobs:
 | `SQLITE_CACHE_MB`      | SQLite page cache, MB. Default `16`.                                                |
 | `SQLITE_MMAP_MB`       | SQLite mmap window, MB. Default `64`.                                               |
 
+## Performance tuning
+
+Heli is built to feel fast on cheap hardware. Out of the box, a 1 GB VPS
+behind the installer-managed Caddy already gives you HTTP/3, TLS 1.3,
+and per-asset cache headers. A few knobs to push it further:
+
+### Geography
+
+The single biggest perceived-speed lever is **distance**. If most of
+your traffic is from one continent, pick a VPS in that continent.
+- Hetzner has datacenters in Falkenstein/Nuremberg (EU), Ashburn (US-East), Hillsboro (US-West), and Singapore.
+- DigitalOcean has 14+ regions.
+- Vultr has 30+ regions including São Paulo, Sydney, Tokyo, Johannesburg.
+
+### Compression and HTTP/3
+
+The installer-managed Caddy serves HTTP/3 by default. To also enable
+brotli compression (smaller responses than gzip for text), add `encode`
+to `/etc/caddy/Caddyfile`:
+
+```caddy
+your.domain {
+    encode zstd br gzip
+    reverse_proxy localhost:3000
+}
+```
+
+Then `sudo systemctl reload caddy`. Heli's Node server also gzips
+responses on its own (so the origin → reverse-proxy hop is already
+compressed); this just adds brotli for the proxy → browser hop.
+
+### SQLite memory
+
+The defaults assume a tight 1 GB VPS. If you have more RAM, give SQLite
+more page cache and a wider mmap window — most read queries become
+memory hits instead of disk reads:
+
+```bash
+# /srv/heli/.env, for hosts with ≥ 2 GB RAM
+SQLITE_CACHE_MB=64
+SQLITE_MMAP_MB=128
+```
+
+`docker compose up -d` to apply.
+
+### Putting Cloudflare in front
+
+For globally distributed users on a single VPS, a CDN in front buys you
+TLS termination + edge caching near every visitor. Cloudflare's free
+plan covers it:
+
+1. Add your domain to Cloudflare, set DNS to Cloudflare nameservers.
+2. Point the A record at your VPS as before, but with the **orange
+   cloud** enabled.
+3. SSL/TLS mode: **Full (strict)** (Caddy already has a real cert).
+4. Optional cache rule: `/_app/immutable/*` and `/avatars/*` → "Cache
+   Everything", edge TTL 1 year. Heli already sends immutable headers
+   on those paths; the rule just opts them into Cloudflare's edge.
+
+The HTML for authed pages stays uncached (private cookies) — only
+static assets ride the edge.
+
+If you don't want a public IP at all, **Cloudflare Tunnel** is the same
+benefits without exposing your VPS: `cloudflared tunnel create heli`,
+point the tunnel at `localhost:80`, route the hostname.
+
 ## Upgrade
 
 Updates are applied **automatically** — a Watchtower sidecar checks
