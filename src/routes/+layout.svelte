@@ -278,7 +278,7 @@
         <RemindersPopover items={reminders} />
       </div>
       <div class="absolute bottom-3 left-4 right-4 text-[10px] text-[var(--color-subtle)]">
-        <span title="Heli version">v{VERSION}</span>
+        <span title="Heli version">Version: {VERSION.replace(/^v/, '')}</span>
       </div>
     </aside>
 
