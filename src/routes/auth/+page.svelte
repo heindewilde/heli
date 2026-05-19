@@ -2,14 +2,14 @@
   import { APP_NAME } from '$lib/branding';
   import { Moon, Sun } from 'lucide-svelte';
   import { onMount } from 'svelte';
-  import AuthForm from '$lib/components/AuthForm.svelte';
+  import AuthCard from '$lib/components/AuthCard.svelte';
   import Sky from '$lib/components/Sky.svelte';
   import { untrack } from 'svelte';
 
   let { data, form } = $props();
 
   // The form lets users toggle between sign in and sign up without leaving
-  // the page — heading + subtitle have to follow that, not the URL the page
+  // the page — heading + tab title have to follow that, not the URL the page
   // was loaded with.
   let mode = $state<'login' | 'register'>(
     untrack(() => (!data.registrationDisabled && data.mode === 'register' ? 'register' : 'login'))
@@ -27,8 +27,6 @@
       localStorage.setItem('theme', isDark ? 'dark' : 'light');
     } catch {}
   }
-
-  const heading = $derived(mode === 'register' ? 'Create your account' : 'Welcome back');
 </script>
 
 <svelte:head>
@@ -54,20 +52,7 @@
   </header>
 
   <main class="main">
-    <div class="card">
-      <header class="card-head">
-        <h1>{heading}</h1>
-        <p class="subtitle">
-          {#if mode === 'register'}
-            Start organizing your <span class="nowrap"><span class="handwrite">(net)</span>work</span>
-          {:else}
-            Sign in to your CRM
-          {/if}
-        </p>
-      </header>
-
-      <AuthForm {data} {form} bind:mode />
-    </div>
+    <AuthCard {data} {form} headingLevel="h1" bind:mode />
   </main>
 </div>
 
@@ -163,66 +148,6 @@
     align-items: center;
     justify-content: center;
     padding: 2rem 1.25rem 3rem;
-  }
-
-  .card {
-    width: 100%;
-    max-width: 30rem;
-    background: rgba(255, 255, 255, 0.6);
-    border: 1px solid rgba(255, 255, 255, 0.7);
-    border-radius: var(--radius-lg);
-    padding: 2.25rem 2.25rem 2rem;
-    box-shadow:
-      0 1px 0 rgba(255, 255, 255, 0.6) inset,
-      0 18px 50px -12px rgba(40, 60, 90, 0.25),
-      0 4px 14px rgba(40, 60, 90, 0.08);
-    backdrop-filter: blur(18px) saturate(140%);
-    -webkit-backdrop-filter: blur(18px) saturate(140%);
-  }
-
-  :global([data-theme='dark']) .card {
-    background: rgba(20, 32, 50, 0.6);
-    border-color: rgba(255, 255, 255, 0.1);
-    box-shadow:
-      0 1px 0 rgba(255, 255, 255, 0.05) inset,
-      0 18px 50px -12px rgba(0, 0, 0, 0.5);
-  }
-
-  .card-head {
-    margin: 0 0 1.5rem;
-  }
-
-  h1 {
-    margin: 0 0 0.375rem;
-    font-size: 1.5rem;
-    font-weight: 600;
-    letter-spacing: -0.025em;
-  }
-
-  .subtitle {
-    margin: 0;
-    color: var(--color-muted);
-    font-size: 0.9375rem;
-  }
-
-  .nowrap {
-    white-space: nowrap;
-  }
-
-  .handwrite {
-    font-family: 'Patrick Hand', cursive;
-    font-weight: 400;
-    font-size: 1.18em;
-    letter-spacing: 0;
-    color: #4b6ea8;
-    display: inline-block;
-    transform: translateY(0.04em) rotate(-2deg);
-    transform-origin: center;
-    margin: 0 0.04em;
-  }
-
-  :global([data-theme='dark']) .handwrite {
-    color: #a9c3ee;
   }
 
   @media (max-width: 560px) {
