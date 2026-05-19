@@ -74,12 +74,46 @@ export function parseQueryScope(input: string): { scope: CommandScope | null; q:
   return { scope: SCOPE_FROM_LETTER[m[1].toLowerCase()] ?? null, q: m[2] };
 }
 
+// Tiny in-memory LRU around searchAll. Same user typing "ali" → "alic" →
+// backspace → "ali" again is the common case: the second "ali" hits the
+// cache and skips six FTS5 round-trips. Per-process, so multi-region
+// deployments naturally have one cache per region.
+type CacheEntry = { value: CommandHit[]; expiresAt: number };
+const CACHE_MAX = 256;
+const CACHE_TTL_MS = 30_000;
+const cache = new Map<string, CacheEntry>();
+
+function cacheGet(key: string): CommandHit[] | null {
+  const entry = cache.get(key);
+  if (!entry) return null;
+  if (entry.expiresAt < Date.now()) {
+    cache.delete(key);
+    return null;
+  }
+  // Bump recency: re-insert moves the key to the end of the iteration order.
+  cache.delete(key);
+  cache.set(key, entry);
+  return entry.value;
+}
+
+function cacheSet(key: string, value: CommandHit[]): void {
+  cache.set(key, { value, expiresAt: Date.now() + CACHE_TTL_MS });
+  if (cache.size > CACHE_MAX) {
+    const oldest = cache.keys().next().value;
+    if (oldest !== undefined) cache.delete(oldest);
+  }
+}
+
 export async function searchAll(
   userId: string,
   region: string,
   rawQ: string,
   perKind = 5
 ): Promise<CommandHit[]> {
+  const cacheKey = `${region}:${userId}:${perKind}:${rawQ}`;
+  const cached = cacheGet(cacheKey);
+  if (cached) return cached;
+
   const { scope, q } = parseQueryScope(rawQ);
   const fts = ftsQuery(q);
   if (!fts) return [];
@@ -225,5 +259,6 @@ export async function searchAll(
       href: `/pipelines/${p.id}`
     });
   }
+  cacheSet(cacheKey, hits);
   return hits;
 }

@@ -75,7 +75,7 @@
       } catch {
         // ignore
       }
-    }, 120);
+    }, 40);
   }
 
   function pick(h: Hit) {
