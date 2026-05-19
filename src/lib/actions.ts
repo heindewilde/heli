@@ -8,3 +8,26 @@
 export function autofocus(el: HTMLElement): void {
   el.focus();
 }
+
+// Fire `callback` when the element scrolls into view (within `rootMargin`).
+// The callback may fire multiple times across mount/scroll cycles — the
+// caller is expected to guard concurrent invocations (e.g. a loading flag).
+// Falls back to a no-op when IntersectionObserver isn't available.
+export function onIntersect(
+  el: HTMLElement,
+  callback: () => void
+): { destroy(): void } | void {
+  if (typeof IntersectionObserver === 'undefined') return;
+  const observer = new IntersectionObserver(
+    (entries) => {
+      if (entries.some((e) => e.isIntersecting)) callback();
+    },
+    { rootMargin: '200px' }
+  );
+  observer.observe(el);
+  return {
+    destroy() {
+      observer.disconnect();
+    }
+  };
+}

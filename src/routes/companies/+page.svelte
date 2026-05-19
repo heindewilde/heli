@@ -18,6 +18,7 @@
   import { buildUrl as buildUrlBase } from '$lib/url';
   import { formatLastSeen } from '$lib/interactions';
   import { createListCache } from '$lib/client/listCache.svelte';
+  import { onIntersect } from '$lib/actions';
 
   let { data } = $props();
 
@@ -411,7 +412,7 @@
       </ul>
     </div>
     {#if nextCursor}
-      <div class="flex justify-center">
+      <div use:onIntersect={loadMore} class="flex justify-center">
         <button
           type="button"
           onclick={loadMore}
