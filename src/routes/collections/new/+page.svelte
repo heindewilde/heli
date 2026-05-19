@@ -2,6 +2,7 @@
   import { enhance } from '$app/forms';
   import { FolderOpen, Search, X, Users, Building2 } from 'lucide-svelte';
   import { COLLECTION_ICON_MAP, COLLECTION_ICON_NAMES } from '$lib/collectionIcons';
+  import { autofocus } from '$lib/actions';
 
   let { form } = $props();
   let submitting = $state(false);
@@ -119,7 +120,7 @@
     <!-- Name -->
     <label class="flex flex-col gap-1 text-sm">
       <span class="text-[var(--color-muted)]">Name <span class="text-[var(--color-danger)]">*</span></span>
-      <input name="name" required maxlength="200" class={inputClass} autofocus />
+      <input name="name" required maxlength="200" class={inputClass} use:autofocus />
     </label>
 
     <!-- Description -->

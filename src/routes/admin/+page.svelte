@@ -1,5 +1,6 @@
 <script lang="ts">
   import { APP_NAME } from '$lib/branding';
+  import { autofocus } from '$lib/actions';
   let { data, form } = $props();
 </script>
 
@@ -17,8 +18,8 @@
           type="password"
           name="secret"
           placeholder="Admin secret"
-          autofocus
           autocomplete="current-password"
+          use:autofocus
         />
         {#if form?.error}<p class="error">{form.error}</p>{/if}
         <button type="submit">Sign in</button>

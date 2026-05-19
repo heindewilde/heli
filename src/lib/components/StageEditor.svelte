@@ -145,10 +145,12 @@
           <button
             type="button"
             onclick={() => togglePicker(stage.id)}
+            aria-label="Change stage color"
             class="h-4 w-4 rounded-full ring-offset-1 hover:ring-2 hover:ring-[var(--color-border)]"
             style="background-color:{STAGE_COLOR_SWATCH[stageColor]}"
           ></button>
           {#if openPicker === stage.id}
+            <!-- svelte-ignore a11y_no_static_element_interactions -->
             <div
               class="absolute bottom-full right-0 z-10 mb-1.5 flex gap-1 rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-bg)] p-1.5 shadow-md"
               onpointerdown={(e) => e.stopPropagation()}
@@ -189,10 +191,12 @@
         <button
           type="button"
           onclick={() => togglePicker('new')}
+          aria-label="Pick color for new stage"
           class="h-4 w-4 rounded-full ring-offset-1 hover:ring-2 hover:ring-[var(--color-border)]"
           style="background-color:{STAGE_COLOR_SWATCH[newColor]}"
         ></button>
         {#if openPicker === 'new'}
+          <!-- svelte-ignore a11y_no_static_element_interactions -->
           <div
             class="absolute bottom-full right-0 z-10 mb-1.5 flex gap-1 rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-bg)] p-1.5 shadow-md"
             onpointerdown={(e) => e.stopPropagation()}

@@ -4,6 +4,7 @@
   import CompanyPicker from '$lib/components/CompanyPicker.svelte';
   import { COLLECTION_ICON_MAP, COLLECTION_ICON_NAMES } from '$lib/collectionIcons';
   import type { BillingType, ProjectStatus } from '$lib/server/schema';
+  import { autofocus } from '$lib/actions';
 
   let { form } = $props();
   let submitting = $state(false);
@@ -99,7 +100,7 @@
 
     <label class="flex flex-col gap-1 text-sm">
       <span class="text-[var(--color-muted)]">Name *</span>
-      <input name="name" required maxlength="200" class={inputClass} autofocus />
+      <input name="name" required maxlength="200" class={inputClass} use:autofocus />
     </label>
 
     <label class="flex flex-col gap-1 text-sm">

@@ -91,6 +91,7 @@
                     Move
                   </button>
                   {#if openMoverFor === item.id}
+                    <!-- svelte-ignore a11y_no_static_element_interactions -->
                     <div
                       class="absolute right-0 top-full z-20 mt-1 min-w-[200px] rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-surface)] py-1 shadow-[var(--shadow-md)]"
                       onpointerdown={(e) => e.stopPropagation()}

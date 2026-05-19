@@ -165,6 +165,7 @@
   </div>
 
   <!-- Desktop: horizontal kanban board with drag-and-drop -->
+  <!-- svelte-ignore a11y_no_static_element_interactions -->
   <div bind:this={scrollEl} class="hidden sm:flex gap-3 overflow-x-auto pb-2" ondragover={updateEdgeScroll}>
     {#each visibleStages as stage (stage.id)}
       {@const items = itemsByStage.get(stage.id) ?? []}
