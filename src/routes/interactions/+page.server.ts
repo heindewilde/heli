@@ -22,7 +22,8 @@ export const load: PageServerLoad = async ({ locals, url }) => {
     companyId,
     type,
     from: Number.isFinite(from) ? from : undefined,
-    to: Number.isFinite(to) ? to : undefined
+    to: Number.isFinite(to) ? to : undefined,
+    limit: 50
   });
 
   return {

@@ -175,7 +175,7 @@ export const load: PageServerLoad = async ({ locals, url }) => {
         ${priorityClause}
         ${statusClause}
       ORDER BY rank
-      LIMIT 200
+      LIMIT 50
     `);
   } else {
     items = await d.all<Row>(sql`
@@ -190,7 +190,7 @@ export const load: PageServerLoad = async ({ locals, url }) => {
         ${priorityClause}
         ${statusClause}
       ORDER BY ${orderClause}
-      LIMIT 200
+      LIMIT 50
     `);
   }
 

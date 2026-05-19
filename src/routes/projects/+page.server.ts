@@ -22,7 +22,7 @@ export const load: PageServerLoad = async ({ locals, url }) => {
     q,
     status,
     sort,
-    limit: 200
+    limit: 50
   });
 
   const projectIds = items.map((i) => i.id);
