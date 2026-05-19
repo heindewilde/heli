@@ -18,7 +18,6 @@
 
   let { data, children } = $props();
   const user = $derived(data.user);
-  const reminders = $derived(data.reminders ?? []);
 
   const canonicalUrl = $derived(`https://${APP_DOMAIN}${page.url.pathname}`);
 
@@ -275,7 +274,11 @@
         {/each}
       </nav>
       <div class="mt-4 border-t border-[var(--color-border)] pt-3">
-        <RemindersPopover items={reminders} />
+        {#await data.reminders ?? []}
+          <RemindersPopover items={[]} />
+        {:then reminders}
+          <RemindersPopover items={reminders ?? []} />
+        {/await}
       </div>
       <div class="absolute bottom-3 left-4 right-4 text-[10px] text-[var(--color-subtle)]">
         <span title="Heli version">Version: {VERSION.replace(/^v/, '')}</span>
