@@ -5,6 +5,14 @@
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <meta name="theme-color" media="(prefers-color-scheme: light)" content="#f6f8fc" />
     <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#0c0d11" />
+    <!-- The Geist variable font loads on every page; preloading lifts it
+         to a high-priority fetch in parallel with HTML parsing so first
+         paint isn't a flash of fallback font. `crossorigin` is required
+         on font preloads (per spec) even when the font is same-origin. -->
+    <link rel="preload" href="%sveltekit.assets%/fonts/Geist-Variable.woff2" as="font" type="font/woff2" crossorigin />
+    <!-- Warm up TLS/H3 to the third-party origins we hit on most pages. -->
+    <link rel="preconnect" href="https://img.logo.dev" crossorigin />
+    <link rel="preconnect" href="https://scripts.simpleanalyticscdn.com" crossorigin />
     <link rel="icon" type="image/png" sizes="96x96" href="%sveltekit.assets%/favicon-96x96.png" />
     <link rel="icon" type="image/svg+xml" href="%sveltekit.assets%/favicon.svg" />
     <link rel="shortcut icon" href="%sveltekit.assets%/favicon.ico" />
