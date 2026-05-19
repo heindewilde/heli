@@ -6,6 +6,8 @@
   import ShortcutHelp from '$lib/components/ShortcutHelp.svelte';
   import RemindersPopover from '$lib/components/RemindersPopover.svelte';
   import ThemeToggle from '$lib/components/ThemeToggle.svelte';
+  import UpdateBanner from '$lib/components/UpdateBanner.svelte';
+  import { watchServiceWorker } from '$lib/client/sw.svelte';
   import { LayoutDashboard, Users, Building2, MessagesSquare, Briefcase, Folder, Funnel, LogOut, Search, HelpCircle, Settings, Menu, X } from 'lucide-svelte';
   import { page } from '$app/state';
   import { onMount } from 'svelte';
@@ -53,6 +55,8 @@
   });
 
   onMount(() => {
+    watchServiceWorker();
+
     const cleanups: Array<() => void> = [];
 
     // cmd/ctrl + K is meta-modified, so it doesn't go through bindKeys' filter.
@@ -317,3 +321,4 @@
   <ShortcutHelp bind:open={helpOpen} onClose={() => (helpOpen = false)} />
 {/if}
 <Toaster />
+<UpdateBanner />
