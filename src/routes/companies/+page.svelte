@@ -17,13 +17,19 @@
   import { toast } from '$lib/toasts.svelte';
   import { buildUrl as buildUrlBase } from '$lib/url';
   import { formatLastSeen } from '$lib/interactions';
+  import { createListCache } from '$lib/client/listCache.svelte';
 
   let { data } = $props();
+
+  type Row = (typeof data.items)[number];
 
   // svelte-ignore state_referenced_locally
   let q = $state(data.q);
   let selected = $state(0);
-  let rows = $derived(data.items);
+  // svelte-ignore state_referenced_locally
+  const cache = createListCache<Row>(data.items);
+  $effect(() => cache.hydrate(data.items));
+  const rows = $derived(cache.items);
   let statuses = $derived<StatusRow[]>(data.statuses);
 
   let showAdd = $state(false);
@@ -75,17 +81,22 @@
     searchTimer = setTimeout(() => navTo({ q: q.trim() }), 200);
   }
 
-  async function patch(id: string, body: Record<string, unknown>) {
-    const res = await fetch(`/api/companies/${id}`, {
-      method: 'PATCH',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify(body)
-    });
-    if (!res.ok) {
+  async function patch(id: string, body: Record<string, unknown>, optimistic?: Partial<Row>) {
+    const rollback = cache.patch(id, (optimistic ?? body) as Partial<Row>);
+    try {
+      const res = await fetch(`/api/companies/${id}`, {
+        method: 'PATCH',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify(body)
+      });
+      if (!res.ok) {
+        rollback();
+        toast.danger('Update failed');
+      }
+    } catch {
+      rollback();
       toast.danger('Update failed');
-      return;
     }
-    await invalidateAll();
   }
 
   onMount(() =>
@@ -148,14 +159,8 @@
 
   const priorityFilter = $derived<Priority[] | null>(data.priorityFilter as Priority[] | null);
 
-  let optimisticStatus = $state<Record<string, string | null>>({});
   async function setStatus(id: string, next: StatusRow | null) {
-    optimisticStatus[id] = next?.id ?? null;
-    try {
-      await patch(id, { statusId: next?.id ?? null });
-    } finally {
-      delete optimisticStatus[id];
-    }
+    await patch(id, { statusId: next?.id ?? null });
   }
   async function setPriority(id: string, next: Priority) {
     await patch(id, { priority: next });
@@ -289,7 +294,6 @@
       <ul role="list">
         {#each rows as company, i (company.id)}
           {@const tags = data.itemTags[company.id] ?? []}
-          {@const currentStatusId = optimisticStatus[company.id] !== undefined ? optimisticStatus[company.id] : company.statusId}
           {@const sel = i === selected}
           <li data-entity-row>
             <!-- Mobile card (< md) -->
@@ -309,7 +313,7 @@
                   {/if}
                 </span>
               </a>
-              <StatusCell value={currentStatusId} statuses={statuses} scope="company" onChange={(s) => setStatus(company.id, s)} onStatusesChange={(next) => (statuses = next)} />
+              <StatusCell value={company.statusId} statuses={statuses} scope="company" onChange={(s) => setStatus(company.id, s)} onStatusesChange={(next) => (statuses = next)} />
             </div>
             <!-- Desktop row (>= md) -->
             <div
@@ -352,7 +356,7 @@
 
               <div class="flex min-w-0 flex-col gap-0.5">
                 <StatusCell
-                  value={currentStatusId}
+                  value={company.statusId}
                   statuses={statuses}
                   scope="company"
                   onChange={(s) => setStatus(company.id, s)}
