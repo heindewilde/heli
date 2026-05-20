@@ -91,13 +91,13 @@
       {data.total}
     </span>
     <div class="ml-auto flex items-center gap-2">
-      <label class="inline-flex items-center gap-1 rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-surface)] pl-2 pr-1 text-xs text-[var(--color-muted)]">
-        <ArrowDownUp size={12} strokeWidth={2} class="text-[var(--color-subtle)]" />
+      <label class="inline-flex items-center gap-1 rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-surface)] pl-2 pr-1 text-sm text-[var(--color-muted)]">
+        <ArrowDownUp size={14} strokeWidth={2} class="text-[var(--color-subtle)]" />
         <span class="sr-only">Sort by</span>
         <select
           value={data.sort}
           onchange={(e) => goto(buildUrl({ sort: (e.currentTarget as HTMLSelectElement).value }), { replaceState: true, keepFocus: true, noScroll: true })}
-          class="bg-transparent py-2 pl-1 pr-1 text-xs outline-none"
+          class="bg-transparent py-2 pl-1 pr-1 text-sm outline-none"
         >
           <option value="updated">Recently updated</option>
           <option value="recent">Recently added</option>

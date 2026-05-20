@@ -314,7 +314,7 @@
       {:else if data.favorite || data.archived || data.priorityFilter || data.statusFilter}
         <p class="text-sm text-[var(--color-muted)]">No people in this filter.</p>
       {:else}
-        <p class="text-sm text-[var(--color-muted)]">Paste a link in the topbar, or use <strong>Add person</strong> above to add someone.</p>
+        <p class="text-sm text-[var(--color-muted)]">Paste a link anywhere, or use <strong>Add person</strong> above to add someone.</p>
       {/if}
     </div>
   {:else}

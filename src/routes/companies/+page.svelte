@@ -299,7 +299,7 @@
       {:else if data.favorite || data.archived || data.priorityFilter || data.statusFilter}
         <p class="text-sm text-[var(--color-muted)]">No companies in this filter.</p>
       {:else}
-        <p class="text-sm text-[var(--color-muted)]">Paste a website link in the topbar, or use <strong>Add company</strong> above to add one.</p>
+        <p class="text-sm text-[var(--color-muted)]">Paste a link anywhere, or use <strong>Add company</strong> above to add one.</p>
       {/if}
     </div>
   {:else}
