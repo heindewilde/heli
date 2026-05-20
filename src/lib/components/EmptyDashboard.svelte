@@ -31,7 +31,7 @@
   <header class="flex flex-col gap-2">
     <h1 class="text-2xl font-semibold tracking-tight">Welcome to {APP_NAME}.</h1>
     <p class="text-sm text-[var(--color-muted)]">
-      Paste a profile or website link anywhere on the page. {APP_NAME} classifies and enriches it in the background — no forms, no fields to fill in first.
+      Paste a profile or website link anywhere on the page. {APP_NAME} classifies and enriches it in the background.
     </p>
   </header>
 

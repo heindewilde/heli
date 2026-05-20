@@ -106,12 +106,8 @@
 
   @supports ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
     .overlay {
-      background: rgba(199, 218, 234, 0.55);
       backdrop-filter: blur(4px) saturate(120%);
       -webkit-backdrop-filter: blur(4px) saturate(120%);
-    }
-    :global([data-theme='dark']) .overlay {
-      background: rgba(17, 30, 47, 0.55);
     }
   }
 

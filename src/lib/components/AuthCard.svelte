@@ -68,7 +68,6 @@
 
   @supports ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
     .card {
-      background: rgba(255, 255, 255, 0.78);
       backdrop-filter: blur(30px) saturate(180%);
       -webkit-backdrop-filter: blur(30px) saturate(180%);
     }
@@ -89,12 +88,6 @@
     box-shadow:
       0 1px 0 rgba(255, 255, 255, 0.06) inset,
       0 18px 50px -12px rgba(0, 0, 0, 0.55);
-  }
-
-  @supports ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
-    :global([data-theme='dark']) .card {
-      background: rgba(20, 32, 50, 0.72);
-    }
   }
 
   .card-head {
