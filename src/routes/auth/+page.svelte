@@ -54,6 +54,11 @@
   <main class="main">
     <AuthCard {data} {form} headingLevel="h1" bind:mode />
   </main>
+  <footer class="auth-footer">
+    <a href="/privacy">Privacy Policy</a>
+    <span aria-hidden="true">·</span>
+    <a href="/terms">Terms of Service</a>
+  </footer>
 </div>
 
 <style>
@@ -148,6 +153,28 @@
     align-items: center;
     justify-content: center;
     padding: 2rem 1.25rem 3rem;
+  }
+
+  .auth-footer {
+    position: relative;
+    z-index: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.75rem;
+    padding: 1rem 1.25rem 2rem;
+    font-size: 0.8125rem;
+    color: var(--color-muted);
+  }
+
+  .auth-footer a {
+    color: var(--color-muted);
+    text-decoration: none;
+    transition: color 0.15s;
+  }
+
+  .auth-footer a:hover {
+    color: var(--color-text);
   }
 
   @media (max-width: 560px) {

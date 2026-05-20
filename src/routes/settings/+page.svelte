@@ -325,4 +325,9 @@
       class="self-start rounded-[var(--radius-sm)] bg-[var(--color-danger)] px-3 py-2 text-sm font-medium text-white disabled:opacity-60"
     >Delete account permanently</button>
   </section>
+
+  <footer class="flex gap-4 text-xs text-[var(--color-subtle)]">
+    <a href="/privacy" class="hover:text-[var(--color-muted)]">Privacy Policy</a>
+    <a href="/terms" class="hover:text-[var(--color-muted)]">Terms of Service</a>
+  </footer>
 </article>

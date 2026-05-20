@@ -167,6 +167,8 @@
     <span>The CRM for freelancers and small businesses</span>
     <span class="footer-spacer"></span>
     <a href={GITHUB_URL} target="_blank" rel="noreferrer noopener">GitHub</a>
+    <a href="/privacy">Privacy</a>
+    <a href="/terms">Terms</a>
     <a href="/auth" onclick={(e) => openAuth('login', e)}>Sign in</a>
   </footer>
 </div>
