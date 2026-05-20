@@ -27,6 +27,21 @@
 
   const anyParsing = $derived((data.recent ?? []).some((r) => r.source === 'parsing'));
 
+  // Time-of-day greeting. Computed client-side so the user's local timezone
+  // wins (server is in `ams` on cloud, but the dashboard greets per the
+  // user's wall clock). Falls back to "Welcome back" during SSR.
+  let greeting = $state('Welcome back');
+  $effect(() => {
+    const h = new Date().getHours();
+    greeting = h < 5 ? 'Good evening' : h < 12 ? 'Good morning' : h < 18 ? 'Good afternoon' : 'Good evening';
+  });
+
+  const summaryLine = $derived.by(() => {
+    const due = data.summary?.dueToday ?? 0;
+    const saved = data.summary?.savesThisWeek ?? 0;
+    return `${due} reminder${due === 1 ? '' : 's'} due today, ${saved} save${saved === 1 ? '' : 's'} this week.`;
+  });
+
   // First-run state: nothing saved yet, no recent activity. Replace the
   // count cards (which would all read 0) with an onboarding panel that
   // explains what to do next.
@@ -52,12 +67,8 @@
   {:else}
   <section class="flex flex-col gap-6">
     <header class="flex flex-col gap-1">
-      <h1 class="text-2xl font-semibold tracking-tight">
-        Welcome{data.user.username ? `, ${data.user.username}` : ''}.
-      </h1>
-      <p class="text-sm text-[var(--color-muted)]">
-        Paste a profile or website link in the topbar to save it.<span class="hidden sm:inline"> Press <kbd class="rounded border border-[var(--color-border)] bg-[var(--color-surface)] px-1 text-[10px]">/</kbd> to search.</span>
-      </p>
+      <h1 class="text-2xl font-semibold tracking-tight">{greeting}.</h1>
+      <p class="text-sm text-[var(--color-muted)]">{summaryLine}</p>
     </header>
 
     <div class="grid grid-cols-2 gap-3 sm:grid-cols-4">
