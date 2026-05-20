@@ -95,15 +95,24 @@
     align-items: center;
     justify-content: center;
     padding: 2rem 1.25rem;
-    background: rgba(199, 218, 234, 0.55);
-    backdrop-filter: blur(4px) saturate(120%);
-    -webkit-backdrop-filter: blur(4px) saturate(120%);
+    background: rgba(199, 218, 234, 0.88);
     animation: fade-in 0.18s ease-out;
     overflow-y: auto;
   }
 
   :global([data-theme='dark']) .overlay {
-    background: rgba(17, 30, 47, 0.55);
+    background: rgba(17, 30, 47, 0.88);
+  }
+
+  @supports ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+    .overlay {
+      background: rgba(199, 218, 234, 0.55);
+      backdrop-filter: blur(4px) saturate(120%);
+      -webkit-backdrop-filter: blur(4px) saturate(120%);
+    }
+    :global([data-theme='dark']) .overlay {
+      background: rgba(17, 30, 47, 0.55);
+    }
   }
 
   .close-btn {

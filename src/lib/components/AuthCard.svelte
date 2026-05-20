@@ -55,7 +55,7 @@
     position: relative;
     width: 100%;
     max-width: 30rem;
-    background: rgba(255, 255, 255, 0.78);
+    background: #fafbfd;
     border: 1px solid rgba(255, 255, 255, 0.85);
     border-radius: var(--radius-lg);
     padding: 2.25rem 2.25rem 2rem;
@@ -63,9 +63,15 @@
       0 1px 0 rgba(255, 255, 255, 0.7) inset,
       0 18px 50px -12px rgba(40, 60, 90, 0.3),
       0 4px 14px rgba(40, 60, 90, 0.1);
-    backdrop-filter: blur(30px) saturate(180%);
-    -webkit-backdrop-filter: blur(30px) saturate(180%);
     animation: rise 0.22s cubic-bezier(0.2, 0.7, 0.2, 1);
+  }
+
+  @supports ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+    .card {
+      background: rgba(255, 255, 255, 0.78);
+      backdrop-filter: blur(30px) saturate(180%);
+      -webkit-backdrop-filter: blur(30px) saturate(180%);
+    }
   }
 
   @keyframes rise {
@@ -78,11 +84,17 @@
   }
 
   :global([data-theme='dark']) .card {
-    background: rgba(20, 32, 50, 0.72);
+    background: #182335;
     border-color: rgba(255, 255, 255, 0.12);
     box-shadow:
       0 1px 0 rgba(255, 255, 255, 0.06) inset,
       0 18px 50px -12px rgba(0, 0, 0, 0.55);
+  }
+
+  @supports ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+    :global([data-theme='dark']) .card {
+      background: rgba(20, 32, 50, 0.72);
+    }
   }
 
   .card-head {
