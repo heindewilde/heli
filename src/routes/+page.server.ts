@@ -146,8 +146,13 @@ export const load: PageServerLoad = async ({ locals, setHeaders }) => {
     .sort((a, b) => b.createdAt - a.createdAt)
     .slice(0, 8);
 
+  const serverHour = new Date().getHours();
+  const greeting =
+    serverHour < 5 ? 'Good evening' : serverHour < 12 ? 'Good morning' : serverHour < 18 ? 'Good afternoon' : 'Good evening';
+
   return {
     user: locals.user,
+    greeting,
     counts: {
       people: Number(peopleCount?.n ?? 0),
       companies: Number(companiesCount?.n ?? 0),

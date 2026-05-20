@@ -27,14 +27,7 @@
 
   const anyParsing = $derived((data.recent ?? []).some((r) => r.source === 'parsing'));
 
-  // Time-of-day greeting. Computed client-side so the user's local timezone
-  // wins (server is in `ams` on cloud, but the dashboard greets per the
-  // user's wall clock). Falls back to "Welcome back" during SSR.
-  let greeting = $state('Welcome back');
-  $effect(() => {
-    const h = new Date().getHours();
-    greeting = h < 5 ? 'Good evening' : h < 12 ? 'Good morning' : h < 18 ? 'Good afternoon' : 'Good evening';
-  });
+  const greeting = $derived(data.greeting);
 
   const summaryLine = $derived.by(() => {
     const due = data.summary?.dueToday ?? 0;

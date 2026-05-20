@@ -62,5 +62,8 @@ export const load: PageServerLoad = async ({ url, locals }) => {
       : await saveCompany(locals.user.id, locals.user.region, cleaned);
 
   const path = kind === 'person' ? `/people/${result.id}` : `/companies/${result.id}`;
+
+  if (url.searchParams.get('redirect') === '1') throw redirect(303, path);
+
   return { ok: true as const, id: result.id, kind, dedup: result.dedup, path };
 };

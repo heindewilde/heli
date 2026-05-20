@@ -41,7 +41,7 @@
       {#each tries as t (t.url)}
         {@const Icon = t.icon}
         <a
-          href={`/save?url=${encodeURIComponent(t.url)}`}
+          href={`/save?url=${encodeURIComponent(t.url)}&redirect=1`}
           data-sveltekit-preload-data="off"
           class="group flex flex-col gap-1 rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)] px-4 py-3 text-left shadow-[var(--shadow-xs)] transition-all hover:-translate-y-px hover:border-[var(--color-border-strong)] hover:shadow-[var(--shadow-sm)]"
         >
