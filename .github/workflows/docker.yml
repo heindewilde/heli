@@ -45,6 +45,17 @@ jobs:
 
       - uses: actions/checkout@v4
 
+      - name: Compute version string
+        id: version
+        run: |
+          if [ "${{ github.ref_type }}" = "tag" ]; then
+            echo "value=${{ github.ref_name }}" >> $GITHUB_OUTPUT
+          else
+            PKG=$(jq -r .version package.json)
+            SHA=${GITHUB_SHA::7}
+            echo "value=${PKG}-${SHA}" >> $GITHUB_OUTPUT
+          fi
+
       - id: build
         uses: docker/build-push-action@v6
         with:
@@ -52,7 +63,7 @@ jobs:
           platforms: ${{ matrix.platform }}
           labels: ${{ steps.meta.outputs.labels }}
           build-args: |
-            VERSION=${{ github.ref_type == 'tag' && github.ref_name || github.sha }}
+            VERSION=${{ steps.version.outputs.value }}
           outputs: type=image,name=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }},push-by-digest=true,name-canonical=true,push=true
           cache-from: type=gha,scope=build-${{ env.PLATFORM_PAIR }}
           cache-to: type=gha,mode=max,scope=build-${{ env.PLATFORM_PAIR }}
