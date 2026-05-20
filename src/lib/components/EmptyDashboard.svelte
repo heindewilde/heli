@@ -1,9 +1,6 @@
 <script lang="ts">
   import { APP_NAME } from '$lib/branding';
-  import { ArrowUp, Linkedin, Building2, Github, Bookmark, Keyboard, Search } from 'lucide-svelte';
-
-  type Props = { username: string | null };
-  let { username }: Props = $props();
+  import { Linkedin, Building2, Github, Bookmark, Keyboard, Search } from 'lucide-svelte';
 
   // Each card opens /save?url=… — the existing share-target route. It calls
   // the same classify + save pipeline as the topbar and lands on the new
@@ -32,15 +29,9 @@
 
 <section class="flex flex-col gap-8">
   <header class="flex flex-col gap-2">
-    <h1 class="text-2xl font-semibold tracking-tight">
-      Welcome to {APP_NAME}{username ? `, ${username}` : ''}.
-    </h1>
+    <h1 class="text-2xl font-semibold tracking-tight">Welcome to {APP_NAME}.</h1>
     <p class="text-sm text-[var(--color-muted)]">
-      Paste a profile or website link in the search bar above. {APP_NAME} classifies and enriches it in the background — no forms, no fields to fill in first.
-    </p>
-    <p class="hidden items-center gap-1 text-xs font-medium text-[var(--color-text)] sm:flex">
-      <ArrowUp size={12} strokeWidth={2.25} class="-mt-px" />
-      Drop a link up there.
+      Paste a profile or website link anywhere on the page. {APP_NAME} classifies and enriches it in the background — no forms, no fields to fill in first.
     </p>
   </header>
 
@@ -64,34 +55,34 @@
     </div>
   </section>
 
-  <section class="flex flex-col gap-3 rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)] p-5">
+  <section class="flex flex-col gap-4">
     <h2 class="text-sm font-medium text-[var(--color-muted)]">A few things to know</h2>
-    <ul class="flex flex-col gap-3 text-sm">
-      <li class="flex items-start gap-3">
-        <span class="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-bg)] text-[var(--color-muted)]">
-          <Search size={14} strokeWidth={2} />
+    <ul class="flex flex-col gap-5 text-sm">
+      <li class="flex items-start gap-4">
+        <span class="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-surface)] text-[var(--color-muted)]">
+          <Search size={15} strokeWidth={2} />
         </span>
-        <span class="min-w-0 flex-1">
+        <span class="min-w-0 flex-1 leading-relaxed">
           <span class="font-medium">Press <kbd class="rounded border border-[var(--color-border)] bg-[var(--color-bg)] px-1 text-[10px] font-mono">⌘K</kbd> to search</span>
-          <span class="block text-xs text-[var(--color-muted)]">Across people, companies, and interactions. Prefix with <kbd class="rounded border border-[var(--color-border)] bg-[var(--color-bg)] px-1 text-[10px] font-mono">p:</kbd>, <kbd class="rounded border border-[var(--color-border)] bg-[var(--color-bg)] px-1 text-[10px] font-mono">c:</kbd>, or <kbd class="rounded border border-[var(--color-border)] bg-[var(--color-bg)] px-1 text-[10px] font-mono">i:</kbd> to scope.</span>
+          <span class="mt-1 block text-xs text-[var(--color-muted)]">Across people, companies, and interactions. Prefix with <kbd class="rounded border border-[var(--color-border)] bg-[var(--color-bg)] px-1 text-[10px] font-mono">p:</kbd>, <kbd class="rounded border border-[var(--color-border)] bg-[var(--color-bg)] px-1 text-[10px] font-mono">c:</kbd>, or <kbd class="rounded border border-[var(--color-border)] bg-[var(--color-bg)] px-1 text-[10px] font-mono">i:</kbd> to scope.</span>
         </span>
       </li>
-      <li class="flex items-start gap-3">
-        <span class="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-bg)] text-[var(--color-muted)]">
-          <Keyboard size={14} strokeWidth={2} />
+      <li class="flex items-start gap-4">
+        <span class="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-surface)] text-[var(--color-muted)]">
+          <Keyboard size={15} strokeWidth={2} />
         </span>
-        <span class="min-w-0 flex-1">
+        <span class="min-w-0 flex-1 leading-relaxed">
           <span class="font-medium">Press <kbd class="rounded border border-[var(--color-border)] bg-[var(--color-bg)] px-1 text-[10px] font-mono">?</kbd> for shortcuts</span>
-          <span class="block text-xs text-[var(--color-muted)]">Lists are keyboard-driven: <kbd class="rounded border border-[var(--color-border)] bg-[var(--color-bg)] px-1 text-[10px] font-mono">j/k</kbd> to navigate, <kbd class="rounded border border-[var(--color-border)] bg-[var(--color-bg)] px-1 text-[10px] font-mono">enter</kbd> to open, <kbd class="rounded border border-[var(--color-border)] bg-[var(--color-bg)] px-1 text-[10px] font-mono">*</kbd> to favorite.</span>
+          <span class="mt-1 block text-xs text-[var(--color-muted)]">Lists are keyboard-driven: <kbd class="rounded border border-[var(--color-border)] bg-[var(--color-bg)] px-1 text-[10px] font-mono">j/k</kbd> to navigate, <kbd class="rounded border border-[var(--color-border)] bg-[var(--color-bg)] px-1 text-[10px] font-mono">enter</kbd> to open, <kbd class="rounded border border-[var(--color-border)] bg-[var(--color-bg)] px-1 text-[10px] font-mono">*</kbd> to favorite.</span>
         </span>
       </li>
-      <li class="flex items-start gap-3">
-        <span class="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-bg)] text-[var(--color-muted)]">
-          <Bookmark size={14} strokeWidth={2} />
+      <li class="flex items-start gap-4">
+        <span class="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-surface)] text-[var(--color-muted)]">
+          <Bookmark size={15} strokeWidth={2} />
         </span>
-        <span class="min-w-0 flex-1">
+        <span class="min-w-0 flex-1 leading-relaxed">
           <span class="font-medium">Drag the bookmarklet to save from any tab</span>
-          <span class="block text-xs text-[var(--color-muted)]">
+          <span class="mt-1 block text-xs text-[var(--color-muted)]">
             <a href="/settings" class="font-medium text-[var(--color-text)] underline decoration-[var(--color-border-strong)] underline-offset-2 hover:decoration-[var(--color-accent)]">Settings → Bookmarklet</a> has a one-click setup.
           </span>
         </span>

@@ -48,7 +48,7 @@
 
 {#if data.user}
   {#if firstRun}
-    <EmptyDashboard username={data.user.username} />
+    <EmptyDashboard />
   {:else}
   <section class="flex flex-col gap-6">
     <header class="flex flex-col gap-1">
