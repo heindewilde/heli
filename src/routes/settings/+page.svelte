@@ -149,6 +149,10 @@
   }
 </script>
 
+<svelte:head>
+  <title>Settings — {APP_NAME}</title>
+</svelte:head>
+
 <article class="flex flex-col gap-8">
   <header>
     <h1 class="text-2xl font-semibold tracking-tight">Settings</h1>

@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { APP_NAME } from '$lib/branding';
   import { goto } from '$app/navigation';
   import PersonPicker from '$lib/components/PersonPicker.svelte';
   import CompanyPicker from '$lib/components/CompanyPicker.svelte';
@@ -144,6 +145,10 @@
     }
   }
 </script>
+
+<svelte:head>
+  <title>New interaction — {APP_NAME}</title>
+</svelte:head>
 
 <article class="mx-auto flex max-w-2xl flex-col gap-4">
   <header>

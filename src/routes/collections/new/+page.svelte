@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { APP_NAME } from '$lib/branding';
   import { enhance } from '$app/forms';
   import { FolderOpen, Search, X, Users, Building2 } from 'lucide-svelte';
   import { COLLECTION_ICON_MAP, COLLECTION_ICON_NAMES } from '$lib/collectionIcons';
@@ -53,6 +54,10 @@
     selectedMembers = selectedMembers.filter((m) => !(m.kind === hit.kind && m.id === hit.id));
   }
 </script>
+
+<svelte:head>
+  <title>New collection — {APP_NAME}</title>
+</svelte:head>
 
 <article class="mx-auto flex max-w-2xl flex-col gap-6">
   <header>

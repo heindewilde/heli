@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { APP_NAME } from '$lib/branding';
   import { enhance } from '$app/forms';
   import { ArrowUp, ArrowDown, Trash2 } from 'lucide-svelte';
   import { STAGE_COLORS, STAGE_COLOR_SWATCH, type StageColor } from '$lib/stageColors';
@@ -53,6 +54,10 @@
     stages = copy;
   }
 </script>
+
+<svelte:head>
+  <title>New pipeline — {APP_NAME}</title>
+</svelte:head>
 
 <article class="mx-auto flex max-w-2xl flex-col gap-4">
   <header>

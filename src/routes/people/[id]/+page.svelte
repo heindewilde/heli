@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { APP_NAME } from '$lib/branding';
   import { goto, invalidateAll } from '$app/navigation';
   import { Star, Archive, Trash2, Loader2, Mail, Phone, MapPin, Building2, Sparkles, Linkedin, Twitter } from 'lucide-svelte';
   import NotesEditor from '$lib/components/NotesEditor.svelte';
@@ -177,6 +178,10 @@
       .toUpperCase()
   );
 </script>
+
+<svelte:head>
+  <title>{person.name} — {APP_NAME}</title>
+</svelte:head>
 
 <article class="flex flex-col gap-6">
   {#if data.justSaved}

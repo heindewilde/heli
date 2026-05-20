@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { APP_NAME } from '$lib/branding';
   import { goto, invalidateAll } from '$app/navigation';
   import { Trash2, Pencil, Save, X, Building2 } from 'lucide-svelte';
   import PersonPicker from '$lib/components/PersonPicker.svelte';
@@ -100,6 +101,10 @@
   const Icon = $derived(meta.icon);
   const dayLabel = $derived(dayBucket(interaction.occurredAt).label);
 </script>
+
+<svelte:head>
+  <title>{interaction.title} — {APP_NAME}</title>
+</svelte:head>
 
 <article class="flex flex-col gap-6">
   <header class="flex items-start gap-4">

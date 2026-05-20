@@ -6,9 +6,9 @@
   import { Users, Building2, MessagesSquare, FolderKanban, Loader2, AlertTriangle, Calendar } from 'lucide-svelte';
   import { invalidateAll } from '$app/navigation';
   import { pollWhile } from '$lib/polling';
-  import { APP_NAME, APP_DOMAIN, APP_DESCRIPTION } from '$lib/branding';
+  import { APP_NAME, APP_TAGLINE, APP_DOMAIN, APP_DESCRIPTION } from '$lib/branding';
 
-  const LANDING_TITLE = `${APP_NAME} — Open Source CRM for Freelancers & Small Businesses`;
+  const LANDING_TITLE = `${APP_NAME} — ${APP_TAGLINE}`;
   // Escape `<` so a stray closing-script tag in any field cannot break out of the JSON-LD block.
   const softwareSchemaJson = JSON.stringify({
     '@context': 'https://schema.org',
@@ -187,7 +187,9 @@
 {/if}
 
 <svelte:head>
-  {#if !data.user}
+  {#if data.user}
+    <title>Dashboard — {APP_NAME}</title>
+  {:else}
     <title>{LANDING_TITLE}</title>
     <meta property="og:title" content={LANDING_TITLE} />
     <meta name="twitter:title" content={LANDING_TITLE} />

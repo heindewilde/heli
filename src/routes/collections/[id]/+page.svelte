@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { APP_NAME } from '$lib/branding';
   import { goto, invalidateAll } from '$app/navigation';
   import { Trash2, Archive, X, FolderOpen, Funnel } from 'lucide-svelte';
   import { COLLECTION_ICON_MAP } from '$lib/collectionIcons';
@@ -119,6 +120,10 @@
   const peopleMembers = $derived(collection.members.filter((m) => m.kind === 'person'));
   const companyMembers = $derived(collection.members.filter((m) => m.kind === 'company'));
 </script>
+
+<svelte:head>
+  <title>{collection.name} — {APP_NAME}</title>
+</svelte:head>
 
 <article class="flex flex-col gap-6">
   {#if data.justSaved}

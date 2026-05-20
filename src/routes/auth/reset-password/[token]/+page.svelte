@@ -1,6 +1,11 @@
 <script lang="ts">
+  import { APP_NAME } from '$lib/branding';
   let { form } = $props();
 </script>
+
+<svelte:head>
+  <title>Reset password — {APP_NAME}</title>
+</svelte:head>
 
 <section class="mx-auto flex min-h-[calc(100vh-3.5rem)] max-w-sm flex-col justify-center gap-4 px-6">
   <h1 class="text-2xl font-semibold tracking-tight">Choose a new password</h1>

@@ -160,7 +160,7 @@
     <link rel="preconnect" href="https://scripts.simpleanalyticscdn.com" crossorigin="anonymous" />
     {@html '<script async src="https://scripts.simpleanalyticscdn.com/latest.js"><\/script>'}
   {/if}
-  <title>{APP_NAME} — {APP_TAGLINE}</title>
+  <title>{APP_NAME}</title>
   <meta name="description" content={APP_DESCRIPTION} />
   <meta name="apple-mobile-web-app-title" content={APP_NAME} />
   <link rel="canonical" href={canonicalUrl} />

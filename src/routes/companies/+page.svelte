@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { APP_NAME } from '$lib/branding';
   import { goto, invalidateAll } from '$app/navigation';
   import { page } from '$app/state';
   import { onMount } from 'svelte';
@@ -195,6 +196,10 @@
   }
 
 </script>
+
+<svelte:head>
+  <title>Companies — {APP_NAME}</title>
+</svelte:head>
 
 <div class="flex flex-col gap-4">
   <header class="flex flex-wrap items-center gap-3">

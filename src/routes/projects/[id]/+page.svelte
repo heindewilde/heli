@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { APP_NAME } from '$lib/branding';
   import { goto, invalidateAll } from '$app/navigation';
   import { Trash2, AlertTriangle, Plus, X, Briefcase } from 'lucide-svelte';
   import StatusChip from '$lib/components/StatusChip.svelte';
@@ -193,6 +194,10 @@
 
   const inputRowClass = 'min-w-0 rounded border border-transparent bg-transparent px-1 py-0.5 text-right text-xs hover:border-[var(--color-border)] focus:border-[var(--color-accent)] focus:outline-none';
 </script>
+
+<svelte:head>
+  <title>{project.name} — {APP_NAME}</title>
+</svelte:head>
 
 <article class="flex flex-col gap-6">
   {#if data.justSaved}

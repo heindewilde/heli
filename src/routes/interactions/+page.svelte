@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { APP_NAME } from '$lib/branding';
   import { goto } from '$app/navigation';
   import { page } from '$app/state';
   import { Plus, Search } from 'lucide-svelte';
@@ -84,6 +85,10 @@
 
   const hasFilters = $derived(!!(data.q || data.type || data.from || data.to));
 </script>
+
+<svelte:head>
+  <title>Interactions — {APP_NAME}</title>
+</svelte:head>
 
 <div class="flex flex-col gap-4">
   <header class="flex flex-wrap items-center gap-3">

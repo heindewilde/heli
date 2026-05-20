@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { APP_NAME } from '$lib/branding';
   import { goto, invalidateAll } from '$app/navigation';
   import { Trash2, Archive, Funnel, Folder, Settings, LayoutGrid, List as ListIcon } from 'lucide-svelte';
   import NotesEditor from '$lib/components/NotesEditor.svelte';
@@ -126,6 +127,10 @@ async function patch(body: Record<string, unknown>): Promise<boolean> {
     }).length
   );
 </script>
+
+<svelte:head>
+  <title>{pipeline.name} — {APP_NAME}</title>
+</svelte:head>
 
 <article class="flex flex-col gap-4">
   {#if data.justSaved}
