@@ -14,7 +14,7 @@ The phased build spec is gone — work from what the user says in conversation, 
 Heli is a personal CRM. SvelteKit 2 (adapter-node, full SSR) + libSQL/SQLite + Drizzle ORM, FTS5 search, lean bundle (no charting/markdown/animation deps).
 
 - **Cloud version**: single Fly region (`ams`), with Cloudflare in front for global edge cache + brotli + HTTP/3 + TLS-near-user. Patch version auto-bumped per deploy.
-- **Self-host**: one-line installer at `heli.so/install` provisions Docker + Caddy + Let's Encrypt on a VPS. Caddy is auto-configured. See `SELFHOST.md` for the full guide including a Performance-tuning section.
+- **Self-host**: one-line installer at `heli.so/install` provisions Docker + Caddy + Let's Encrypt on a VPS. Caddy is auto-configured. See `SELFHOST.md` for the full guide including a Performance-tuning section. Self-hosters run `ghcr.io/heindewilde/heli:latest`; a Watchtower sidecar auto-updates every 6 hours.
 - **Multi-region DB**: optional Turso replicas via `DATABASE_URL_EU/US/APAC`. Region routing keyed by `email_routing` table; `db(region)` returns the right libSQL client. Writes go to `PRIMARY_REGION`.
 
 ## Lightweightness rules
@@ -80,6 +80,19 @@ Heli is a personal CRM. SvelteKit 2 (adapter-node, full SSR) + libSQL/SQLite + D
 - **Sanitize on write**, not on read. Stored notes are already-sanitized HTML.
 - **`PRIMARY_REGION`** defaults to `'local'` on single-host setups and only falls back to `'EU'` when a `DATABASE_URL_EU/US/APAC` is configured. Don't reintroduce a hardcoded `'EU'` default.
 - **CSP heads-up**: `hooks.server.ts` sets `script-src 'self' 'unsafe-inline'` which does **not** explicitly allow `scripts.simpleanalyticscdn.com`. Either SvelteKit's `kit.csp.directives` merges the host in via the auto-mode, or analytics is silently blocked. Worth confirming in browser devtools next time the analytics script is in scope.
+
+## Versioning
+
+Every push to `main` triggers two workflows:
+
+1. **`fly-deploy.yml`** — auto-bumps the patch tag (`v0.2.5` → `v0.2.6`), pushes it to git, deploys to Fly. The tag name is passed as `VERSION` build arg → cloud shows `Version: v0.2.6`.
+2. **`docker.yml`** — triggered by the tag push (not the branch push). Builds a multi-arch image, tags it `:latest` + `:stable` + the semver tags, passes the tag name as `VERSION` → self-hosted shows the same `Version: v0.2.6`.
+
+**Rules to never break:**
+- `docker.yml` must only trigger on `tags: ['v*']` (and `workflow_dispatch`), never on `push.branches`. If you add a branch trigger back, `:latest` will get a SHA as its version instead of a clean number.
+- `package.json` version must stay in sync with the latest `v*` tag. Bump it whenever you'd bump the tag.
+- Both `:latest` and `:stable` are pushed on every tag build — don't remove either.
+- `VERSION` in the Dockerfile is set at build time via `--build-arg`. The value flows through to `PUBLIC_HELI_VERSION` (read in `src/lib/version.ts`). Don't add a runtime env var for this — it's intentionally baked in at build time.
 
 ## Naming
 
