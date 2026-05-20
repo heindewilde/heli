@@ -8,7 +8,7 @@ export function setSessionCookie(cookies: Cookies, sessionId: string): void {
   cookies.set(SESSION_COOKIE, sessionId, {
     path: '/',
     httpOnly: true,
-    sameSite: 'strict',
+    sameSite: 'lax',
     secure: !dev,
     maxAge: THIRTY_DAYS_S
   });

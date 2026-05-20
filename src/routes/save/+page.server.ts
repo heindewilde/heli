@@ -1,5 +1,5 @@
-import { redirect } from '@sveltejs/kit';
 import type { PageServerLoad } from './$types';
+import { redirect } from '@sveltejs/kit';
 import { cleanUrl, assertPublicUrl, UrlError } from '$lib/server/url';
 import { classify } from '$lib/server/classify';
 import { savePerson } from '$lib/server/savePerson';
@@ -22,7 +22,6 @@ function pickUrl(...sources: (string | null)[]): string | null {
 
 export const load: PageServerLoad = async ({ url, locals }) => {
   if (!locals.user) {
-    // Stash the original query so the user can sign in and come back.
     const back = `/save?${url.searchParams.toString()}`;
     throw redirect(303, `/auth?next=${encodeURIComponent(back)}`);
   }
@@ -62,8 +61,6 @@ export const load: PageServerLoad = async ({ url, locals }) => {
       ? await savePerson(locals.user.id, locals.user.region, cleaned)
       : await saveCompany(locals.user.id, locals.user.region, cleaned);
 
-  // Land on the detail page so the user can confirm + edit. SaveBanner reads
-  // these flags to show "Saved … (Undo)" or "You've already saved this".
   const path = kind === 'person' ? `/people/${result.id}` : `/companies/${result.id}`;
-  throw redirect(303, path + (result.dedup ? '?dedup=1' : '?just=1'));
+  return { ok: true as const, id: result.id, kind, dedup: result.dedup, path };
 };
