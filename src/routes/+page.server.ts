@@ -5,6 +5,7 @@ import { db, isMultiRegion } from '$lib/server/db';
 import { people, companies, interactions as interactionsTable, projects, reminders } from '$lib/server/schema';
 import { listInteractions } from '$lib/server/interactions-query';
 import { isRegistrationDisabled } from '$lib/server/auth';
+import { env } from '$env/dynamic/private';
 
 export const load: PageServerLoad = async ({ locals, setHeaders }) => {
   if (!locals.user) {
@@ -21,7 +22,8 @@ export const load: PageServerLoad = async ({ locals, setHeaders }) => {
       user: null,
       authConfig: {
         registrationDisabled: await isRegistrationDisabled(),
-        multiRegion: isMultiRegion()
+        multiRegion: isMultiRegion(),
+        googleAuthEnabled: !!(env.GOOGLE_CLIENT_ID && env.GOOGLE_CLIENT_SECRET)
       }
     };
   }

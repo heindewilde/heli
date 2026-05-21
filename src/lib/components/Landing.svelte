@@ -19,7 +19,7 @@
   import AuthModal from './AuthModal.svelte';
 
   type Props = {
-    authConfig?: { registrationDisabled?: boolean; multiRegion?: boolean };
+    authConfig?: { registrationDisabled?: boolean; multiRegion?: boolean; googleAuthEnabled?: boolean };
   };
   let { authConfig = {} }: Props = $props();
 
@@ -178,6 +178,7 @@
   initialMode={authModalMode}
   registrationDisabled={authConfig.registrationDisabled}
   multiRegion={authConfig.multiRegion}
+  googleAuthEnabled={authConfig.googleAuthEnabled}
 />
 
 <style>

@@ -9,12 +9,14 @@
     initialMode?: 'login' | 'register';
     registrationDisabled?: boolean;
     multiRegion?: boolean;
+    googleAuthEnabled?: boolean;
   };
   let {
     open = $bindable(false),
     initialMode = 'login',
     registrationDisabled = false,
-    multiRegion = false
+    multiRegion = false,
+    googleAuthEnabled = false
   }: Props = $props();
 
   // Reset the form's mode each time the modal opens, so a fresh open from a
@@ -57,7 +59,8 @@
   const formData = $derived({
     next: '/',
     registrationDisabled,
-    multiRegion
+    multiRegion,
+    googleAuthEnabled
   });
 </script>
 
