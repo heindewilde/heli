@@ -3,6 +3,7 @@ import type { RequestHandler } from './$types';
 import { loginOrRegisterWithGoogle, AuthError } from '$lib/server/auth';
 import { setSessionCookie } from '$lib/server/cookies';
 import { checkRateLimit, LIMITS, RateLimitError } from '$lib/server/rate-limit';
+import { env } from '$env/dynamic/private';
 
 function safeNext(raw: string): string {
   if (!raw.startsWith('/') || raw.startsWith('//')) return '/';
@@ -10,8 +11,8 @@ function safeNext(raw: string): string {
 }
 
 export const GET: RequestHandler = async ({ url, cookies, getClientAddress }) => {
-  const clientId = process.env.GOOGLE_CLIENT_ID;
-  const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
+  const clientId = env.GOOGLE_CLIENT_ID;
+  const clientSecret = env.GOOGLE_CLIENT_SECRET;
   if (!clientId || !clientSecret) throw error(503, 'Google OAuth is not configured');
 
   const code = url.searchParams.get('code');

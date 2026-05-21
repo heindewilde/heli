@@ -4,6 +4,7 @@ import { register, login, AuthError, isRegistrationDisabled } from '$lib/server/
 import { setSessionCookie } from '$lib/server/cookies';
 import { checkRateLimit, LIMITS, RateLimitError } from '$lib/server/rate-limit';
 import { isMultiRegion, isValidRegion } from '$lib/server/db';
+import { env } from '$env/dynamic/private';
 
 function safeNext(raw: string | null): string {
   // Only allow same-origin absolute paths so a poisoned `?next=` can't
@@ -30,7 +31,7 @@ export const load: PageServerLoad = async ({ locals, url }) => {
     next,
     registrationDisabled: await isRegistrationDisabled(),
     multiRegion: isMultiRegion(),
-    googleAuthEnabled: !!(process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET),
+    googleAuthEnabled: !!(env.GOOGLE_CLIENT_ID && env.GOOGLE_CLIENT_SECRET),
     oauthError
   };
 };

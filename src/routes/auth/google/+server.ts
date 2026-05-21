@@ -1,10 +1,11 @@
 import { redirect, error } from '@sveltejs/kit';
 import { dev } from '$app/environment';
 import { createId } from '@paralleldrive/cuid2';
+import { env } from '$env/dynamic/private';
 import type { RequestHandler } from './$types';
 
 export const GET: RequestHandler = async ({ cookies, url }) => {
-  const clientId = process.env.GOOGLE_CLIENT_ID;
+  const clientId = env.GOOGLE_CLIENT_ID;
   if (!clientId) throw error(503, 'Google OAuth is not configured');
 
   const state = createId();
