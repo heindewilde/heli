@@ -2,7 +2,11 @@ import { createId } from '@paralleldrive/cuid2';
 import bcrypt from 'bcryptjs';
 import { and, eq, lt, ne } from 'drizzle-orm';
 import { db, primaryDb, defaultRegion } from './db';
-import { users, sessions, passwordResetTokens, emailRouting } from './schema';
+import { users, sessions, passwordResetTokens, emailRouting, oauthAccounts } from './schema';
+
+// Stored as passwordHash for OAuth-only accounts that have no password set.
+// Not a valid bcrypt hash, so bcrypt.compare will always return false against it.
+export const OAUTH_SENTINEL = 'oauth_no_password';
 
 const BCRYPT_ROUNDS = 10;
 const SESSION_TTL_MS = 30 * 24 * 60 * 60 * 1000;
@@ -246,7 +250,82 @@ export async function updatePassword(userId: string, region: string, newPassword
 export async function verifyPassword(userId: string, region: string, password: string): Promise<boolean> {
   const u = await db(region).select().from(users).where(eq(users.id, userId)).get();
   if (!u) return false;
+  if (u.passwordHash === OAUTH_SENTINEL) return false;
   return bcrypt.compare(password, u.passwordHash);
+}
+
+export async function userHasPassword(userId: string, region: string): Promise<boolean> {
+  const u = await db(region).select({ passwordHash: users.passwordHash }).from(users).where(eq(users.id, userId)).get();
+  return !!u && u.passwordHash !== OAUTH_SENTINEL;
+}
+
+export async function loginOrRegisterWithGoogle(input: {
+  googleId: string;
+  email: string;
+  name: string;
+  region?: string;
+}): Promise<{ user: AuthUser; sessionId: string; expiresAt: number }> {
+  const email = normalizeEmail(input.email);
+
+  const routing = await primaryDb().select().from(emailRouting).where(eq(emailRouting.email, email)).get();
+
+  if (routing) {
+    const region = routing.region;
+    const user = await db(region).select().from(users).where(eq(users.email, email)).get();
+    if (!user) throw new AuthError('not_found');
+
+    // Link Google account if not already linked.
+    const linked = await db(region)
+      .select()
+      .from(oauthAccounts)
+      .where(and(eq(oauthAccounts.provider, 'google'), eq(oauthAccounts.providerUserId, input.googleId)))
+      .get();
+    if (!linked) {
+      await db(region).insert(oauthAccounts).values({
+        id: createId(),
+        userId: user.id,
+        provider: 'google',
+        providerUserId: input.googleId,
+        email,
+        createdAt: Date.now()
+      });
+    }
+
+    const session = await createSession(user.id, region);
+    return {
+      user: { id: user.id, email: user.email, username: user.username, region },
+      sessionId: session.id,
+      expiresAt: session.expiresAt
+    };
+  }
+
+  // New user.
+  if (await isRegistrationDisabled()) {
+    throw new AuthError('registration_disabled', 'Registration is disabled on this instance');
+  }
+
+  const region = input.region ?? defaultRegion();
+  const id = createId();
+  const now = Date.now();
+  const username = input.name.trim().slice(0, 50) || 'user';
+
+  await db(region).insert(users).values({ id, email, passwordHash: OAUTH_SENTINEL, username, createdAt: now });
+  await primaryDb().insert(emailRouting).values({ email, region });
+  await db(region).insert(oauthAccounts).values({
+    id: createId(),
+    userId: id,
+    provider: 'google',
+    providerUserId: input.googleId,
+    email,
+    createdAt: now
+  });
+
+  const session = await createSession(id, region);
+  return {
+    user: { id, email, username, region },
+    sessionId: session.id,
+    expiresAt: session.expiresAt
+  };
 }
 
 export async function deleteAccount(userId: string, region: string): Promise<void> {

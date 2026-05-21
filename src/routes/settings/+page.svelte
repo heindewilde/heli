@@ -70,7 +70,7 @@
   async function saveEmail() {
     saving = 'email';
     try {
-      const r = await postUser({ action: 'updateEmail', email, currentPassword: emailPwd });
+      const r = await postUser({ action: 'updateEmail', email, ...(data.hasPassword ? { currentPassword: emailPwd } : {}) });
       if (!r.ok) {
         toast.danger(
           r.body?.message === 'wrong_password' || r.status === 403
@@ -102,7 +102,7 @@
     try {
       const r = await postUser({
         action: 'updatePassword',
-        currentPassword: currentPwd,
+        ...(data.hasPassword ? { currentPassword: currentPwd } : {}),
         newPassword: newPwd
       });
       if (!r.ok) {
@@ -136,7 +136,7 @@
     if (!confirm(`Delete your ${APP_NAME} account? This wipes every person, company, interaction, tag, and reminder. This cannot be undone.`)) return;
     saving = 'delete';
     try {
-      const r = await postUser({ action: 'deleteAccount', currentPassword: deletePwd });
+      const r = await postUser({ action: 'deleteAccount', ...(data.hasPassword ? { currentPassword: deletePwd } : {}) });
       if (!r.ok) {
         toast.danger(r.status === 403 ? 'Current password is incorrect' : 'Could not delete account');
         return;
@@ -247,15 +247,17 @@
           class="rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-bg)] px-3 py-2"
         />
       </label>
-      <label class="flex flex-col gap-1 text-sm">
-        <span class="text-[var(--color-muted)]">Current password</span>
-        <input
-          type="password"
-          bind:value={emailPwd}
-          autocomplete="current-password"
-          class="rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-bg)] px-3 py-2"
-        />
-      </label>
+      {#if data.hasPassword}
+        <label class="flex flex-col gap-1 text-sm">
+          <span class="text-[var(--color-muted)]">Current password</span>
+          <input
+            type="password"
+            bind:value={emailPwd}
+            autocomplete="current-password"
+            class="rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-bg)] px-3 py-2"
+          />
+        </label>
+      {/if}
       <button
         type="button"
         onclick={saveEmail}
@@ -268,12 +270,17 @@
 
     <div class="flex flex-col gap-2">
       <h3 class="flex items-center gap-2 text-xs font-medium uppercase tracking-wide text-[var(--color-subtle)]">
-        <KeyRound size={12} strokeWidth={2} /> Password
+        <KeyRound size={12} strokeWidth={2} /> {data.hasPassword ? 'Password' : 'Set a password'}
       </h3>
-      <label class="flex flex-col gap-1 text-sm">
-        <span class="text-[var(--color-muted)]">Current password</span>
-        <input type="password" bind:value={currentPwd} autocomplete="current-password" class="rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-bg)] px-3 py-2" />
-      </label>
+      {#if !data.hasPassword}
+        <p class="text-xs text-[var(--color-muted)]">Your account uses Google sign-in. You can set a password to also sign in with email.</p>
+      {/if}
+      {#if data.hasPassword}
+        <label class="flex flex-col gap-1 text-sm">
+          <span class="text-[var(--color-muted)]">Current password</span>
+          <input type="password" bind:value={currentPwd} autocomplete="current-password" class="rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-bg)] px-3 py-2" />
+        </label>
+      {/if}
       <label class="flex flex-col gap-1 text-sm">
         <span class="text-[var(--color-muted)]">New password</span>
         <input type="password" bind:value={newPwd} minlength="8" maxlength="72" autocomplete="new-password" class="rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-bg)] px-3 py-2" />
@@ -287,7 +294,7 @@
         onclick={savePassword}
         disabled={saving === 'password'}
         class="self-start rounded-[var(--radius-sm)] bg-[var(--color-accent)] transition-colors hover:bg-[var(--color-accent-hover)] px-3 py-2 text-sm font-medium text-[var(--color-accent-fg)] disabled:opacity-60"
-      >Update password</button>
+      >{data.hasPassword ? 'Update password' : 'Set password'}</button>
     </div>
 
     <hr class="border-[var(--color-border)]" />
@@ -313,19 +320,21 @@
     <p class="text-sm text-[var(--color-danger)]">
       Deleting your account erases every person, company, interaction, tag, reminder, and session. This cannot be undone.
     </p>
-    <label class="flex flex-col gap-1 text-sm">
-      <span class="text-[var(--color-danger)]">Confirm with current password</span>
-      <input
-        type="password"
-        bind:value={deletePwd}
-        autocomplete="current-password"
-        class="rounded-[var(--radius-sm)] border border-[var(--color-danger-border)] bg-[var(--color-bg)] px-3 py-2"
-      />
-    </label>
+    {#if data.hasPassword}
+      <label class="flex flex-col gap-1 text-sm">
+        <span class="text-[var(--color-danger)]">Confirm with current password</span>
+        <input
+          type="password"
+          bind:value={deletePwd}
+          autocomplete="current-password"
+          class="rounded-[var(--radius-sm)] border border-[var(--color-danger-border)] bg-[var(--color-bg)] px-3 py-2"
+        />
+      </label>
+    {/if}
     <button
       type="button"
       onclick={deleteAccount}
-      disabled={saving === 'delete' || !deletePwd}
+      disabled={saving === 'delete' || (data.hasPassword && !deletePwd)}
       class="self-start rounded-[var(--radius-sm)] bg-[var(--color-danger)] px-3 py-2 text-sm font-medium text-white disabled:opacity-60"
     >Delete account permanently</button>
   </section>

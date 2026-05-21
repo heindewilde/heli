@@ -252,6 +252,17 @@ CREATE TABLE IF NOT EXISTS pipeline_item_events (
 );
 CREATE INDEX IF NOT EXISTS idx_pipeline_item_events_item_at ON pipeline_item_events(item_id, at);
 
+CREATE TABLE IF NOT EXISTS oauth_accounts (
+  id TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  provider TEXT NOT NULL,
+  provider_user_id TEXT NOT NULL,
+  email TEXT NOT NULL,
+  created_at INTEGER NOT NULL
+);
+CREATE UNIQUE INDEX IF NOT EXISTS uq_oauth_accounts_provider ON oauth_accounts(provider, provider_user_id);
+CREATE INDEX IF NOT EXISTS idx_oauth_accounts_user ON oauth_accounts(user_id);
+
 CREATE TABLE IF NOT EXISTS collection_pipeline_syncs (
   collection_id TEXT PRIMARY KEY REFERENCES collections(id) ON DELETE CASCADE,
   pipeline_id TEXT NOT NULL REFERENCES pipelines(id) ON DELETE CASCADE,

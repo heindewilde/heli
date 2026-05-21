@@ -6,7 +6,8 @@ import {
   updateEmail,
   updatePassword,
   updateUsername,
-  verifyPassword
+  verifyPassword,
+  userHasPassword
 } from '$lib/server/auth';
 import { clearSessionCookie } from '$lib/server/cookies';
 import { sanitizePlainText } from '$lib/server/sanitize';
@@ -49,18 +50,22 @@ export const POST: RequestHandler = async ({ request, locals, cookies }) => {
         return json({ ok: true, username });
       }
       case 'updateEmail': {
-        const password = String(body.currentPassword ?? '');
-        if (!(await verifyPassword(userId, region, password))) {
-          throw error(403, 'wrong_password');
+        if (await userHasPassword(userId, region)) {
+          const password = String(body.currentPassword ?? '');
+          if (!(await verifyPassword(userId, region, password))) {
+            throw error(403, 'wrong_password');
+          }
         }
         const newEmail = String(body.email ?? '');
         await updateEmail(userId, region, newEmail);
         return json({ ok: true, email: newEmail.trim().toLowerCase() });
       }
       case 'updatePassword': {
-        const current = String(body.currentPassword ?? '');
-        if (!(await verifyPassword(userId, region, current))) {
-          throw error(403, 'wrong_password');
+        if (await userHasPassword(userId, region)) {
+          const current = String(body.currentPassword ?? '');
+          if (!(await verifyPassword(userId, region, current))) {
+            throw error(403, 'wrong_password');
+          }
         }
         const next = String(body.newPassword ?? '');
         await updatePassword(userId, region, next);
@@ -71,9 +76,11 @@ export const POST: RequestHandler = async ({ request, locals, cookies }) => {
         return json({ ok: true });
       }
       case 'deleteAccount': {
-        const password = String(body.currentPassword ?? '');
-        if (!(await verifyPassword(userId, region, password))) {
-          throw error(403, 'wrong_password');
+        if (await userHasPassword(userId, region)) {
+          const password = String(body.currentPassword ?? '');
+          if (!(await verifyPassword(userId, region, password))) {
+            throw error(403, 'wrong_password');
+          }
         }
         await deleteAccount(userId, region);
         clearSessionCookie(cookies);

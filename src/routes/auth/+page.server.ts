@@ -16,11 +16,22 @@ function safeNext(raw: string | null): string {
 export const load: PageServerLoad = async ({ locals, url }) => {
   const next = safeNext(url.searchParams.get('next'));
   if (locals.user) throw redirect(303, next);
+  const oauthErrorParam = url.searchParams.get('oauth_error');
+  const oauthError =
+    oauthErrorParam === 'registration_disabled'
+      ? 'Registration is disabled on this instance.'
+      : oauthErrorParam === 'rate_limited'
+        ? 'Too many attempts. Try again later.'
+        : oauthErrorParam === 'google_failed'
+          ? 'Google sign-in failed. Please try again.'
+          : null;
   return {
     mode: url.searchParams.get('mode') === 'register' ? 'register' : 'login',
     next,
     registrationDisabled: await isRegistrationDisabled(),
-    multiRegion: isMultiRegion()
+    multiRegion: isMultiRegion(),
+    googleAuthEnabled: !!(process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET),
+    oauthError
   };
 };
 

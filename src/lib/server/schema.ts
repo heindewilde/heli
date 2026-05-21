@@ -444,6 +444,24 @@ export const pipelineItemEvents = sqliteTable(
   (t) => [index('idx_pipeline_item_events_item_at').on(t.itemId, t.at)]
 );
 
+export const oauthAccounts = sqliteTable(
+  'oauth_accounts',
+  {
+    id: text('id').primaryKey(),
+    userId: text('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    provider: text('provider').notNull(),
+    providerUserId: text('provider_user_id').notNull(),
+    email: text('email').notNull(),
+    createdAt: integer('created_at').notNull()
+  },
+  (t) => [
+    uniqueIndex('uq_oauth_accounts_provider').on(t.provider, t.providerUserId),
+    index('idx_oauth_accounts_user').on(t.userId)
+  ]
+);
+
 export const collectionPipelineSync = sqliteTable(
   'collection_pipeline_syncs',
   {
@@ -472,6 +490,7 @@ export type Project = typeof projects.$inferSelect;
 export type ProjectLink = typeof projectLinks.$inferSelect;
 export type Collection = typeof collections.$inferSelect;
 export type CollectionItem = typeof collectionItems.$inferSelect;
+export type OAuthAccount = typeof oauthAccounts.$inferSelect;
 export type Pipeline = typeof pipelines.$inferSelect;
 export type PipelineStage = typeof pipelineStages.$inferSelect;
 export type PipelineItem = typeof pipelineItems.$inferSelect;
