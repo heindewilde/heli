@@ -9,7 +9,7 @@
 
 <article class="prose">
   <h1>Terms of Service</h1>
-  <p class="meta">Last updated: 20 May 2025 · Applies to the cloud service at {APP_DOMAIN}</p>
+  <p class="meta">Last updated: 21 May 2025 · Applies to the cloud service at {APP_DOMAIN}</p>
 
   <h2>1. Provider</h2>
   <p>
@@ -20,8 +20,9 @@
 
   <h2>2. Your account</h2>
   <p>
-    You must provide an accurate email address when registering. You are responsible for keeping your password secure and
-    for all activity that occurs under your account. Notify us immediately at <a href="mailto:info@heindewilde.com">info@heindewilde.com</a>
+    You must provide an accurate email address when registering. You may sign in with an email and password
+    or via Google OAuth. You are responsible for keeping your credentials secure and for all activity that
+    occurs under your account. Notify us immediately at <a href="mailto:info@heindewilde.com">info@heindewilde.com</a>
     if you suspect unauthorized access.
   </p>
 
@@ -37,12 +38,22 @@
 
   <h2>4. Your contact data and GDPR</h2>
   <p>
-    You are the data controller for the contact data you store in Heli. You are responsible for ensuring
-    you have a lawful basis under GDPR (or any other applicable privacy law) to process information about
-    the people and companies you add. We process that data on your behalf as a data processor.
+    You are the data controller for the contact data you store in Heli, including any contacts imported from
+    Google. You are responsible for ensuring you have a lawful basis under GDPR (or any other applicable
+    privacy law) to process information about the people and companies you add. We process that data on
+    your behalf as a data processor.
   </p>
 
-  <h2>5. The service — no uptime guarantee</h2>
+  <h2>5. Google integrations</h2>
+  <p>
+    Heli offers optional Google integrations (sign-in via Google, Google Contacts import). These are
+    provided as-is and may be modified or removed at any time. Use of these features is also subject to
+    <a href="https://policies.google.com/terms" target="_blank" rel="noreferrer noopener">Google's Terms of Service</a>.
+    We handle Google user data in accordance with our <a href="/privacy">Privacy Policy</a> and the
+    <a href="https://developers.google.com/terms/api-services-user-data-policy" target="_blank" rel="noreferrer noopener">Google API Services User Data Policy</a>.
+  </p>
+
+  <h2>6. The service — no uptime guarantee</h2>
   <p>
     Heli is provided <strong>"as is"</strong> and <strong>"as available"</strong>, without warranty of any kind,
     express or implied. We do not warrant that the service will be uninterrupted, error-free, or free of harmful
@@ -51,29 +62,29 @@
     changes where possible.
   </p>
 
-  <h2>6. Data and backups</h2>
+  <h2>7. Data and backups</h2>
   <p>
     You are solely responsible for maintaining copies of your data. We make reasonable efforts to prevent data
     loss but do not guarantee that your data will never be lost, corrupted, or inaccessible. We provide an
-    export feature (Settings → Export) so you can download your data at any time. We strongly recommend
+    export feature (Settings → Export) so you can download your data as CSV at any time. We strongly recommend
     doing so regularly. We are not liable for any data loss, however caused.
   </p>
 
-  <h2>7. Self-hosted instances</h2>
+  <h2>8. Self-hosted instances</h2>
   <p>
     The Heli source code is available under the AGPL-3.0 licence. Self-hosted instances are governed by
     that licence, not by these terms. You are your own operator and bear full responsibility for your deployment,
     your users, and your data.
   </p>
 
-  <h2>8. Suspension and termination</h2>
+  <h2>9. Suspension and termination</h2>
   <p>
     We may suspend or terminate accounts that violate these terms, without notice in cases of serious abuse.
     You may delete your account at any time from Settings → Danger zone. On deletion, all your data is
     permanently erased in accordance with our <a href="/privacy">Privacy Policy</a>.
   </p>
 
-  <h2>9. Limitation of liability</h2>
+  <h2>10. Limitation of liability</h2>
   <p>
     To the maximum extent permitted by Dutch law, Brainpower's total liability to you for any claim arising
     out of or related to these terms or your use of Heli — whether based in contract, tort, statute, or any
@@ -87,14 +98,14 @@
     or willful misconduct on our part, as Dutch law does not permit exclusion of such liability.
   </p>
 
-  <h2>10. Governing law</h2>
+  <h2>11. Governing law</h2>
   <p>
     These terms are governed by the laws of the Netherlands. Any disputes shall be submitted to the
     competent court in Amsterdam, unless mandatory consumer protection law in your country of residence
     requires otherwise.
   </p>
 
-  <h2>11. Changes</h2>
+  <h2>12. Changes</h2>
   <p>
     We will notify registered users by email at least 30 days before any material change to these terms.
     Continued use of the service after the effective date constitutes acceptance of the updated terms.

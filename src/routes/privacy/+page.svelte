@@ -9,7 +9,7 @@
 
 <article class="prose">
   <h1>{APP_NAME} Privacy Policy</h1>
-  <p class="meta">Last updated: 20 May 2025 · Applies to the cloud service at {APP_DOMAIN}</p>
+  <p class="meta">Last updated: 21 May 2025 · Applies to the cloud service at {APP_DOMAIN}</p>
 
   <h2>1. Who we are</h2>
   <p>
@@ -20,13 +20,36 @@
 
   <h2>2. What we collect</h2>
   <h3>Account data</h3>
-  <p>When you register: your email address, a username, and a hashed password. We never store your password in plain text.</p>
+  <p>
+    When you register with email and password: your email address, a username, and a hashed password.
+    We never store your password in plain text.
+    When you register or sign in with Google: your Google account email address, display name, and a Google account identifier.
+    We do not receive or store your Google password.
+  </p>
 
   <h3>Your contact data</h3>
   <p>
     Everything you enter into Heli — people, companies, interactions, notes, tags, reminders — is <em>your</em> data.
     You are the data controller for it; we process it on your behalf to provide the service.
     You are responsible for having a lawful basis under GDPR to store information about your contacts.
+  </p>
+
+  <h3>Google Contacts import</h3>
+  <p>
+    If you choose to import from Google Contacts, Heli requests read-only access to your Google Contacts
+    (<code>contacts.readonly</code> scope). We fetch your contacts, compare them against contacts already in your Heli
+    account, and present a preview for your confirmation. Only the contacts you explicitly confirm are saved to
+    your Heli account. We do not retain your Google access token after the import is complete; it is used
+    once, in memory, and discarded.
+    The imported contact records (name, email, phone, role, location, notes, organization) become part of
+    your Heli contact data, governed by section 2 above.
+  </p>
+  <p>
+    Heli's use and transfer of information received from Google APIs adheres to the
+    <a href="https://developers.google.com/terms/api-services-user-data-policy" target="_blank" rel="noreferrer noopener">Google API Services User Data Policy</a>,
+    including the Limited Use requirements. Specifically: Google user data is used only to provide the
+    in-app import feature you requested; it is not used for advertising, sold to third parties, or used
+    for any purpose unrelated to the feature.
   </p>
 
   <h3>Server logs</h3>
@@ -39,6 +62,7 @@
   <ul>
     <li><strong>Account data</strong> — necessary to perform the contract (Art. 6(1)(b) GDPR).</li>
     <li><strong>Your contact data</strong> — processed on your behalf under the same contract.</li>
+    <li><strong>Google Contacts import</strong> — performed only on your explicit request; data is then governed by the contract.</li>
     <li><strong>Server logs</strong> — legitimate interest in security and service reliability (Art. 6(1)(f) GDPR).</li>
   </ul>
 
@@ -46,14 +70,16 @@
   <p>
     Data is hosted on <strong>Fly.io</strong> in Amsterdam (EU) by default.
     Traffic passes through <strong>Cloudflare</strong>'s network for DDoS protection, TLS termination, and caching.
-    If you or your account is routed to a replica region (EU/US/APAC), your data may be replicated to Turso infrastructure in that region.
+    If your account is routed to a replica region (EU/US/APAC), your data may be replicated to Turso infrastructure in that region.
     All providers are bound by data processing agreements and handle data in accordance with GDPR.
   </p>
 
   <h2>5. Cookies</h2>
   <p>
-    We set one <code>session</code> cookie, used solely for authentication.
-    It is a first-party, HttpOnly, Secure cookie and contains no tracking identifiers.
+    We use first-party, HttpOnly, Secure cookies for authentication and short-lived OAuth flows only.
+    These include your session cookie, and temporary state cookies used during Google sign-in or Google
+    Contacts import (each expires within 10–15 minutes). None of these cookies contain tracking identifiers
+    or are shared with third parties.
     We do not use advertising cookies, third-party trackers, or fingerprinting.
   </p>
 
@@ -76,7 +102,7 @@
     <li><strong>Access</strong> — request a copy of your personal data (use the Export feature in Settings).</li>
     <li><strong>Rectification</strong> — correct inaccurate account data in Settings.</li>
     <li><strong>Erasure</strong> — delete your account and all data in Settings → Danger zone.</li>
-    <li><strong>Portability</strong> — export your data in JSON format from Settings.</li>
+    <li><strong>Portability</strong> — export your data as CSV from Settings.</li>
     <li><strong>Restriction / Objection</strong> — contact us at <a href="mailto:info@heindewilde.com">info@heindewilde.com</a>.</li>
     <li><strong>Complaint</strong> — you may lodge a complaint with the Dutch supervisory authority,
       the <a href="https://www.autoriteitpersoonsgegevens.nl" target="_blank" rel="noreferrer noopener">Autoriteit Persoonsgegevens</a>.</li>
