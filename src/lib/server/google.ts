@@ -1,5 +1,6 @@
 import { createId } from '@paralleldrive/cuid2';
 
+export const GOOGLE_PENDING_COOKIE = 'google_pending';
 export const CONTACTS_IMPORT_COOKIE = 'google_contacts_import';
 
 export type MappedPerson = {

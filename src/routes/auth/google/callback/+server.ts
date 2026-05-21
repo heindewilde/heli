@@ -6,7 +6,7 @@ import { setSessionCookie } from '$lib/server/cookies';
 import { checkRateLimit, LIMITS, RateLimitError } from '$lib/server/rate-limit';
 import { env } from '$env/dynamic/private';
 
-export const GOOGLE_PENDING_COOKIE = 'google_pending';
+import { GOOGLE_PENDING_COOKIE } from '$lib/server/google';
 
 function safeNext(raw: string): string {
   if (!raw.startsWith('/') || raw.startsWith('//')) return '/';

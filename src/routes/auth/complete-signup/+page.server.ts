@@ -4,7 +4,7 @@ import { registerWithGoogle, AuthError, isRegistrationDisabled } from '$lib/serv
 import { setSessionCookie } from '$lib/server/cookies';
 import { isMultiRegion, isValidRegion } from '$lib/server/db';
 import { checkRateLimit, LIMITS, RateLimitError } from '$lib/server/rate-limit';
-import { GOOGLE_PENDING_COOKIE } from '../google/callback/+server';
+import { GOOGLE_PENDING_COOKIE } from '$lib/server/google';
 
 type Pending = { googleId: string; email: string; name: string; next: string };
 
