@@ -2,7 +2,7 @@
   import { goto, invalidateAll } from '$app/navigation';
   import { APP_NAME } from '$lib/branding';
   import { toast } from '$lib/toasts.svelte';
-  import { Bookmark, Download, ShieldAlert, KeyRound, Mail, User, LogOut, Copy, Check } from 'lucide-svelte';
+  import { Bookmark, Download, ShieldAlert, KeyRound, Mail, User, LogOut, Copy, Check, Users } from 'lucide-svelte';
 
   let { data } = $props();
   const user = $derived(data.user);
@@ -25,6 +25,32 @@
   const bookmarkletJs = $derived(
     `javascript:void(window.open('${data.origin}/save?url='+encodeURIComponent(location.href),'_blank'))`
   );
+
+  let importState = $state<'idle' | 'importing' | 'done'>('idle');
+  let importResult = $state<{ imported: number; duplicates: number; errors: number } | null>(null);
+
+  async function confirmImport() {
+    importState = 'importing';
+    try {
+      const res = await fetch('/api/import', { method: 'POST' });
+      if (!res.ok) {
+        toast.danger('Import failed. Please try again.');
+        importState = 'idle';
+        return;
+      }
+      importResult = await res.json();
+      importState = 'done';
+      await invalidateAll();
+    } catch {
+      toast.danger('Import failed. Please try again.');
+      importState = 'idle';
+    }
+  }
+
+  async function cancelImport() {
+    await fetch('/api/import', { method: 'DELETE' });
+    await goto('/settings', { replaceState: true });
+  }
 
   let copied = $state(false);
   async function copyBookmarklet() {
@@ -211,6 +237,80 @@
       </a>
     </div>
   </section>
+
+  {#if data.googleAuthEnabled}
+    <section class="flex flex-col gap-3 rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)] p-5">
+      <h2 class="flex items-center gap-2 text-sm font-medium"><Users size={14} strokeWidth={2} /> Google Contacts</h2>
+
+      {#if data.importError}
+        <p class="rounded-[var(--radius-sm)] border border-[var(--color-danger-border)] bg-[var(--color-danger-bg)] px-3 py-2 text-sm text-[var(--color-danger)]">
+          Could not connect to Google. Please try again.
+        </p>
+      {/if}
+
+      {#if importState === 'done' && importResult}
+        <p class="rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-bg)] px-3 py-2 text-sm text-[var(--color-muted)]">
+          Imported {importResult.imported} contact{importResult.imported !== 1 ? 's' : ''}.{importResult.duplicates > 0 ? ` ${importResult.duplicates} already existed and were skipped.` : ''}
+        </p>
+      {:else if data.pendingImport && importState !== 'done'}
+        <div class="flex flex-col gap-3 rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-bg)] p-4">
+          <p class="text-sm">
+            <strong>{data.pendingImport.totalToImport}</strong> contact{data.pendingImport.totalToImport !== 1 ? 's' : ''} ready to import
+            {#if data.pendingImport.duplicateCount > 0}
+              · <span class="text-[var(--color-muted)]">{data.pendingImport.duplicateCount} already in {APP_NAME}, will be skipped</span>
+            {/if}
+          </p>
+
+          {#if data.pendingImport.preview.length > 0}
+            <ul class="flex flex-col gap-1">
+              {#each data.pendingImport.preview as contact}
+                <li class="flex items-baseline gap-2 text-sm">
+                  <span class="font-medium">{contact.name}</span>
+                  {#if contact.email}<span class="text-[var(--color-muted)] text-xs">{contact.email}</span>{/if}
+                </li>
+              {/each}
+              {#if data.pendingImport.totalToImport > data.pendingImport.preview.length}
+                <li class="text-xs text-[var(--color-subtle)]">… and {data.pendingImport.totalToImport - data.pendingImport.preview.length} more</li>
+              {/if}
+            </ul>
+          {/if}
+
+          <div class="flex items-center gap-2">
+            <button
+              type="button"
+              onclick={confirmImport}
+              disabled={importState === 'importing'}
+              class="rounded-[var(--radius-sm)] bg-[var(--color-accent)] px-3 py-2 text-sm font-medium text-[var(--color-accent-fg)] transition-colors hover:bg-[var(--color-accent-hover)] disabled:opacity-60"
+            >
+              {importState === 'importing' ? 'Importing…' : `Import ${data.pendingImport.totalToImport} contact${data.pendingImport.totalToImport !== 1 ? 's' : ''}`}
+            </button>
+            <button
+              type="button"
+              onclick={cancelImport}
+              disabled={importState === 'importing'}
+              class="rounded-[var(--radius-sm)] border border-[var(--color-border)] px-3 py-2 text-sm hover:bg-[var(--color-surface)] disabled:opacity-60"
+            >Cancel</button>
+          </div>
+        </div>
+      {:else}
+        <p class="text-sm text-[var(--color-muted)]">
+          Import your Google Contacts directly into {APP_NAME}. Contacts already in your account are automatically skipped.
+        </p>
+        <a
+          href="/auth/google/contacts"
+          class="self-start inline-flex items-center gap-2 rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-bg)] px-3 py-2 text-sm font-medium hover:bg-[var(--color-surface)]"
+        >
+          <svg width="14" height="14" viewBox="0 0 24 24" aria-hidden="true">
+            <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
+            <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
+            <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l3.66-2.84z"/>
+            <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
+          </svg>
+          Import from Google Contacts
+        </a>
+      {/if}
+    </section>
+  {/if}
 
   <section class="flex flex-col gap-4 rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)] p-5">
     <h2 class="flex items-center gap-2 text-sm font-medium"><User size={14} strokeWidth={2} /> Account</h2>

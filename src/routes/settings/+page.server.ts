@@ -5,8 +5,10 @@ import { eq, sql } from 'drizzle-orm';
 import { people, companies, interactions, users } from '$lib/server/schema';
 import { isEmailConfigured } from '$lib/server/email';
 import { OAUTH_SENTINEL } from '$lib/server/auth';
+import { getPendingImport, CONTACTS_IMPORT_COOKIE } from '$lib/server/google';
+import { env } from '$env/dynamic/private';
 
-export const load: PageServerLoad = async ({ locals, url }) => {
+export const load: PageServerLoad = async ({ locals, url, cookies }) => {
   if (!locals.user) throw redirect(303, '/auth?next=/settings');
 
   const d = db(locals.user.region);
@@ -17,10 +19,31 @@ export const load: PageServerLoad = async ({ locals, url }) => {
     d.select({ passwordHash: users.passwordHash }).from(users).where(eq(users.id, locals.user.id)).get()
   ]);
 
-  // Build the bookmarklet against the request's origin so it points back at
-  // *this* deployment (localhost in dev, heli.so in prod, your-host.example
-  // when self-hosted). Document the same-origin caveat in the UI.
   const origin = url.origin;
+  const googleAuthEnabled = !!(env.GOOGLE_CLIENT_ID && env.GOOGLE_CLIENT_SECRET);
+
+  // Resolve any pending contacts import
+  let pendingImport: {
+    token: string;
+    preview: Array<{ name: string; email: string | null }>;
+    totalToImport: number;
+    duplicateCount: number;
+  } | null = null;
+
+  if (url.searchParams.get('import') === 'contacts') {
+    const importId = cookies.get(CONTACTS_IMPORT_COOKIE);
+    if (importId) {
+      const pending = getPendingImport(importId, locals.user.id);
+      if (pending) {
+        pendingImport = {
+          token: importId,
+          preview: pending.toImport.slice(0, 10).map((c) => ({ name: c.name, email: c.email })),
+          totalToImport: pending.toImport.length,
+          duplicateCount: pending.duplicateCount
+        };
+      }
+    }
+  }
 
   return {
     user: locals.user,
@@ -31,6 +54,9 @@ export const load: PageServerLoad = async ({ locals, url }) => {
     },
     origin,
     emailConfigured: isEmailConfigured(),
-    hasPassword: !!u && u.passwordHash !== OAUTH_SENTINEL
+    hasPassword: !!u && u.passwordHash !== OAUTH_SENTINEL,
+    googleAuthEnabled,
+    pendingImport,
+    importError: url.searchParams.get('import_error') ?? null
   };
 };

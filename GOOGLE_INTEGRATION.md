@@ -253,16 +253,16 @@ export async function fetchGmailThreads(accessToken: string, emailAddresses: str
 | `src/routes/auth/complete-signup/+page.svelte` | done | ✓ done |
 | `src/lib/server/schema.ts` | 2, 3 | pending |
 | `src/lib/server/migrate.ts` | 2, 3 | pending |
-| `src/lib/server/google.ts` | 1, 2, 3, 4, 5 (new, built incrementally) | pending |
-| `src/routes/auth/google/contacts/+server.ts` | 1 (new) | pending |
-| `src/routes/auth/google/contacts/callback/+server.ts` | 1 (new) | pending |
+| `src/lib/server/google.ts` | 1, 2, 3, 4, 5 (new, built incrementally) | ✓ Phase 1 done |
+| `src/routes/auth/google/contacts/+server.ts` | 1 (new) | ✓ done |
+| `src/routes/auth/google/contacts/callback/+server.ts` | 1 (new) | ✓ done |
 | `src/routes/auth/google/calendar/+server.ts` | 3 (new, stores tokens here) | pending |
 | `src/routes/auth/google/calendar/callback/+server.ts` | 3 (new, stores tokens here) | pending |
 | `src/routes/auth/google/gmail-contacts/+server.ts` | 4 (new) | pending |
 | `src/routes/auth/google/gmail/+server.ts` | 5 (new, stores tokens here) | pending |
 | `src/routes/auth/google/gmail/callback/+server.ts` | 5 (new, stores tokens here) | pending |
-| `src/routes/api/import/+server.ts` | 1, 4 (new) | pending |
+| `src/routes/api/import/+server.ts` | 1, 4 (new) | ✓ Phase 1 done |
 | `src/routes/api/sync/calendar/+server.ts` | 3 (new) | pending |
 | `src/routes/api/sync/gmail/+server.ts` | 5 (new) | pending |
-| `src/routes/settings/+page.server.ts` | 1, 2, 3, 4, 5 | pending |
-| `src/routes/settings/+page.svelte` | 1, 2, 3, 4, 5 | pending |
+| `src/routes/settings/+page.server.ts` | 1, 2, 3, 4, 5 | ✓ Phase 1 done |
+| `src/routes/settings/+page.svelte` | 1, 2, 3, 4, 5 | ✓ Phase 1 done |
