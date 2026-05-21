@@ -1,9 +1,12 @@
 import { redirect, error } from '@sveltejs/kit';
+import { dev } from '$app/environment';
 import type { RequestHandler } from './$types';
-import { loginOrRegisterWithGoogle, AuthError } from '$lib/server/auth';
+import { loginOrRegisterWithGoogle, isNewGoogleUser, AuthError } from '$lib/server/auth';
 import { setSessionCookie } from '$lib/server/cookies';
 import { checkRateLimit, LIMITS, RateLimitError } from '$lib/server/rate-limit';
 import { env } from '$env/dynamic/private';
+
+export const GOOGLE_PENDING_COOKIE = 'google_pending';
 
 function safeNext(raw: string): string {
   if (!raw.startsWith('/') || raw.startsWith('//')) return '/';
@@ -75,6 +78,17 @@ export const GET: RequestHandler = async ({ url, cookies, getClientAddress }) =>
 
   try {
     checkRateLimit(LIMITS.login, `google:${getClientAddress()}`);
+
+    if (await isNewGoogleUser(googleUser.email)) {
+      // New user — collect username + region before creating the account.
+      cookies.set(
+        GOOGLE_PENDING_COOKIE,
+        JSON.stringify({ googleId: googleUser.id, email: googleUser.email, name: googleUser.name ?? '', next }),
+        { path: '/', httpOnly: true, sameSite: 'lax', secure: !dev, maxAge: 600 }
+      );
+      throw redirect(303, '/auth/complete-signup');
+    }
+
     const result = await loginOrRegisterWithGoogle({
       googleId: googleUser.id,
       email: googleUser.email,

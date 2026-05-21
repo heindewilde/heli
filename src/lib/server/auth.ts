@@ -259,6 +259,51 @@ export async function userHasPassword(userId: string, region: string): Promise<b
   return !!u && u.passwordHash !== OAUTH_SENTINEL;
 }
 
+export async function isNewGoogleUser(emailRaw: string): Promise<boolean> {
+  const email = normalizeEmail(emailRaw);
+  const row = await primaryDb().select().from(emailRouting).where(eq(emailRouting.email, email)).get();
+  return !row;
+}
+
+export async function registerWithGoogle(input: {
+  googleId: string;
+  email: string;
+  username: string;
+  region: string;
+}): Promise<{ user: AuthUser; sessionId: string; expiresAt: number }> {
+  const email = normalizeEmail(input.email);
+  assertUsername(input.username);
+
+  // Race-condition guard: if account appeared between the check and now, link it.
+  const existing = await primaryDb().select().from(emailRouting).where(eq(emailRouting.email, email)).get();
+  if (existing) {
+    return loginOrRegisterWithGoogle({ googleId: input.googleId, email, name: input.username });
+  }
+
+  const username = input.username.trim().slice(0, 50);
+  const region = input.region;
+  const id = createId();
+  const now = Date.now();
+
+  await db(region).insert(users).values({ id, email, passwordHash: OAUTH_SENTINEL, username, createdAt: now });
+  await primaryDb().insert(emailRouting).values({ email, region });
+  await db(region).insert(oauthAccounts).values({
+    id: createId(),
+    userId: id,
+    provider: 'google',
+    providerUserId: input.googleId,
+    email,
+    createdAt: now
+  });
+
+  const session = await createSession(id, region);
+  return {
+    user: { id, email, username, region },
+    sessionId: session.id,
+    expiresAt: session.expiresAt
+  };
+}
+
 export async function loginOrRegisterWithGoogle(input: {
   googleId: string;
   email: string;
