@@ -8,7 +8,7 @@
   let submitting = $state(false);
   let selectedRegion = $state('eu');
   // svelte-ignore state_referenced_locally
-  let username = $state((form as { username?: string } | null)?.username ?? data.suggestedUsername);
+  let username = $state((form as { username?: string } | null)?.username ?? '');
 
   const regionButtons = [
     { value: 'eu', emoji: '🇪🇺', label: 'EU' },

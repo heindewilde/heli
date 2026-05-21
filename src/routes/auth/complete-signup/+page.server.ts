@@ -27,7 +27,6 @@ export const load: PageServerLoad = async ({ cookies, locals }) => {
 
   return {
     email: pending.email,
-    suggestedUsername: pending.name.trim().split(/\s+/)[0] || '',
     multiRegion: isMultiRegion()
   };
 };
