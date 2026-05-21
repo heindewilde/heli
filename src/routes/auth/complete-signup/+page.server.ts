@@ -3,7 +3,7 @@ import type { PageServerLoad, Actions } from './$types';
 import { registerWithGoogle, AuthError, isRegistrationDisabled } from '$lib/server/auth';
 import { setSessionCookie } from '$lib/server/cookies';
 import { isMultiRegion, isValidRegion } from '$lib/server/db';
-import { checkRateLimit, LIMITS, RateLimitError } from '$lib/server/rate-limit';
+import { checkRateLimit, LIMITS, RateLimitError, safeClientAddress } from '$lib/server/rate-limit';
 import { GOOGLE_PENDING_COOKIE } from '$lib/server/google';
 
 type Pending = { googleId: string; email: string; name: string; next: string };
@@ -55,7 +55,7 @@ export const actions: Actions = {
     }
 
     try {
-      checkRateLimit(LIMITS.register, getClientAddress());
+      checkRateLimit(LIMITS.register, safeClientAddress(getClientAddress));
       const result = await registerWithGoogle({
         googleId: pending.googleId,
         email: pending.email,

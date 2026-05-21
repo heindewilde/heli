@@ -3,7 +3,7 @@ import { dev } from '$app/environment';
 import type { RequestHandler } from './$types';
 import { loginOrRegisterWithGoogle, isNewGoogleUser, AuthError } from '$lib/server/auth';
 import { setSessionCookie } from '$lib/server/cookies';
-import { checkRateLimit, LIMITS, RateLimitError } from '$lib/server/rate-limit';
+import { checkRateLimit, LIMITS, RateLimitError, safeClientAddress } from '$lib/server/rate-limit';
 import { env } from '$env/dynamic/private';
 
 import { GOOGLE_PENDING_COOKIE } from '$lib/server/google';
@@ -77,7 +77,7 @@ export const GET: RequestHandler = async ({ url, cookies, getClientAddress }) =>
   }
 
   try {
-    checkRateLimit(LIMITS.login, `google:${getClientAddress()}`);
+    checkRateLimit(LIMITS.login, `google:${safeClientAddress(getClientAddress)}`);
 
     if (await isNewGoogleUser(googleUser.email)) {
       // New user — collect username + region before creating the account.

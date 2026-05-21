@@ -2,7 +2,7 @@ import { fail, redirect } from '@sveltejs/kit';
 import type { Actions, PageServerLoad } from './$types';
 import { register, login, AuthError, isRegistrationDisabled } from '$lib/server/auth';
 import { setSessionCookie } from '$lib/server/cookies';
-import { checkRateLimit, LIMITS, RateLimitError } from '$lib/server/rate-limit';
+import { checkRateLimit, LIMITS, RateLimitError, safeClientAddress } from '$lib/server/rate-limit';
 import { isMultiRegion, isValidRegion } from '$lib/server/db';
 import { env } from '$env/dynamic/private';
 
@@ -43,7 +43,7 @@ export const actions: Actions = {
     const password = String(data.get('password') ?? '');
     const next = safeNext(String(data.get('next') ?? '') || url.searchParams.get('next'));
     try {
-      checkRateLimit(LIMITS.login, `${getClientAddress()}:${email.toLowerCase()}`);
+      checkRateLimit(LIMITS.login, `${safeClientAddress(getClientAddress)}:${email.toLowerCase()}`);
       const result = await login({ email, password });
       setSessionCookie(cookies, result.sessionId);
     } catch (err) {
@@ -77,7 +77,7 @@ export const actions: Actions = {
     }
 
     try {
-      checkRateLimit(LIMITS.register, getClientAddress());
+      checkRateLimit(LIMITS.register, safeClientAddress(getClientAddress));
       const result = await register({ email, password, username, region });
       setSessionCookie(cookies, result.sessionId);
     } catch (err) {

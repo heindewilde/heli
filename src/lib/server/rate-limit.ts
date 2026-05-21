@@ -38,6 +38,13 @@ export class RateLimitError extends Error {
   }
 }
 
+// Safely resolves getClientAddress(), falling back to 'unknown' when the
+// expected address header (e.g. CF-Connecting-IP) is absent. Requests that
+// lack the header share one 'unknown' bucket, which is an acceptable fallback.
+export function safeClientAddress(fn: () => string): string {
+  try { return fn(); } catch { return 'unknown'; }
+}
+
 export function checkRateLimit(limit: Limit, key: string): void {
   const now = Date.now();
   const cutoff = now - limit.windowMs;
