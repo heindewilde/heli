@@ -324,26 +324,26 @@
         <TasksCard kind="person" refId={person.id} tasks={data.tasks} />
       </div>
 
-      <div class="flex flex-col gap-2">
+      <div class="flex flex-col gap-2 rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)] p-3">
         <div class="flex items-center justify-between">
-          <h2 class="text-sm font-medium text-[var(--color-muted)]">Interactions</h2>
+          <h3 class="text-xs font-medium uppercase tracking-wide text-[var(--color-subtle)]">Interactions</h3>
           <a
             href={`/interactions/new?person=${person.id}`}
-            class="inline-flex items-center gap-1 rounded-[var(--radius-sm)] border border-[var(--color-border)] px-2.5 py-1 text-xs hover:bg-[var(--color-surface)]"
+            class="inline-flex items-center gap-1 rounded-[var(--radius-sm)] border border-[var(--color-border)] px-2 py-0.5 text-xs hover:bg-[var(--color-bg)]"
           >
             <Plus size={12} strokeWidth={2} />
-            Log interaction
+            Log
           </a>
         </div>
         {#if interactions.length === 0}
-          <p class="rounded-[var(--radius-sm)] border border-dashed border-[var(--color-border)] bg-[var(--color-surface)] p-4 text-center text-xs text-[var(--color-muted)]">
+          <p class="px-1 py-2 text-xs text-[var(--color-muted)]">
             No interactions logged with {person.name} yet.
           </p>
         {:else}
           <div class="flex flex-col gap-4">
             {#each interactionGroups as [key, g] (key)}
               <section class="flex flex-col gap-1">
-                <h3 class="text-xs font-medium uppercase tracking-wide text-[var(--color-subtle)]">{g.label}</h3>
+                <h4 class="text-xs font-medium uppercase tracking-wide text-[var(--color-subtle)]">{g.label}</h4>
                 <ul class="flex flex-col gap-0.5">
                   {#each g.items as i (i.id)}
                     <li>

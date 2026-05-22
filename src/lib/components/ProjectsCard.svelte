@@ -11,7 +11,7 @@
     kind: MemberKind;
     refId: string;
     projects: ProjectLite[];
-    /** IDs of projects shared with the linked company; used to add a subtle "w/ company" hint. */
+    /** IDs of projects shared with the linked company; renders a subtle "w/ company" hint. */
     sharedIds?: Set<string>;
     sharedLabel?: string;
   };
@@ -88,52 +88,63 @@
   }
 </script>
 
-<div class="flex flex-col gap-2 rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)] p-3">
-  <h3 class="text-xs font-medium uppercase tracking-wide text-[var(--color-subtle)]">Projects</h3>
-  {#if projects.length === 0}
-    <p class="rounded-[var(--radius-sm)] border border-dashed border-[var(--color-border)] p-3 text-center text-xs text-[var(--color-muted)]">
-      No projects yet.
-    </p>
-  {:else}
-    <ul class="flex flex-col gap-1">
-      {#each projects as p (p.id)}
-        <li class="group flex items-center gap-2 rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-bg)] px-2 py-1.5 hover:border-[var(--color-highlight-border)]">
-          <a href={`/projects/${p.id}`} class="flex min-w-0 flex-1 items-center gap-2">
-            <FolderKanban size={14} strokeWidth={2} class="shrink-0 text-[var(--color-muted)]" />
-            <span class="min-w-0 flex-1 truncate text-sm font-medium">{p.name}</span>
+<div class="flex flex-col rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)]">
+  <header class="flex items-center justify-between gap-2 border-b border-[var(--color-border)] px-3 py-2">
+    <div class="flex items-center gap-1.5">
+      <FolderKanban size={12} strokeWidth={2} class="text-[var(--color-subtle)]" />
+      <h3 class="text-xs font-medium uppercase tracking-wide text-[var(--color-subtle)]">Projects</h3>
+      {#if projects.length > 0}
+        <span class="rounded-full bg-[var(--color-bg)] px-1.5 py-0.5 text-[10px] text-[var(--color-muted)]">{projects.length}</span>
+      {/if}
+    </div>
+  </header>
+
+  <div class="flex flex-1 flex-col gap-1 p-2">
+    {#if projects.length === 0}
+      <div class="flex flex-col items-center gap-1 px-3 py-4 text-center">
+        <FolderKanban size={18} strokeWidth={1.5} class="text-[var(--color-subtle)]" />
+        <p class="text-xs text-[var(--color-muted)]">Not on any project</p>
+      </div>
+    {:else}
+      <ul class="flex flex-col">
+        {#each projects as p (p.id)}
+          <li class="group rounded-[var(--radius-sm)] px-2 py-1.5 hover:bg-[var(--color-bg)]">
+            <div class="flex items-center gap-2">
+              <FolderKanban size={12} strokeWidth={2} class="shrink-0 text-[var(--color-subtle)]" />
+              <a href={`/projects/${p.id}`} class="min-w-0 flex-1 truncate text-sm hover:underline">{p.name}</a>
+              <StatusChip status={p.status as ProjectStatus} size="sm" />
+              <button
+                type="button"
+                onclick={() => remove(p.id)}
+                aria-label="Remove from {p.name}"
+                class="shrink-0 rounded-[var(--radius-sm)] p-0.5 text-[var(--color-subtle)] opacity-0 hover:bg-[var(--color-danger-bg)] hover:text-[var(--color-danger)] group-hover:opacity-100"
+              >
+                <X size={11} strokeWidth={2} />
+              </button>
+            </div>
             {#if sharedIds.has(p.id) && sharedLabel}
-              <span class="shrink-0 text-[10px] text-[var(--color-subtle)]">· w/ {sharedLabel}</span>
+              <p class="pl-[18px] text-[10px] text-[var(--color-subtle)]">with {sharedLabel}</p>
             {/if}
-            <StatusChip status={p.status as ProjectStatus} size="sm" />
-          </a>
-          <button
-            type="button"
-            onclick={() => remove(p.id)}
-            aria-label="Remove from {p.name}"
-            class="shrink-0 rounded-[var(--radius-sm)] p-1 text-[var(--color-subtle)] opacity-0 hover:bg-[var(--color-danger-bg)] hover:text-[var(--color-danger)] group-hover:opacity-100"
-          >
-            <X size={12} strokeWidth={2} />
-          </button>
-        </li>
-      {/each}
-    </ul>
-  {/if}
-  <div class="relative">
+          </li>
+        {/each}
+      </ul>
+    {/if}
+  </div>
+
+  <footer class="relative border-t border-[var(--color-border)]">
     <button
       type="button"
       onclick={() => (pickerOpen = !pickerOpen)}
-      class="inline-flex items-center gap-1 rounded-full border border-dashed border-[var(--color-border)] px-2 py-0.5 text-xs text-[var(--color-muted)] hover:bg-[var(--color-bg)]"
+      class="flex w-full items-center justify-center gap-1.5 rounded-b-[var(--radius-md)] px-3 py-2 text-xs text-[var(--color-muted)] hover:bg-[var(--color-bg)] hover:text-[var(--color-text)]"
     >
-      <Plus size={10} strokeWidth={2} /> Project
+      <Plus size={12} strokeWidth={2} />
+      Add to project
     </button>
     {#if pickerOpen}
       <!-- svelte-ignore a11y_click_events_have_key_events -->
       <!-- svelte-ignore a11y_no_static_element_interactions -->
-      <div
-        class="fixed inset-0 z-30"
-        onclick={() => (pickerOpen = false)}
-      ></div>
-      <div class="absolute left-0 top-full z-40 mt-1 w-64 rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-bg)] p-2 shadow-[var(--shadow-lg)]">
+      <div class="fixed inset-0 z-30" onclick={() => (pickerOpen = false)}></div>
+      <div class="absolute bottom-full left-0 right-0 z-40 mb-1 rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-bg)] p-2 shadow-[var(--shadow-lg)]">
         <input
           bind:value={pickerQuery}
           oninput={onQueryChange}
@@ -164,5 +175,5 @@
         </ul>
       </div>
     {/if}
-  </div>
+  </footer>
 </div>
