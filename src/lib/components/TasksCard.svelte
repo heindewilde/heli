@@ -149,21 +149,23 @@
       e.preventDefault();
       add();
     }}
-    class="flex items-center gap-1.5"
+    class="group flex w-full items-center gap-2 rounded-[var(--radius-md)] border border-dashed border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 text-sm leading-relaxed transition-colors focus-within:border-[var(--color-border-strong)] focus-within:bg-[var(--color-bg)] hover:border-[var(--color-border-strong)] hover:bg-[var(--color-bg)]"
   >
     <input
       bind:value={title}
       placeholder="Add a task…"
-      class="min-w-0 flex-1 rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-bg)] px-2 py-1 text-sm outline-none focus:border-[var(--color-highlight-border)]"
+      class="min-w-0 flex-1 bg-transparent text-sm leading-relaxed outline-none placeholder:text-[var(--color-subtle)]"
     />
-    <DueDatePicker value={dueDraft} onChange={(v) => (dueDraft = v)} />
+    <span class="shrink-0">
+      <DueDatePicker
+        value={dueDraft}
+        onChange={(v) => (dueDraft = v)}
+        variant={dueDraft == null ? 'icon' : 'chip'}
+      />
+    </span>
   </form>
 
-  {#if items.length === 0}
-    <p class="rounded-[var(--radius-sm)] border border-dashed border-[var(--color-border)] p-3 text-center text-xs text-[var(--color-muted)]">
-      No tasks yet.
-    </p>
-  {:else}
+  {#if items.length > 0}
     <ul class="flex flex-col">
       {#each open as t (t.id)}
         <li class="group flex items-center gap-2 rounded-[var(--radius-sm)] px-1 py-1 hover:bg-[var(--color-bg)]">

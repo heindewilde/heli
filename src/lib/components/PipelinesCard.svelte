@@ -19,18 +19,24 @@
   let loading = $state(false);
 
   let stageOptions = $state<Record<string, { id: string; name: string; kind: string }[]>>({});
+  let stagePopoverFor = $state<string | null>(null);
 
   const memberOf = $derived(new Set(pipelines.map((p) => p.pipelineId)));
   const filtered = $derived(candidates.filter((c) => !memberOf.has(c.id) && !c.isArchived));
 
-  // Preload stage options for every pipeline the entity belongs to, so the
-  // native <select> overlay has options on first click without a round-trip.
+  // Preload stage options so the popover opens with content on first click.
   $effect(() => {
     const pids = [...new Set(pipelines.map((p) => p.pipelineId))];
     for (const pid of pids) {
       if (!stageOptions[pid]) loadStages(pid);
     }
   });
+
+  function stageDotClass(kind: string): string {
+    if (kind === 'won') return 'bg-emerald-500';
+    if (kind === 'lost') return 'bg-rose-500';
+    return 'bg-[var(--color-accent)]';
+  }
 
   async function loadCandidates() {
     loading = true;
@@ -121,7 +127,6 @@
 <div class="flex flex-col rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)]">
   <header class="flex items-center justify-between gap-2 border-b border-[var(--color-border)] px-3 py-2">
     <div class="flex items-center gap-1.5">
-      <Funnel size={12} strokeWidth={2} class="text-[var(--color-subtle)]" />
       <h3 class="text-xs font-medium uppercase tracking-wide text-[var(--color-subtle)]">Pipelines</h3>
       {#if pipelines.length > 0}
         <span class="rounded-full bg-[var(--color-bg)] px-1.5 py-0.5 text-[10px] text-[var(--color-muted)]">{pipelines.length}</span>
@@ -152,22 +157,42 @@
               </button>
             </div>
             <div class="mt-1 flex items-center gap-1 pl-[18px]">
-              <span class="relative inline-flex">
-                <span class="pointer-events-none inline-flex items-center gap-1 rounded-full border px-1.5 py-px text-[10px] {stageClass(p.stageKind)}">
+              <div class="relative inline-flex">
+                <button
+                  type="button"
+                  onclick={() => (stagePopoverFor = stagePopoverFor === p.itemId ? null : p.itemId)}
+                  class="inline-flex items-center gap-1 rounded-full border px-1.5 py-px text-[10px] {stageClass(p.stageKind)} hover:opacity-90"
+                >
                   <span>{p.stageName}</span>
                   <ChevronDown size={9} strokeWidth={2.5} />
-                </span>
-                <select
-                  value={p.stageId}
-                  onchange={(e) => moveStage(p.pipelineId, p.itemId, (e.currentTarget as HTMLSelectElement).value)}
-                  aria-label="Change stage"
-                  class="absolute inset-0 cursor-pointer opacity-0"
-                >
-                  {#each stageOptions[p.pipelineId] ?? [] as s (s.id)}
-                    <option value={s.id}>{s.name}</option>
-                  {/each}
-                </select>
-              </span>
+                </button>
+                {#if stagePopoverFor === p.itemId}
+                  <!-- svelte-ignore a11y_click_events_have_key_events -->
+                  <!-- svelte-ignore a11y_no_static_element_interactions -->
+                  <div class="fixed inset-0 z-30" onclick={() => (stagePopoverFor = null)}></div>
+                  <div class="absolute left-0 top-full z-40 mt-1 min-w-[160px] rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)] p-1 shadow-[var(--shadow-lg)]">
+                    {#each stageOptions[p.pipelineId] ?? [] as s (s.id)}
+                      <button
+                        type="button"
+                        onclick={() => {
+                          stagePopoverFor = null;
+                          if (s.id !== p.stageId) moveStage(p.pipelineId, p.itemId, s.id);
+                        }}
+                        class="flex w-full items-center gap-2 rounded-[var(--radius-sm)] px-2 py-1.5 text-left text-xs hover:bg-[var(--color-bg)] {s.id === p.stageId ? 'bg-[var(--color-bg)] font-medium' : ''}"
+                      >
+                        <span class="inline-block h-1.5 w-1.5 rounded-full {stageDotClass(s.kind)}"></span>
+                        <span class="min-w-0 flex-1 truncate">{s.name}</span>
+                        {#if s.id === p.stageId}
+                          <span class="text-[10px] text-[var(--color-subtle)]">current</span>
+                        {/if}
+                      </button>
+                    {/each}
+                    {#if (stageOptions[p.pipelineId]?.length ?? 0) === 0}
+                      <p class="px-2 py-1.5 text-xs italic text-[var(--color-subtle)]">Loading stages…</p>
+                    {/if}
+                  </div>
+                {/if}
+              </div>
             </div>
           </li>
         {/each}

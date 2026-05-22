@@ -91,7 +91,6 @@
 <div class="flex flex-col rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)]">
   <header class="flex items-center justify-between gap-2 border-b border-[var(--color-border)] px-3 py-2">
     <div class="flex items-center gap-1.5">
-      <FolderKanban size={12} strokeWidth={2} class="text-[var(--color-subtle)]" />
       <h3 class="text-xs font-medium uppercase tracking-wide text-[var(--color-subtle)]">Projects</h3>
       {#if projects.length > 0}
         <span class="rounded-full bg-[var(--color-bg)] px-1.5 py-0.5 text-[10px] text-[var(--color-muted)]">{projects.length}</span>
