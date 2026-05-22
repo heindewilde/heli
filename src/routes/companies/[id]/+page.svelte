@@ -8,14 +8,13 @@
   import InteractionRow from '$lib/components/InteractionRow.svelte';
   import TagInput from '$lib/components/TagInput.svelte';
   import AddReminder from '$lib/components/AddReminder.svelte';
-  import CollectionsRibbon from '$lib/components/CollectionsRibbon.svelte';
-  import PipelinesRibbon from '$lib/components/PipelinesRibbon.svelte';
+  import CollectionsCard from '$lib/components/CollectionsCard.svelte';
+  import PipelinesCard from '$lib/components/PipelinesCard.svelte';
+  import ProjectsCard from '$lib/components/ProjectsCard.svelte';
+  import TasksCard from '$lib/components/TasksCard.svelte';
   import SaveBanner from '$lib/components/SaveBanner.svelte';
-  import StatusChip from '$lib/components/StatusChip.svelte';
   import CompanyLogo from '$lib/components/CompanyLogo.svelte';
   import SocialLinks from '$lib/components/SocialLinks.svelte';
-  import { FolderKanban } from 'lucide-svelte';
-  import type { ProjectStatus } from '$lib/server/schema';
   import { Plus } from 'lucide-svelte';
   import { dayBucket } from '$lib/interactions';
   import { toast } from '$lib/toasts.svelte';
@@ -242,104 +241,99 @@
   {/if}
 
   <div class="grid gap-6 md:grid-cols-[1fr_260px]">
-    <section class="flex flex-col gap-3">
-      <h2 class="text-sm font-medium text-[var(--color-muted)]">Notes</h2>
-      <NotesEditor
-        value={company.notes}
-        onSave={(next) => patch({ notes: next })}
-      />
-
-      <div class="mt-4 flex flex-col gap-2">
-        <h2 class="text-sm font-medium text-[var(--color-muted)]">People at this company</h2>
-        {#if linkedPeople.length > 0}
-          <ul class="flex flex-col gap-0.5">
-            {#each linkedPeople as p (p.id)}
-              <li>
-                <div class="group flex items-center gap-2 rounded-[var(--radius-sm)] px-2 py-1.5 hover:bg-[var(--color-surface)]">
-                  <a href={`/people/${p.id}`} class="flex min-w-0 flex-1 items-center gap-3">
-                    <span class="flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-full border border-[var(--color-border)] bg-[var(--color-surface)] text-xs text-[var(--color-muted)]">
-                      {#if p.avatarUrl}
-                        <img src={p.avatarUrl} alt="" class="h-full w-full object-cover" />
-                      {:else}
-                        {(p.name[0] ?? '·').toUpperCase()}
-                      {/if}
-                    </span>
-                    <span class="min-w-0 flex-1">
-                      <span class="block truncate text-sm font-medium">{p.name}</span>
-                      {#if p.role}
-                        <span class="block truncate text-xs text-[var(--color-muted)]">{p.role}</span>
-                      {/if}
-                    </span>
-                  </a>
-                  <button
-                    type="button"
-                    onclick={() => unlinkPerson(p)}
-                    aria-label="Unlink {p.name}"
-                    class="rounded-[var(--radius-sm)] p-1 text-[var(--color-subtle)] opacity-0 hover:bg-[var(--color-bg)] group-hover:opacity-100"
-                  ><X size={12} strokeWidth={2} /></button>
-                </div>
-              </li>
-            {/each}
-          </ul>
-        {/if}
-        <PersonPicker
-          selected={pickerPeople}
-          onAdd={(p) => linkPerson(p)}
-          onRemove={() => {}}
-          placeholder={linkedPeople.length > 0 ? 'Add another person…' : 'Add a person…'}
-        />
+    <section class="flex flex-col gap-6">
+      <div class="grid gap-6 md:grid-cols-2">
+        <div class="flex flex-col gap-2 rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)] p-3">
+          <h3 class="text-xs font-medium uppercase tracking-wide text-[var(--color-subtle)]">Notes</h3>
+          <NotesEditor
+            value={company.notes}
+            onSave={(next) => patch({ notes: next })}
+          />
+        </div>
+        <TasksCard kind="company" refId={company.id} tasks={data.tasks} />
       </div>
 
-      <div class="mt-4 flex items-center justify-between">
-        <h2 class="text-sm font-medium text-[var(--color-muted)]">Interactions</h2>
-        <a
-          href={`/interactions/new?company=${company.id}`}
-          class="inline-flex items-center gap-1 rounded-[var(--radius-sm)] border border-[var(--color-border)] px-2.5 py-1 text-xs hover:bg-[var(--color-bg)]"
-        >
-          <Plus size={12} strokeWidth={2} />
-          Log interaction
-        </a>
-      </div>
-      {#if interactions.length === 0}
-        <p class="rounded-[var(--radius-sm)] border border-dashed border-[var(--color-border)] bg-[var(--color-surface)] p-4 text-center text-xs text-[var(--color-muted)]">
-          No interactions logged with {company.name} yet.
-        </p>
-      {:else}
-        <div class="flex flex-col gap-4">
-          {#each interactionGroups as [key, g] (key)}
-            <section class="flex flex-col gap-1">
-              <h3 class="text-xs font-medium uppercase tracking-wide text-[var(--color-subtle)]">{g.label}</h3>
-              <ul class="flex flex-col gap-0.5">
-                {#each g.items as i (i.id)}
-                  <li>
-                    <InteractionRow {...i} showCompany={false} />
-                  </li>
-                {/each}
-              </ul>
-            </section>
-          {/each}
+      <div class="grid gap-6 md:grid-cols-2">
+        <div class="flex flex-col gap-2">
+          <div class="flex items-center justify-between">
+            <h2 class="text-sm font-medium text-[var(--color-muted)]">Interactions</h2>
+            <a
+              href={`/interactions/new?company=${company.id}`}
+              class="inline-flex items-center gap-1 rounded-[var(--radius-sm)] border border-[var(--color-border)] px-2.5 py-1 text-xs hover:bg-[var(--color-bg)]"
+            >
+              <Plus size={12} strokeWidth={2} />
+              Log
+            </a>
+          </div>
+          {#if interactions.length === 0}
+            <p class="rounded-[var(--radius-sm)] border border-dashed border-[var(--color-border)] bg-[var(--color-surface)] p-4 text-center text-xs text-[var(--color-muted)]">
+              No interactions logged with {company.name} yet.
+            </p>
+          {:else}
+            <div class="flex flex-col gap-4">
+              {#each interactionGroups as [key, g] (key)}
+                <section class="flex flex-col gap-1">
+                  <h3 class="text-xs font-medium uppercase tracking-wide text-[var(--color-subtle)]">{g.label}</h3>
+                  <ul class="flex flex-col gap-0.5">
+                    {#each g.items as i (i.id)}
+                      <li>
+                        <InteractionRow {...i} showCompany={false} />
+                      </li>
+                    {/each}
+                  </ul>
+                </section>
+              {/each}
+            </div>
+          {/if}
         </div>
-      {/if}
 
-      {#if data.projects.length > 0}
-        <div class="flex flex-col gap-2 mt-4">
-          <h2 class="text-sm font-medium text-[var(--color-muted)]">Projects</h2>
-          <ul class="flex flex-col gap-1">
-            {#each data.projects as p (p.id)}
-              <li>
-                <a
-                  href={`/projects/${p.id}`}
-                  class="group flex items-center gap-2 rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 hover:border-[var(--color-highlight-border)]"
-                >
-                  <FolderKanban size={14} strokeWidth={2} class="shrink-0 text-[var(--color-muted)]" />
-                  <span class="min-w-0 flex-1 truncate text-sm font-medium">{p.name}</span>
-                  <StatusChip status={p.status as ProjectStatus} size="sm" />
-                </a>
-              </li>
-            {/each}
-          </ul>
+        <div class="flex flex-col gap-2">
+          <h2 class="text-sm font-medium text-[var(--color-muted)]">People at this company</h2>
+          {#if linkedPeople.length > 0}
+            <ul class="flex flex-col gap-0.5">
+              {#each linkedPeople as p (p.id)}
+                <li>
+                  <div class="group flex items-center gap-2 rounded-[var(--radius-sm)] px-2 py-1.5 hover:bg-[var(--color-surface)]">
+                    <a href={`/people/${p.id}`} class="flex min-w-0 flex-1 items-center gap-3">
+                      <span class="flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-full border border-[var(--color-border)] bg-[var(--color-surface)] text-xs text-[var(--color-muted)]">
+                        {#if p.avatarUrl}
+                          <img src={p.avatarUrl} alt="" class="h-full w-full object-cover" />
+                        {:else}
+                          {(p.name[0] ?? '·').toUpperCase()}
+                        {/if}
+                      </span>
+                      <span class="min-w-0 flex-1">
+                        <span class="block truncate text-sm font-medium">{p.name}</span>
+                        {#if p.role}
+                          <span class="block truncate text-xs text-[var(--color-muted)]">{p.role}</span>
+                        {/if}
+                      </span>
+                    </a>
+                    <button
+                      type="button"
+                      onclick={() => unlinkPerson(p)}
+                      aria-label="Unlink {p.name}"
+                      class="rounded-[var(--radius-sm)] p-1 text-[var(--color-subtle)] opacity-0 hover:bg-[var(--color-bg)] group-hover:opacity-100"
+                    ><X size={12} strokeWidth={2} /></button>
+                  </div>
+                </li>
+              {/each}
+            </ul>
+          {/if}
+          <PersonPicker
+            selected={pickerPeople}
+            onAdd={(p) => linkPerson(p)}
+            onRemove={() => {}}
+            placeholder={linkedPeople.length > 0 ? 'Add another person…' : 'Add a person…'}
+          />
         </div>
-      {/if}
+      </div>
+
+      <div class="grid gap-6 md:grid-cols-3">
+        <CollectionsCard kind="company" refId={company.id} collections={data.collections} />
+        <PipelinesCard kind="company" refId={company.id} pipelines={data.pipelines} />
+        <ProjectsCard kind="company" refId={company.id} projects={data.projects} />
+      </div>
     </section>
 
     <aside class="flex flex-col gap-3">
@@ -352,14 +346,6 @@
       <div class="flex flex-col gap-2 rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)] p-3">
         <h3 class="text-xs font-medium uppercase tracking-wide text-[var(--color-subtle)]">Tags</h3>
         <TagInput scope="company" entityId={company.id} {tags} suggestions={tagSuggestions} />
-      </div>
-      <div class="flex flex-col gap-2 rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)] p-3">
-        <h3 class="text-xs font-medium uppercase tracking-wide text-[var(--color-subtle)]">Collections</h3>
-        <CollectionsRibbon kind="company" refId={company.id} collections={data.collections} />
-      </div>
-      <div class="flex flex-col gap-2 rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)] p-3">
-        <h3 class="text-xs font-medium uppercase tracking-wide text-[var(--color-subtle)]">Pipelines</h3>
-        <PipelinesRibbon kind="company" refId={company.id} pipelines={data.pipelines} />
       </div>
     </aside>
   </div>

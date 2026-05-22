@@ -6,16 +6,15 @@
   import FieldRow from '$lib/components/FieldRow.svelte';
   import InteractionRow from '$lib/components/InteractionRow.svelte';
   import TagInput from '$lib/components/TagInput.svelte';
-  import CollectionsRibbon from '$lib/components/CollectionsRibbon.svelte';
-  import PipelinesRibbon from '$lib/components/PipelinesRibbon.svelte';
+  import CollectionsCard from '$lib/components/CollectionsCard.svelte';
+  import PipelinesCard from '$lib/components/PipelinesCard.svelte';
+  import ProjectsCard from '$lib/components/ProjectsCard.svelte';
+  import TasksCard from '$lib/components/TasksCard.svelte';
   import AddReminder from '$lib/components/AddReminder.svelte';
   import SaveBanner from '$lib/components/SaveBanner.svelte';
-  import StatusChip from '$lib/components/StatusChip.svelte';
   import CompanyLogo from '$lib/components/CompanyLogo.svelte';
   import CompanyPicker from '$lib/components/CompanyPicker.svelte';
   import SocialLinks from '$lib/components/SocialLinks.svelte';
-  import { FolderKanban } from 'lucide-svelte';
-  import type { ProjectStatus } from '$lib/server/schema';
   import { Plus } from 'lucide-svelte';
   import { dayBucket } from '$lib/interactions';
   import { toast } from '$lib/toasts.svelte';
@@ -314,12 +313,15 @@
 
   <div class="grid gap-6 md:grid-cols-[1fr_260px]">
     <section class="flex flex-col gap-6">
-      <div class="flex flex-col gap-3">
-        <h2 class="text-sm font-medium text-[var(--color-muted)]">Notes</h2>
-        <NotesEditor
-          value={person.notes}
-          onSave={(next) => patch({ notes: next })}
-        />
+      <div class="grid gap-6 md:grid-cols-2">
+        <div class="flex flex-col gap-2 rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)] p-3">
+          <h3 class="text-xs font-medium uppercase tracking-wide text-[var(--color-subtle)]">Notes</h3>
+          <NotesEditor
+            value={person.notes}
+            onSave={(next) => patch({ notes: next })}
+          />
+        </div>
+        <TasksCard kind="person" refId={person.id} tasks={data.tasks} />
       </div>
 
       <div class="flex flex-col gap-2">
@@ -355,47 +357,17 @@
         {/if}
       </div>
 
-      {#if data.projectsTogether.length > 0 || data.projectsOther.length > 0}
-        <div class="flex flex-col gap-2">
-          {#if company && data.projectsTogether.length > 0}
-            <div class="flex items-center gap-2">
-              <h2 class="text-sm font-medium text-[var(--color-muted)]">Together at {company.name}</h2>
-              <span class="rounded-full bg-[var(--color-highlight-bg)] px-1.5 py-0.5 text-[10px] text-[var(--color-text)]">{data.projectsTogether.length}</span>
-            </div>
-            <ul class="flex flex-col gap-1">
-              {#each data.projectsTogether as p (p.id)}
-                <li>
-                  <a
-                    href={`/projects/${p.id}`}
-                    class="group flex items-center gap-2 rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 hover:border-[var(--color-highlight-border)]"
-                  >
-                    <FolderKanban size={14} strokeWidth={2} class="shrink-0 text-[var(--color-muted)]" />
-                    <span class="min-w-0 flex-1 truncate text-sm font-medium">{p.name}</span>
-                    <StatusChip status={p.status as ProjectStatus} size="sm" />
-                  </a>
-                </li>
-              {/each}
-            </ul>
-          {/if}
-          {#if data.projectsOther.length > 0}
-            <h2 class="mt-1 text-sm font-medium text-[var(--color-muted)]">{data.projectsTogether.length > 0 ? 'Other projects' : 'Projects'}</h2>
-            <ul class="flex flex-col gap-1">
-              {#each data.projectsOther as p (p.id)}
-                <li>
-                  <a
-                    href={`/projects/${p.id}`}
-                    class="group flex items-center gap-2 rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 hover:border-[var(--color-border-strong)]"
-                  >
-                    <FolderKanban size={14} strokeWidth={2} class="shrink-0 text-[var(--color-muted)]" />
-                    <span class="min-w-0 flex-1 truncate text-sm font-medium">{p.name}</span>
-                    <StatusChip status={p.status as ProjectStatus} size="sm" />
-                  </a>
-                </li>
-              {/each}
-            </ul>
-          {/if}
-        </div>
-      {/if}
+      <div class="grid gap-6 md:grid-cols-3">
+        <CollectionsCard kind="person" refId={person.id} collections={data.collections} />
+        <PipelinesCard kind="person" refId={person.id} pipelines={data.pipelines} />
+        <ProjectsCard
+          kind="person"
+          refId={person.id}
+          projects={[...data.projectsTogether, ...data.projectsOther]}
+          sharedIds={new Set(data.projectsTogether.map((p) => p.id))}
+          sharedLabel={company?.name ?? ''}
+        />
+      </div>
     </section>
 
     <aside class="flex flex-col gap-3">
@@ -424,14 +396,6 @@
       <div class="flex flex-col gap-2 rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)] p-3">
         <h3 class="text-xs font-medium uppercase tracking-wide text-[var(--color-subtle)]">Tags</h3>
         <TagInput scope="person" entityId={person.id} {tags} suggestions={tagSuggestions} />
-      </div>
-      <div class="flex flex-col gap-2 rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)] p-3">
-        <h3 class="text-xs font-medium uppercase tracking-wide text-[var(--color-subtle)]">Collections</h3>
-        <CollectionsRibbon kind="person" refId={person.id} collections={data.collections} />
-      </div>
-      <div class="flex flex-col gap-2 rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)] p-3">
-        <h3 class="text-xs font-medium uppercase tracking-wide text-[var(--color-subtle)]">Pipelines</h3>
-        <PipelinesRibbon kind="person" refId={person.id} pipelines={data.pipelines} />
       </div>
     </aside>
   </div>

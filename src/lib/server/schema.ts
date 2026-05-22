@@ -241,6 +241,27 @@ export const reminders = sqliteTable(
   (t) => [index('idx_reminders_user_at').on(t.userId, t.remindAt)]
 );
 
+export const tasks = sqliteTable(
+  'tasks',
+  {
+    id: text('id').primaryKey(),
+    userId: text('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    kind: text('kind').notNull(),
+    refId: text('ref_id').notNull(),
+    title: text('title').notNull(),
+    dueAt: integer('due_at'),
+    completedAt: integer('completed_at'),
+    createdAt: integer('created_at').notNull(),
+    updatedAt: integer('updated_at').notNull()
+  },
+  (t) => [
+    index('idx_tasks_ref').on(t.userId, t.kind, t.refId, t.completedAt),
+    index('idx_tasks_user_due').on(t.userId, t.dueAt)
+  ]
+);
+
 export const projects = sqliteTable(
   'projects',
   {
@@ -486,6 +507,7 @@ export type Company = typeof companies.$inferSelect;
 export type Interaction = typeof interactions.$inferSelect;
 export type Tag = typeof tags.$inferSelect;
 export type Reminder = typeof reminders.$inferSelect;
+export type Task = typeof tasks.$inferSelect;
 export type Project = typeof projects.$inferSelect;
 export type ProjectLink = typeof projectLinks.$inferSelect;
 export type Collection = typeof collections.$inferSelect;

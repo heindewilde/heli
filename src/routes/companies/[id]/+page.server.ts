@@ -8,6 +8,7 @@ import { projectsForCompany } from '$lib/server/projects-query';
 import { getTagsForEntity } from '$lib/server/tags';
 import { listCollectionsForEntity } from '$lib/server/collections';
 import { listPipelinesForEntity } from '$lib/server/pipelines';
+import { listTasksForEntity } from '$lib/server/tasks';
 
 export const load: PageServerLoad = async ({ locals, params, url }) => {
   if (!locals.user) throw redirect(303, '/auth');
@@ -46,10 +47,22 @@ export const load: PageServerLoad = async ({ locals, params, url }) => {
 
   const projects = await projectsForCompany(locals.user.id, locals.user.region, company.id);
 
-  const [collections, pipelines] = await Promise.all([
+  const [collections, pipelines, tasks] = await Promise.all([
     listCollectionsForEntity(locals.user.id, locals.user.region, 'company', company.id),
-    listPipelinesForEntity(locals.user.id, locals.user.region, 'company', company.id)
+    listPipelinesForEntity(locals.user.id, locals.user.region, 'company', company.id),
+    listTasksForEntity(locals.user.id, locals.user.region, 'company', company.id)
   ]);
 
-  return { company, linkedPeople, interactions, tags, justSaved, dedup, projects, collections, pipelines };
+  return {
+    company,
+    linkedPeople,
+    interactions,
+    tags,
+    justSaved,
+    dedup,
+    projects,
+    collections,
+    pipelines,
+    tasks
+  };
 };
