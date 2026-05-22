@@ -330,7 +330,11 @@
           <ul class="flex flex-col gap-0.5">
             {#each interactions as i (i.id)}
               <li>
-                <InteractionRow {...i} />
+                <InteractionRow
+                  {...i}
+                  showCompany={false}
+                  people={i.people.filter((p) => p.id !== person.id)}
+                />
               </li>
             {/each}
           </ul>
