@@ -181,6 +181,9 @@ const CONTENT_TABLES = [
   'oauth_accounts'
 ] as const;
 
+// Tables in CONTENT_TABLES that lack a created_at column — we report total only.
+const NO_CREATED_AT = new Set<string>(['tags']);
+
 export async function contentTotals(region: RegionKey): Promise<ContentTotals[]> {
   const c = client(region);
   const since = dayBoundary(7);
@@ -189,7 +192,9 @@ export async function contentTotals(region: RegionKey): Promise<ContentTotals[]>
     CONTENT_TABLES.map(async (table) => {
       const [total, new7d] = await Promise.all([
         countWhere(c, table),
-        countWhere(c, table, 'created_at >= ?', [since])
+        NO_CREATED_AT.has(table)
+          ? Promise.resolve(0)
+          : countWhere(c, table, 'created_at >= ?', [since])
       ]);
       results.push({ table, total, new7d });
     })
