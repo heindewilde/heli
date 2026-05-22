@@ -483,6 +483,19 @@ export const oauthAccounts = sqliteTable(
   ]
 );
 
+export const dailyMetrics = sqliteTable(
+  'daily_metrics',
+  {
+    date: text('date').notNull(),
+    metric: text('metric').notNull(),
+    value: integer('value').notNull()
+  },
+  (t) => [
+    primaryKey({ columns: [t.date, t.metric] }),
+    index('idx_daily_metrics_metric_date').on(t.metric, t.date)
+  ]
+);
+
 export const collectionPipelineSync = sqliteTable(
   'collection_pipeline_syncs',
   {
@@ -517,6 +530,7 @@ export type Pipeline = typeof pipelines.$inferSelect;
 export type PipelineStage = typeof pipelineStages.$inferSelect;
 export type PipelineItem = typeof pipelineItems.$inferSelect;
 export type PipelineItemEvent = typeof pipelineItemEvents.$inferSelect;
+export type DailyMetric = typeof dailyMetrics.$inferSelect;
 
 export const TAG_SCOPES = ['person', 'company'] as const;
 export type TagScope = (typeof TAG_SCOPES)[number];

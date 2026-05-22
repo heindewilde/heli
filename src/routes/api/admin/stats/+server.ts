@@ -1,7 +1,21 @@
 import { error, json } from '@sveltejs/kit';
-import { count } from 'drizzle-orm';
-import { db, REGIONS, isMultiRegion } from '$lib/server/db';
-import { users } from '$lib/server/schema';
+import {
+  regionStats,
+  authBreakdown,
+  unusedResetTokens,
+  activeUsers,
+  contentTotals,
+  perUserDistribution,
+  pipelineOutcomes,
+  taskStats,
+  reminderStats,
+  topEmailDomains,
+  recentSignups,
+  opsInfo,
+  dailyBuckets,
+  regionsToScan
+} from '$lib/server/admin-stats';
+import { snapshotIfStale, getTrend, padTrend } from '$lib/server/metrics-snapshot';
 
 export const GET = async ({ request }) => {
   const secret = process.env.ADMIN_SECRET;
@@ -10,21 +24,70 @@ export const GET = async ({ request }) => {
   const auth = request.headers.get('authorization');
   if (auth !== `Bearer ${secret}`) throw error(401, 'unauthorized');
 
-  const multi = isMultiRegion();
+  const regions = regionsToScan();
+  await Promise.all(regions.map((r) => snapshotIfStale(r.region, r.label).catch(() => null)));
 
-  if (!multi) {
-    const [row] = await db().select({ n: count() }).from(users);
-    return json({ total: row?.n ?? 0, multiRegion: false });
-  }
-
-  const byRegion: Record<string, number> = {};
-  await Promise.all(
-    REGIONS.map(async (region) => {
-      const [row] = await db(region).select({ n: count() }).from(users);
-      byRegion[region] = row?.n ?? 0;
+  const perRegion = await Promise.all(
+    regions.map(async (r) => {
+      const [
+        rs,
+        au,
+        auth,
+        resetTokens,
+        content,
+        peopleDist,
+        outcomes,
+        tasks,
+        reminders,
+        topDomains,
+        recents,
+        signupBuckets,
+        interactionBuckets,
+        dauTrend,
+        interactionsTrend
+      ] = await Promise.all([
+        regionStats(r.region, r.label),
+        activeUsers(r.region),
+        authBreakdown(r.region),
+        unusedResetTokens(r.region),
+        contentTotals(r.region),
+        perUserDistribution(r.region, 'people'),
+        pipelineOutcomes(r.region),
+        taskStats(r.region),
+        reminderStats(r.region),
+        topEmailDomains(r.region),
+        recentSignups(r.region, secret),
+        dailyBuckets(r.region, 'users', 'created_at', 30),
+        dailyBuckets(r.region, 'interactions', 'occurred_at', 30),
+        getTrend(r.region, 'dau', 30).then((t) => padTrend(t, 30)),
+        getTrend(r.region, 'interactions_total', 30).then((t) => padTrend(t, 30))
+      ]);
+      return {
+        region: r.region,
+        label: r.label,
+        users: rs,
+        activeUsers: au,
+        auth,
+        unusedResetTokens: resetTokens,
+        content,
+        peopleDist,
+        pipelineOutcomes: outcomes,
+        tasks,
+        reminders,
+        topEmailDomains: topDomains,
+        recentSignups: recents,
+        signupBuckets,
+        interactionBuckets,
+        dauTrend,
+        interactionsTrend
+      };
     })
   );
 
-  const total = Object.values(byRegion).reduce((a, b) => a + b, 0);
-  return json({ total, byRegion, multiRegion: true });
+  const ops = await opsInfo();
+  return json({
+    multiRegion: regions.length > 1,
+    perRegion,
+    ops
+  });
 };

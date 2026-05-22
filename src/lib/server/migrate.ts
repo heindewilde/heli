@@ -306,6 +306,14 @@ CREATE TABLE IF NOT EXISTS company_statuses (
 );
 CREATE INDEX IF NOT EXISTS idx_company_statuses_user_sort ON company_statuses(user_id, sort_order);
 CREATE UNIQUE INDEX IF NOT EXISTS uq_company_statuses_user_name ON company_statuses(user_id, name);
+
+CREATE TABLE IF NOT EXISTS daily_metrics (
+  date TEXT NOT NULL,
+  metric TEXT NOT NULL,
+  value INTEGER NOT NULL,
+  PRIMARY KEY (date, metric)
+);
+CREATE INDEX IF NOT EXISTS idx_daily_metrics_metric_date ON daily_metrics(metric, date);
 `;
 
 const FTS = `
