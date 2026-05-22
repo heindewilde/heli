@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { TYPE_META, formatTime, type InteractionType } from '$lib/interactions';
+  import { TYPE_META, formatTime, dayBucket, type InteractionType } from '$lib/interactions';
 
   type Person = { id: string; name: string; avatarUrl: string | null };
 
@@ -35,7 +35,7 @@
   </span>
   <span class="min-w-0 flex-1">
     <span class="flex items-center gap-2">
-      <span class="text-xs text-[var(--color-muted)]">{formatTime(occurredAt)}</span>
+      <span class="text-xs text-[var(--color-muted)]">{dayBucket(occurredAt).label} · {formatTime(occurredAt)}</span>
       <span class="text-xs uppercase tracking-wide text-[var(--color-subtle)]">{meta.label}</span>
     </span>
     <span class="block truncate text-sm font-medium">{title}</span>

@@ -356,6 +356,7 @@ export async function removeFromCollection(
 export type CollectionMembershipForEntity = {
   id: string;
   name: string;
+  icon: string | null;
   isArchived: number;
 };
 
@@ -370,6 +371,7 @@ export async function listCollectionsForEntity(
     .select({
       id: collections.id,
       name: collections.name,
+      icon: collections.icon,
       isArchived: collections.isArchived
     })
     .from(collectionItems)
@@ -382,7 +384,11 @@ export async function listCollectionsForEntity(
       )
     )
     .orderBy(asc(collections.name));
-  return rows.map((r) => ({ ...r, isArchived: Number(r.isArchived ?? 0) }));
+  return rows.map((r) => ({
+    ...r,
+    icon: r.icon ?? null,
+    isArchived: Number(r.isArchived ?? 0)
+  }));
 }
 
 /** Lightweight typeahead for the CollectionPicker / CommandPalette. */

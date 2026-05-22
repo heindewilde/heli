@@ -103,7 +103,7 @@
     {#if projects.length === 0}
       <div class="flex flex-col items-center gap-1 px-3 py-4 text-center">
         <FolderKanban size={18} strokeWidth={1.5} class="text-[var(--color-subtle)]" />
-        <p class="text-xs text-[var(--color-muted)]">Not on any project</p>
+        <p class="text-xs text-[var(--color-muted)]">Not in any project</p>
       </div>
     {:else}
       <ul class="flex flex-col">

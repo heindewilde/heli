@@ -16,7 +16,6 @@
   import CompanyPicker from '$lib/components/CompanyPicker.svelte';
   import SocialLinks from '$lib/components/SocialLinks.svelte';
   import { Plus } from 'lucide-svelte';
-  import { dayBucket } from '$lib/interactions';
   import { toast } from '$lib/toasts.svelte';
   import { onMount } from 'svelte';
   import { pollWhile } from '$lib/polling';
@@ -27,18 +26,6 @@
   const interactions = $derived(data.interactions);
   const tags = $derived(data.tags);
   const suggestion = $derived(data.suggestion);
-
-  const interactionGroups = $derived.by(() => {
-    const today = new Date();
-    const map = new Map<string, { label: string; items: typeof interactions }>();
-    for (const item of interactions) {
-      const b = dayBucket(item.occurredAt, today);
-      const g = map.get(b.key);
-      if (g) g.items.push(item);
-      else map.set(b.key, { label: b.label, items: [item] });
-    }
-    return [...map.entries()].sort((a, b) => (a[0] < b[0] ? 1 : -1));
-  });
 
   let editingName = $state(false);
   // svelte-ignore state_referenced_locally
@@ -311,9 +298,9 @@
     </aside>
   {/if}
 
-  <div class="grid gap-6 md:grid-cols-[1fr_260px]">
-    <section class="flex flex-col gap-6">
-      <div class="grid gap-6 md:grid-cols-2">
+  <div class="grid gap-6 md:grid-cols-[minmax(0,1fr)_260px]">
+    <section class="flex min-w-0 flex-col gap-6">
+      <div class="grid gap-6 md:grid-cols-2 [&>*]:min-w-0">
         <div class="flex flex-col gap-2 rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)] p-3">
           <h3 class="text-xs font-medium uppercase tracking-wide text-[var(--color-subtle)]">Notes</h3>
           <NotesEditor
@@ -340,24 +327,17 @@
             No interactions logged with {person.name} yet.
           </p>
         {:else}
-          <div class="flex flex-col gap-4">
-            {#each interactionGroups as [key, g] (key)}
-              <section class="flex flex-col gap-1">
-                <h4 class="text-xs font-medium uppercase tracking-wide text-[var(--color-subtle)]">{g.label}</h4>
-                <ul class="flex flex-col gap-0.5">
-                  {#each g.items as i (i.id)}
-                    <li>
-                      <InteractionRow {...i} />
-                    </li>
-                  {/each}
-                </ul>
-              </section>
+          <ul class="flex flex-col gap-0.5">
+            {#each interactions as i (i.id)}
+              <li>
+                <InteractionRow {...i} />
+              </li>
             {/each}
-          </div>
+          </ul>
         {/if}
       </div>
 
-      <div class="grid gap-6 md:grid-cols-3">
+      <div class="grid gap-6 md:grid-cols-3 [&>*]:min-w-0">
         <CollectionsCard kind="person" refId={person.id} collections={data.collections} />
         <PipelinesCard kind="person" refId={person.id} pipelines={data.pipelines} />
         <ProjectsCard

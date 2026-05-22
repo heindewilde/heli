@@ -2,8 +2,14 @@
   import { invalidateAll } from '$app/navigation';
   import { FolderOpen, Plus, X } from 'lucide-svelte';
   import { toast } from '$lib/toasts.svelte';
+  import { COLLECTION_ICON_MAP } from '$lib/collectionIcons';
   import type { CollectionMembershipForEntity } from '$lib/server/collections';
   import type { MemberKind } from '$lib/server/schema';
+
+  function iconFor(icon: string | null) {
+    if (!icon) return null;
+    return COLLECTION_ICON_MAP[icon] ?? null;
+  }
 
   type Props = {
     kind: MemberKind;
@@ -111,8 +117,13 @@
     {:else}
       <ul class="flex flex-col">
         {#each collections as c (c.id)}
+          {@const Ic = iconFor(c.icon)}
           <li class="group flex items-center gap-2 rounded-[var(--radius-sm)] px-2 py-1.5 hover:bg-[var(--color-bg)] {c.isArchived ? 'opacity-60' : ''}">
-            <FolderOpen size={12} strokeWidth={2} class="shrink-0 text-[var(--color-subtle)]" />
+            {#if Ic}
+              <Ic size={12} strokeWidth={2} class="shrink-0 text-[var(--color-subtle)]" />
+            {:else}
+              <FolderOpen size={12} strokeWidth={2} class="shrink-0 text-[var(--color-subtle)]" />
+            {/if}
             <a href={`/collections/${c.id}`} class="min-w-0 flex-1 truncate text-sm hover:underline">{c.name}</a>
             <button
               type="button"

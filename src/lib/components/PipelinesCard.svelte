@@ -18,11 +18,19 @@
   let candidates = $state<{ id: string; name: string; isArchived: number }[]>([]);
   let loading = $state(false);
 
-  let stageEditing = $state<string | null>(null);
   let stageOptions = $state<Record<string, { id: string; name: string; kind: string }[]>>({});
 
   const memberOf = $derived(new Set(pipelines.map((p) => p.pipelineId)));
   const filtered = $derived(candidates.filter((c) => !memberOf.has(c.id) && !c.isArchived));
+
+  // Preload stage options for every pipeline the entity belongs to, so the
+  // native <select> overlay has options on first click without a round-trip.
+  $effect(() => {
+    const pids = [...new Set(pipelines.map((p) => p.pipelineId))];
+    for (const pid of pids) {
+      if (!stageOptions[pid]) loadStages(pid);
+    }
+  });
 
   async function loadCandidates() {
     loading = true;
@@ -100,7 +108,6 @@
       toast.danger('Move failed');
       return;
     }
-    stageEditing = null;
     await invalidateAll();
   }
 
@@ -145,28 +152,22 @@
               </button>
             </div>
             <div class="mt-1 flex items-center gap-1 pl-[18px]">
-              <button
-                type="button"
-                onclick={() => {
-                  stageEditing = stageEditing === p.itemId ? null : p.itemId;
-                  if (stageEditing === p.itemId) loadStages(p.pipelineId);
-                }}
-                class="inline-flex items-center gap-1 rounded-full border px-1.5 py-px text-[10px] {stageClass(p.stageKind)} hover:opacity-90"
-              >
-                <span>{p.stageName}</span>
-                <ChevronDown size={9} strokeWidth={2.5} />
-              </button>
-              {#if stageEditing === p.itemId && stageOptions[p.pipelineId]}
+              <span class="relative inline-flex">
+                <span class="pointer-events-none inline-flex items-center gap-1 rounded-full border px-1.5 py-px text-[10px] {stageClass(p.stageKind)}">
+                  <span>{p.stageName}</span>
+                  <ChevronDown size={9} strokeWidth={2.5} />
+                </span>
                 <select
                   value={p.stageId}
                   onchange={(e) => moveStage(p.pipelineId, p.itemId, (e.currentTarget as HTMLSelectElement).value)}
-                  class="rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-bg)] px-1 py-0.5 text-[10px]"
+                  aria-label="Change stage"
+                  class="absolute inset-0 cursor-pointer opacity-0"
                 >
-                  {#each stageOptions[p.pipelineId] as s (s.id)}
+                  {#each stageOptions[p.pipelineId] ?? [] as s (s.id)}
                     <option value={s.id}>{s.name}</option>
                   {/each}
                 </select>
-              {/if}
+              </span>
             </div>
           </li>
         {/each}

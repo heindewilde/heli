@@ -1,7 +1,8 @@
 <script lang="ts">
-  import { Calendar, CheckSquare, X } from 'lucide-svelte';
+  import { CheckSquare, X } from 'lucide-svelte';
   import { toast } from '$lib/toasts.svelte';
   import { autofocus } from '$lib/actions';
+  import DueDatePicker from './DueDatePicker.svelte';
   import type { Task, MemberKind } from '$lib/server/schema';
 
   type Props = {
@@ -20,8 +21,7 @@
   });
 
   let title = $state('');
-  let dueDraft = $state('');
-  let showDue = $state(false);
+  let dueDraft = $state<number | null>(null);
   let adding = $state(false);
   let editingId = $state<string | null>(null);
   let editDraft = $state('');
@@ -29,29 +29,11 @@
   const open = $derived(items.filter((t) => t.completedAt == null));
   const done = $derived(items.filter((t) => t.completedAt != null));
 
-  function fmtDue(ts: number | null): string {
-    if (ts == null) return '';
-    const d = new Date(ts);
-    const today = new Date();
-    const sameDay = (a: Date, b: Date) => a.toDateString() === b.toDateString();
-    const tomorrow = new Date(today);
-    tomorrow.setDate(today.getDate() + 1);
-    if (sameDay(d, today)) return 'Today';
-    if (sameDay(d, tomorrow)) return 'Tomorrow';
-    return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
-  }
-
-  function toDatetimeLocal(ts: number): string {
-    const d = new Date(ts);
-    const pad = (n: number) => String(n).padStart(2, '0');
-    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
-  }
-
   async function add() {
     const next = title.trim();
     if (!next || adding) return;
     adding = true;
-    const dueAt = dueDraft ? new Date(dueDraft).getTime() : null;
+    const dueAt = dueDraft;
     const tempId = `temp-${Date.now()}`;
     const now = Date.now();
     const optimistic: Task = {
@@ -60,15 +42,14 @@
       kind,
       refId,
       title: next,
-      dueAt: dueAt && Number.isFinite(dueAt) ? dueAt : null,
+      dueAt,
       completedAt: null,
       createdAt: now,
       updatedAt: now
     };
     items = [optimistic, ...items];
     title = '';
-    dueDraft = '';
-    showDue = false;
+    dueDraft = null;
 
     try {
       const res = await fetch('/api/tasks', {
@@ -133,26 +114,9 @@
     }
   }
 
-  async function clearDue(t: Task) {
+  async function setDue(t: Task, ts: number | null) {
     if (t.id.startsWith('temp-')) return;
     const before = t.dueAt;
-    items = items.map((x) => (x.id === t.id ? { ...x, dueAt: null } : x));
-    const res = await fetch(`/api/tasks/${t.id}`, {
-      method: 'PATCH',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ dueAt: null })
-    });
-    if (!res.ok) {
-      items = items.map((x) => (x.id === t.id ? { ...x, dueAt: before } : x));
-      toast.danger('Update failed');
-    }
-  }
-
-  async function setDue(t: Task, value: string) {
-    if (t.id.startsWith('temp-')) return;
-    const before = t.dueAt;
-    const ts = value ? new Date(value).getTime() : null;
-    if (ts != null && !Number.isFinite(ts)) return;
     items = items.map((x) => (x.id === t.id ? { ...x, dueAt: ts } : x));
     const res = await fetch(`/api/tasks/${t.id}`, {
       method: 'PATCH',
@@ -175,10 +139,6 @@
       toast.danger('Delete failed');
     }
   }
-
-  function isOverdue(t: Task): boolean {
-    return t.completedAt == null && t.dueAt != null && t.dueAt < Date.now();
-  }
 </script>
 
 <div class="flex flex-col gap-2 rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)] p-3">
@@ -189,31 +149,14 @@
       e.preventDefault();
       add();
     }}
-    class="flex flex-col gap-1.5"
+    class="flex items-center gap-1.5"
   >
-    <div class="flex items-center gap-1.5">
-      <input
-        bind:value={title}
-        placeholder="Add a task…"
-        class="min-w-0 flex-1 rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-bg)] px-2 py-1 text-sm outline-none focus:border-[var(--color-highlight-border)]"
-      />
-      <button
-        type="button"
-        onclick={() => (showDue = !showDue)}
-        aria-label="Set due date"
-        title="Due date"
-        class="rounded-[var(--radius-sm)] p-1.5 text-[var(--color-subtle)] hover:bg-[var(--color-bg)] {showDue || dueDraft ? 'text-[var(--color-muted)]' : ''}"
-      >
-        <Calendar size={14} strokeWidth={2} />
-      </button>
-    </div>
-    {#if showDue}
-      <input
-        type="datetime-local"
-        bind:value={dueDraft}
-        class="rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-bg)] px-2 py-1 text-xs"
-      />
-    {/if}
+    <input
+      bind:value={title}
+      placeholder="Add a task…"
+      class="min-w-0 flex-1 rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-bg)] px-2 py-1 text-sm outline-none focus:border-[var(--color-highlight-border)]"
+    />
+    <DueDatePicker value={dueDraft} onChange={(v) => (dueDraft = v)} />
   </form>
 
   {#if items.length === 0}
@@ -250,45 +193,13 @@
               class="min-w-0 flex-1 truncate text-left text-sm"
             >{t.title}</button>
           {/if}
-          {#if t.dueAt != null}
-            <label class="relative inline-flex shrink-0 items-center {isOverdue(t) ? 'text-[var(--color-warning)]' : 'text-[var(--color-muted)]'}">
-              <span class="rounded-full border px-1.5 py-0.5 text-[10px] {isOverdue(t)
-                ? 'border-[var(--color-warning-border)] bg-[var(--color-warning-bg)]'
-                : 'border-[var(--color-border)] bg-[var(--color-bg)]'}">{fmtDue(t.dueAt)}</span>
-              <input
-                type="datetime-local"
-                value={toDatetimeLocal(t.dueAt)}
-                onchange={(e) => setDue(t, (e.currentTarget as HTMLInputElement).value)}
-                class="absolute inset-0 cursor-pointer opacity-0"
-                aria-label="Change due date"
-              />
-            </label>
-            <button
-              type="button"
-              onclick={() => clearDue(t)}
-              aria-label="Clear due date"
-              class="shrink-0 rounded-[var(--radius-sm)] p-0.5 text-[var(--color-subtle)] opacity-0 hover:bg-[var(--color-surface)] group-hover:opacity-100"
-            >
-              <X size={10} strokeWidth={2} />
-            </button>
-          {:else}
-            <label class="relative inline-flex shrink-0">
-              <button
-                type="button"
-                aria-label="Set due date"
-                class="rounded-[var(--radius-sm)] p-0.5 text-[var(--color-subtle)] opacity-0 hover:bg-[var(--color-surface)] group-hover:opacity-100"
-                tabindex="-1"
-              >
-                <Calendar size={11} strokeWidth={2} />
-              </button>
-              <input
-                type="datetime-local"
-                onchange={(e) => setDue(t, (e.currentTarget as HTMLInputElement).value)}
-                class="absolute inset-0 cursor-pointer opacity-0"
-                aria-label="Set due date"
-              />
-            </label>
-          {/if}
+          <span class="shrink-0 {t.dueAt == null ? 'opacity-0 group-hover:opacity-100' : ''}">
+            <DueDatePicker
+              value={t.dueAt}
+              onChange={(v) => setDue(t, v)}
+              variant={t.dueAt == null ? 'icon' : 'chip'}
+            />
+          </span>
           <button
             type="button"
             onclick={() => remove(t)}
