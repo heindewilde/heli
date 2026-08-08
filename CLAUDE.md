@@ -113,6 +113,32 @@ tables is *created-by attribution only and must never be used as a filter*.
 - **`migrate.ts` has no version tracking and re-runs every boot.** One-shot
   backfills must be gated on the `schema_meta` table, or they full-scan every
   tenant table at every startup.
+- **`PERSONAL_TABLES` (currently just `reminders`) must never be reassigned.**
+  Those rows carry `workspace_id` but their `user_id` is a real owner, not
+  attribution, so `reassignAuthorship` deletes them instead of handing them to
+  the workspace owner. Reassigning shipped once and quietly moved a departing
+  member's private reminders into the owner's sidebar.
+- **Nothing cascades off `workspaces`.** `workspace_id` was added by `ALTER` as
+  a plain `REFERENCES workspaces(id)`, and `owner_user_id` deliberately doesn't
+  cascade either. So deleting a workspace means deleting its tenant rows first,
+  in that order — `deleteAccount` does, batched. A bare `DELETE FROM workspaces`
+  fails with a FK error the moment the workspace holds one row.
+- **Members can do CRM work; owners/admins do workspace-wide damage.** Creating,
+  editing and deleting records is open. `requireRole` guards the wide-blast-
+  radius calls: `POST /api/import`, `DELETE /api/statuses`,
+  `DELETE /api/tags/[id]`, pipeline delete, and stage delete/reorder. The
+  `/api/export` guard is friction, not containment — `/api/people` and
+  `/api/search` return much the same data.
+- **`npm run check` now enforces three tenancy rules**, all in
+  `scripts/check-tenancy.ts`: no stray `user_id` filters (`ALLOW_FILES` to opt
+  out); raw SQL touching a `TENANT_TABLES` table must mention `workspace_id`
+  (`// tenancy-ok: <reason>` to opt out); and every mutating handler under
+  `src/routes/api` must call `requireRole` or be listed in `MEMBER_ALLOWED` with
+  a reason. Adding an endpoint without a role decision fails the build.
+- **Invite expiry is reclaimed lazily.** `uq_workspace_invites_pending` can't
+  express expiry — a partial index has no "now" — so `createInvite` stamps
+  `revoked_at` on a stale row before inserting, and the boot janitor sweeps the
+  rest. Don't assume the index frees the slot.
 
 ## Implementation gotchas to remember
 
@@ -120,7 +146,7 @@ tables is *created-by attribution only and must never be used as a filter*.
 - **SSRF guard with redirects**: `fetch` follows redirects automatically; `assertPublicUrl` on the input URL is not enough. Use `redirect: 'manual'` and re-check `assertPublicUrl` on each `Location` header before re-fetching. Cap to a few hops. See `fetchWithRedirectGuard` in `src/lib/server/og.ts`.
 - **Bookmarklet** posts to `/api/save` with `credentials:'include'` — only works when invoked from same-origin (i.e. while on a Heli tab) or when CORS is configured. Same-origin limitation is documented in Settings; do not loosen CORS for it.
 - **Bootstrap escape hatch**: `DISABLE_REGISTRATION=1` must still allow registration when `users` table is empty.
-- **Janitor**: at startup, clear `source='parsing'` rows where `updatedAt < now-10min` — covers crashed enrichments mid-fetch.
+- **Janitor**: at startup, clear `source='parsing'` rows where `updatedAt < now-10min` — covers crashed enrichments mid-fetch, and retire expired invites. It runs once per regional DB at boot (last step of `migrateOne`), not on a timer, so it is hygiene rather than a correctness mechanism.
 - **Sanitize on write**, not on read. Stored notes are already-sanitized HTML.
 - **`PRIMARY_REGION`** defaults to `'local'` on single-host setups and only falls back to `'EU'` when a `DATABASE_URL_EU/US/APAC` is configured. Don't reintroduce a hardcoded `'EU'` default.
 - **CSP heads-up**: `hooks.server.ts` sets `script-src 'self' 'unsafe-inline'` which does **not** explicitly allow `scripts.simpleanalyticscdn.com`. Either SvelteKit's `kit.csp.directives` merges the host in via the auto-mode, or analytics is silently blocked. Worth confirming in browser devtools next time the analytics script is in scope.

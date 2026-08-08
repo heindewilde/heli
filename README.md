@@ -106,6 +106,9 @@ Full-text search across people, companies, interactions, projects, and notes. `�
 ### 🔒 Own your data
 One database file. Take a copy and walk away whenever. AGPL-3.0 — you have the right to study and modify every line.
 
+### 👥 Work together
+Invite colleagues into a shared workspace. Same records, three roles, private reminders.
+
 </td>
 </tr>
 </table>
@@ -175,6 +178,14 @@ Plus built-in filters for **priority**, **due-soon**, **archive**, and **recentl
 - **Ranked by relevance**, not just date, and results arrive as you type (40 ms debounce; per-process LRU cache keeps repeats instant).
 - **Server-side FTS5** — no external search engine to run, no separate index to maintain.
 
+### 👥 Shared workspaces
+
+- **Invite your colleagues by email** — or copy the invite link, which works even on a self-host with no mail configured.
+- **Everyone in a workspace shares the same records**: people, companies, projects, pipelines, tags and statuses. Reminders stay private to each person.
+- **Three roles.** Owners and admins manage the team and the workspace-wide destructive actions (imports, deleting a shared status or tag, deleting a pipeline). Members get full day-to-day CRM work.
+- **Ownership is transferable**, and members can leave. Records created by someone who leaves stay with the workspace.
+- **Belong to more than one workspace** and switch from the header — your own, plus any you've been invited to.
+
 ### 🔔 Reminders
 
 - Pick any future datetime (defaults to tomorrow 9 am). Attach to a person, company, project, or interaction.
@@ -225,6 +236,7 @@ Both light and dark themes are carefully tuned for long sessions in a CRM. Toggl
 | **Footprint** | One process, one file | SaaS-only | SaaS-only |
 | **Relationship graph** | Native (people ↔ companies ↔ projects) | Yes, but heavy | You build it manually |
 | **Pipelines** | Yes, lightweight | Yes, sprawling | You build it manually |
+| **Collaboration** | Shared workspaces, roles, private reminders | Yes, per seat | Shared doc, no roles |
 | **Privacy** | Your server, your data | Their server | Their server |
 | **Lock-in** | None — SQLite file you own | High | Medium |
 | **Best for** | Freelancers & small teams who want a CRM that gets out of the way | Enterprise sales orgs | "I'll just track this in a spreadsheet" people |
