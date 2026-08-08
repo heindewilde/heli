@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import type { Client } from '@libsql/client';
 import { client as getClient, allRegionUrls, primaryClient, primaryRegion } from './db';
 
@@ -648,6 +649,48 @@ const DROPPED_INDEXES: string[] = [
   `DROP INDEX IF EXISTS idx_pipelines_user_updated`
 ];
 
+/**
+ * One-shot DDL gate.
+ *
+ * ALTERs, unique indexes and index drops each need their own error tolerance,
+ * so they go one statement at a time — about 60 sequential round trips. On a
+ * local file that is free. Against a remote libSQL database it measured ~6s per
+ * database per boot, and the cloud deployment has three of them: ~18s of
+ * startup on every deploy, re-running statements that all no-op.
+ *
+ * Gated on a fingerprint of the statements themselves rather than a hand-kept
+ * version number. Add or edit a statement and the fingerprint moves, so the
+ * block re-runs exactly once on the next boot — there is no version to forget
+ * to bump, which is the failure mode this file's history would predict.
+ *
+ * The fingerprint is only recorded once every statement has actually applied
+ * (see `applyTolerant`'s return). A unique index that legitimately fails today
+ * because of duplicate data must keep being retried on later boots, not be
+ * marked done.
+ */
+const ONESHOT_KEY = 'oneshot_ddl_fingerprint';
+
+function oneshotFingerprint(): string {
+  return createHash('sha1')
+    .update(JSON.stringify([ALTERS, WORKSPACE_UNIQUES, DROPPED_INDEXES]))
+    .digest('hex');
+}
+
+async function oneshotPending(c: Client): Promise<boolean> {
+  const row = await c.execute({
+    sql: `SELECT value FROM schema_meta WHERE key = ?`,
+    args: [ONESHOT_KEY]
+  });
+  return row.rows[0]?.value !== oneshotFingerprint();
+}
+
+async function markOneshotDone(c: Client): Promise<void> {
+  await c.execute({
+    sql: `INSERT OR REPLACE INTO schema_meta (key, value) VALUES (?, ?)`,
+    args: [ONESHOT_KEY, oneshotFingerprint()]
+  });
+}
+
 async function applyAlters(c: Client) {
   for (const stmt of ALTERS) {
     try {
@@ -712,71 +755,113 @@ async function backfillWorkspaces(c: Client, region: string) {
   });
 }
 
-/** Run statements that are individually idempotent, logging rather than throwing. */
-async function applyTolerant(c: Client, stmts: string[], label: string) {
+/**
+ * Run statements that are individually idempotent, logging rather than throwing.
+ * Returns true only if every statement applied — the one-shot gate uses that to
+ * decide whether this work is really finished or needs retrying next boot.
+ */
+async function applyTolerant(c: Client, stmts: string[], label: string): Promise<boolean> {
+  let ok = true;
   for (const stmt of stmts) {
     try {
       await c.execute(stmt);
     } catch (err) {
       // A crash-loop on a self-hoster's VPS is worse than a missing index.
       console.error(`[migrate] ${label} failed: ${stmt}\n  ${(err as Error).message}`);
+      ok = false;
     }
   }
+  return ok;
 }
+
+const FTS_TABLES = ['people', 'companies', 'interactions', 'projects', 'collections', 'pipelines'];
 
 async function rebuildFts(c: Client) {
-  // Cheap and idempotent: only rebuild if FTS tables look out of sync with the source table.
-  for (const name of ['people', 'companies', 'interactions', 'projects', 'collections', 'pipelines']) {
-    const src = await c.execute(`SELECT COUNT(*) AS n FROM ${name}`);
-    const fts = await c.execute(`SELECT COUNT(*) AS n FROM ${name}_fts`);
-    const a = Number(src.rows[0]?.n ?? 0);
-    const b = Number(fts.rows[0]?.n ?? 0);
+  // Only rebuild if an FTS table looks out of sync with its source table.
+  //
+  // The twelve counts go in one batch rather than twelve execute() calls: this
+  // runs on every boot, and against a remote database each call is a network
+  // round trip. A rebuild itself stays a separate statement — it should be rare,
+  // and lumping it in would make the read batch a write.
+  const counts = await c.batch(
+    FTS_TABLES.flatMap((name) => [
+      `SELECT COUNT(*) AS n FROM ${name}`,
+      `SELECT COUNT(*) AS n FROM ${name}_fts`
+    ]),
+    'read'
+  );
+  for (let i = 0; i < FTS_TABLES.length; i++) {
+    const a = Number(counts[i * 2].rows[0]?.n ?? 0);
+    const b = Number(counts[i * 2 + 1].rows[0]?.n ?? 0);
     if (a !== b) {
-      await c.execute(`INSERT INTO ${name}_fts(${name}_fts) VALUES('rebuild')`);
+      await c.execute(`INSERT INTO ${FTS_TABLES[i]}_fts(${FTS_TABLES[i]}_fts) VALUES('rebuild')`);
     }
   }
 }
 
+/**
+ * Boot housekeeping. Deliberately not gated — it is periodic, not one-shot.
+ *
+ * All three statements go in a single batch: it runs on every boot, and three
+ * round trips against a remote database is three too many for work that usually
+ * updates nothing. Swallowed as a whole, because failing housekeeping must not
+ * crash-loop a self-hoster's VPS at startup.
+ */
 async function janitor(c: Client) {
-  const tenMinAgo = Date.now() - 10 * 60 * 1000;
-  await c.execute({
-    sql: `UPDATE people SET source = NULL, updated_at = ? WHERE source = 'parsing' AND updated_at < ?`,
-    args: [Date.now(), tenMinAgo]
-  });
-  await c.execute({
-    sql: `UPDATE companies SET source = NULL, updated_at = ? WHERE source = 'parsing' AND updated_at < ?`,
-    args: [Date.now(), tenMinAgo]
-  });
-
-  // Retire expired invites. uq_workspace_invites_pending can't see expiry (see
-  // the note on the index), so a stale row would keep its (workspace, email)
-  // slot. createInvite reclaims one lazily on the next attempt; this clears the
-  // rest so `listPendingInvites` and the index agree on what "live" means.
-  //
-  // Deliberately not schema_meta-gated — it's periodic housekeeping, not a
-  // one-shot backfill — and deliberately swallowed: a failed sweep must not
-  // crash-loop a self-hoster's VPS at boot.
+  const now = Date.now();
+  const tenMinAgo = now - 10 * 60 * 1000;
   try {
-    await c.execute({
-      sql: `UPDATE workspace_invites SET revoked_at = ?
-            WHERE accepted_at IS NULL AND revoked_at IS NULL AND expires_at < ?`,
-      args: [Date.now(), Date.now()]
-    });
+    await c.batch(
+      [
+        {
+          sql: `UPDATE people SET source = NULL, updated_at = ? WHERE source = 'parsing' AND updated_at < ?`,
+          args: [now, tenMinAgo]
+        },
+        {
+          sql: `UPDATE companies SET source = NULL, updated_at = ? WHERE source = 'parsing' AND updated_at < ?`,
+          args: [now, tenMinAgo]
+        },
+        // Retire expired invites. uq_workspace_invites_pending can't see expiry
+        // (see the note on the index), so a stale row would keep its (workspace,
+        // email) slot. createInvite reclaims one lazily on the next attempt;
+        // this clears the rest so listPendingInvites and the index agree on what
+        // "live" means.
+        {
+          sql: `UPDATE workspace_invites SET revoked_at = ?
+                WHERE accepted_at IS NULL AND revoked_at IS NULL AND expires_at < ?`,
+          args: [now, now]
+        }
+      ],
+      'write'
+    );
   } catch (err) {
-    console.error('janitor: expired invite sweep failed', err);
+    console.error('[migrate] janitor failed', err);
   }
 }
 
 async function migrateOne(c: Client, region: string) {
+  // The execMany blocks are one round trip each and stay unconditional: they are
+  // all IF NOT EXISTS, so they also repair a database someone has dropped a
+  // table or index out of. It is the per-statement loops that are expensive, and
+  // those sit behind the one-shot gate.
   await execMany(c, DDL);
-  await applyAlters(c);
+
+  const oneshot = await oneshotPending(c);
+  let complete = true;
+  if (oneshot) await applyAlters(c);
   // Order matters: columns must exist before the fill, and the fill must happen
   // before the unique indexes are built so they validate against real data.
   await backfillWorkspaces(c, region);
   await execMany(c, WORKSPACE_INDEXES);
-  await applyTolerant(c, WORKSPACE_UNIQUES, 'unique index');
-  await applyTolerant(c, DROPPED_INDEXES, 'drop index');
+  if (oneshot) {
+    complete = (await applyTolerant(c, WORKSPACE_UNIQUES, 'unique index')) && complete;
+    complete = (await applyTolerant(c, DROPPED_INDEXES, 'drop index')) && complete;
+  }
   await execMany(c, FTS);
+  // Recorded only after every statement applied, so a unique index that failed
+  // on duplicate data is retried on the next boot rather than marked done.
+  if (oneshot && complete) await markOneshotDone(c);
+
   await rebuildFts(c);
   await janitor(c);
 }

@@ -110,9 +110,21 @@ tables is *created-by attribution only and must never be used as a filter*.
 - **Workspace switching rotates the session id** and posts `PURGE_API` to the
   service worker. `Vary: Cookie` alone can't tell two workspaces apart behind one
   cookie.
-- **`migrate.ts` has no version tracking and re-runs every boot.** One-shot
-  backfills must be gated on the `schema_meta` table, or they full-scan every
-  tenant table at every startup.
+- **`migrate.ts` re-runs every boot, so anything expensive must be gated on
+  `schema_meta`.** Two gates exist. `workspace_backfill_v1` guards the one-shot
+  data backfill. `oneshot_ddl_fingerprint` guards the per-statement DDL loops
+  (`ALTERS`, `WORKSPACE_UNIQUES`, `DROPPED_INDEXES`) — ~60 sequential round trips
+  that cost ~6s per database per boot against remote libSQL, times three
+  databases in the cloud.
+  - That gate keys on a **sha1 of the statement lists**, not a version number:
+    add or edit a statement and it re-runs once, automatically. Don't replace it
+    with a manual version — that's a bump someone will forget.
+  - It is recorded only when every statement applied (`applyTolerant` returns a
+    boolean). A unique index that legitimately fails on duplicate data must keep
+    retrying on later boots, not be marked done.
+  - The `execMany` blocks (`DDL`, `WORKSPACE_INDEXES`, `FTS`) stay ungated: one
+    round trip each, all `IF NOT EXISTS`, so they still repair a database someone
+    has dropped a table out of.
 - **`PERSONAL_TABLES` (currently just `reminders`) must never be reassigned.**
   Those rows carry `workspace_id` but their `user_id` is a real owner, not
   attribution, so `reassignAuthorship` deletes them instead of handing them to
