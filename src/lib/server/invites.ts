@@ -1,9 +1,9 @@
 import { createId } from '@paralleldrive/cuid2';
-import { and, desc, eq, isNull } from 'drizzle-orm';
+import { and, desc, eq, isNull, lt } from 'drizzle-orm';
 import { db, primaryDb } from './db';
 import { emailRouting, users, workspaceInvites, workspaceMembers, type WorkspaceRole } from './schema';
 import { getWorkspace, hasSeatAvailable } from './workspaces';
-import { isEmailConfigured, sendEmail } from './email';
+import { escapeHtml, isEmailConfigured, sendEmail } from './email';
 import { APP_NAME } from '$lib/branding';
 
 const INVITE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
@@ -86,8 +86,29 @@ export async function createInvite(
     throw new InviteError('region_mismatch');
   }
 
-  const token = `${region}:${createId()}${createId()}`;
+  // Reclaim an expired invite for this address before trying to insert.
+  //
+  // uq_workspace_invites_pending is partial on `accepted_at IS NULL AND
+  // revoked_at IS NULL`; expiry can't be in that predicate because a SQLite
+  // partial index has no notion of "now". So an expired invite keeps occupying
+  // the slot — and `listPendingInvites` filters it out of the UI, so there's no
+  // Revoke button to free it either. Without this the address is un-invitable
+  // forever once its first invite ages out.
   const now = Date.now();
+  await db(region)
+    .update(workspaceInvites)
+    .set({ revokedAt: now })
+    .where(
+      and(
+        eq(workspaceInvites.workspaceId, workspaceId),
+        eq(workspaceInvites.email, email),
+        isNull(workspaceInvites.acceptedAt),
+        isNull(workspaceInvites.revokedAt),
+        lt(workspaceInvites.expiresAt, now)
+      )
+    );
+
+  const token = `${region}:${createId()}${createId()}`;
   const expiresAt = now + INVITE_TTL_MS;
   try {
     await db(region).insert(workspaceInvites).values({
@@ -111,10 +132,14 @@ export async function createInvite(
   let emailed = false;
   if (isEmailConfigured()) {
     try {
+      // The workspace name is user-supplied, so it must be escaped before it
+      // goes into HTML. The subject and the text part are plain text and take
+      // the raw value.
+      const safeName = escapeHtml(ws.name);
       await sendEmail({
         to: email,
         subject: `You've been invited to ${ws.name} on ${APP_NAME}`,
-        html: `<p>You've been invited to join <strong>${ws.name}</strong> on ${APP_NAME}.</p>
+        html: `<p>You've been invited to join <strong>${safeName}</strong> on ${APP_NAME}.</p>
                <p><a href="${url}">Accept the invitation</a></p>
                <p>This link expires in 7 days.</p>`,
         text: `You've been invited to join ${ws.name} on ${APP_NAME}.\n\nAccept: ${url}\n\nThis link expires in 7 days.`

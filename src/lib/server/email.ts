@@ -7,6 +7,23 @@ export function isEmailConfigured(): boolean {
   return !!env.RESEND_API_KEY;
 }
 
+/**
+ * Escape a value for interpolation into email HTML.
+ *
+ * `sanitize.ts` is the wrong tool here: it's an allowlist sanitizer for stored
+ * rich-text notes, so it strips tags rather than entity-encoding them and
+ * leaves bare `&` alone. Mail bodies need the opposite — every user-supplied
+ * value rendered as literal text.
+ */
+export function escapeHtml(value: string): string {
+  return value
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
 export async function sendEmail(opts: {
   to: string;
   subject: string;

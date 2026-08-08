@@ -48,9 +48,13 @@ CREATE TABLE IF NOT EXISTS workspace_invites (
 );
 CREATE INDEX IF NOT EXISTS idx_workspace_invites_ws ON workspace_invites(workspace_id, created_at);
 CREATE INDEX IF NOT EXISTS idx_workspace_invites_email ON workspace_invites(email);
--- Partial index: at most one *live* invite per (workspace, email), while still
--- allowing a re-invite after a revoke or an expiry. Nothing else in this schema
--- uses a partial index.
+-- Partial index: at most one *live* invite per (workspace, email). Nothing else
+-- in this schema uses a partial index.
+--
+-- Note what this predicate can NOT express: expiry. A partial index has no
+-- notion of "now", so an expired-but-unrevoked invite still occupies the slot.
+-- Expiry is reclaimed lazily instead: createInvite stamps revoked_at on a stale
+-- row before inserting, and the boot janitor sweeps the leftovers.
 CREATE UNIQUE INDEX IF NOT EXISTS uq_workspace_invites_pending
   ON workspace_invites(workspace_id, email)
   WHERE accepted_at IS NULL AND revoked_at IS NULL;
@@ -732,6 +736,24 @@ async function janitor(c: Client) {
     sql: `UPDATE companies SET source = NULL, updated_at = ? WHERE source = 'parsing' AND updated_at < ?`,
     args: [Date.now(), tenMinAgo]
   });
+
+  // Retire expired invites. uq_workspace_invites_pending can't see expiry (see
+  // the note on the index), so a stale row would keep its (workspace, email)
+  // slot. createInvite reclaims one lazily on the next attempt; this clears the
+  // rest so `listPendingInvites` and the index agree on what "live" means.
+  //
+  // Deliberately not schema_meta-gated — it's periodic housekeeping, not a
+  // one-shot backfill — and deliberately swallowed: a failed sweep must not
+  // crash-loop a self-hoster's VPS at boot.
+  try {
+    await c.execute({
+      sql: `UPDATE workspace_invites SET revoked_at = ?
+            WHERE accepted_at IS NULL AND revoked_at IS NULL AND expires_at < ?`,
+      args: [Date.now(), Date.now()]
+    });
+  } catch (err) {
+    console.error('janitor: expired invite sweep failed', err);
+  }
 }
 
 async function migrateOne(c: Client, region: string) {

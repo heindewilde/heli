@@ -37,6 +37,7 @@
     already_invited: 'There is already a pending invitation for that address.',
     invalid_email: 'That email address does not look right.',
     seat_limit_reached: 'This workspace has no seats left.',
+    rate_limited: 'Too many invitations sent from this workspace. Try again later.',
     region_mismatch:
       'That account already exists in a different data region and cannot join this workspace.'
   };
@@ -51,8 +52,12 @@
         body: JSON.stringify({ email: inviteEmail, role: inviteRole })
       });
       if (!res.ok) {
-        const code = (await res.text()).replace(/[^a-z_]/g, '');
-        toast.danger(INVITE_ERRORS[code] ?? 'Could not send that invitation.');
+        // Endpoint errors arrive as JSON `{message: '<code>'}` — the same shape
+        // postUser() reads below. Scrubbing res.text() instead yields
+        // 'messagealready_invited', which matched nothing and made every entry
+        // in INVITE_ERRORS unreachable.
+        const body = await res.json().catch(() => null);
+        toast.danger(INVITE_ERRORS[body?.message] ?? 'Could not send that invitation.');
         return;
       }
       const { emailed } = await res.json();
