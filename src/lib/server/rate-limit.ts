@@ -14,7 +14,11 @@ export const LIMITS: Record<string, Limit> = {
   api: { name: 'api', max: 300, windowMs: 60 * 1000 },
   // Keyed by workspace, not user — invite spam is workspace-level abuse, and
   // every invite can send an email that costs money.
-  invite: { name: 'invite', max: 20, windowMs: 60 * 60 * 1000 }
+  invite: { name: 'invite', max: 20, windowMs: 60 * 60 * 1000 },
+  // Keyed by user: creating a workspace is a per-person act, unlike invites.
+  // This is only the fast bound — the buckets live in memory and reset on every
+  // deploy, so MAX_OWNED_WORKSPACES is the durable cap.
+  workspace: { name: 'workspace', max: 5, windowMs: 60 * 60 * 1000 }
 };
 
 function gc() {

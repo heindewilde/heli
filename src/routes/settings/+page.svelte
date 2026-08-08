@@ -2,7 +2,7 @@
   import { goto, invalidateAll } from '$app/navigation';
   import { APP_NAME } from '$lib/branding';
   import { toast } from '$lib/toasts.svelte';
-  import { Bookmark, Download, ShieldAlert, KeyRound, Mail, User, LogOut, Copy, Check, Users } from 'lucide-svelte';
+  import { Bookmark, Building2, Download, ShieldAlert, KeyRound, Mail, User, LogOut, Copy, Check, Users } from 'lucide-svelte';
 
   let { data } = $props();
   const user = $derived(data.user);
@@ -110,6 +110,68 @@
       await invalidateAll();
     } catch {
       toast.danger('Could not remove that member.');
+    } finally {
+      busy = null;
+    }
+  }
+
+  // svelte-ignore state_referenced_locally
+  let workspaceName = $state(data.workspace.name);
+  let newWorkspaceName = $state('');
+
+  const WORKSPACE_ERRORS: Record<string, string> = {
+    rate_limited: 'Too many workspaces created recently. Try again later.',
+    workspace_limit_reached: 'You already own the maximum number of workspaces.',
+    missing_name: 'Give the workspace a name.',
+    invalid_name: 'Give the workspace a name.'
+  };
+
+  async function renameWorkspace(e: SubmitEvent) {
+    e.preventDefault();
+    busy = 'rename';
+    try {
+      const res = await fetch('/api/workspace', {
+        method: 'PATCH',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ name: workspaceName })
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => null);
+        toast.danger(WORKSPACE_ERRORS[body?.message] ?? 'Could not rename this workspace.');
+        return;
+      }
+      toast.success('Workspace renamed.');
+      // The header switcher reads memberships from the layout load, which
+      // doesn't re-run on client-side navigation — without this the old name
+      // stays up there for the rest of the session.
+      await invalidateAll();
+    } catch {
+      toast.danger('Could not rename this workspace.');
+    } finally {
+      busy = null;
+    }
+  }
+
+  async function createWorkspace(e: SubmitEvent) {
+    e.preventDefault();
+    busy = 'newWorkspace';
+    try {
+      const res = await fetch('/api/workspace', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ name: newWorkspaceName })
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => null);
+        toast.danger(WORKSPACE_ERRORS[body?.message] ?? 'Could not create that workspace.');
+        return;
+      }
+      // The session moved to the new workspace, so everything cached on this
+      // page belongs to the old one.
+      navigator.serviceWorker?.controller?.postMessage('PURGE_API');
+      location.assign('/');
+    } catch {
+      toast.danger('Could not create that workspace.');
     } finally {
       busy = null;
     }
@@ -357,6 +419,72 @@
       <span>Email is not configured — password reset links will only appear in server logs. Set <code class="font-mono text-xs">RESEND_API_KEY</code> in your environment to enable email delivery.</span>
     </div>
   {/if}
+
+  <section class="flex flex-col gap-4 rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)] p-5">
+    <h2 class="flex items-center gap-2 text-sm font-medium">
+      <Building2 size={14} strokeWidth={2} /> Workspaces
+    </h2>
+
+    {#if teamAdmin}
+      <form class="flex flex-wrap items-end gap-2" onsubmit={renameWorkspace}>
+        <label class="flex min-w-0 flex-1 flex-col gap-1 text-sm">
+          <span class="text-[var(--color-muted)]">Name</span>
+          <input
+            class="rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-bg)] px-3 py-2 text-sm"
+            type="text"
+            maxlength="80"
+            bind:value={workspaceName}
+            required
+          />
+        </label>
+        <button
+          class="rounded-[var(--radius-sm)] border border-[var(--color-border)] px-3 py-2 text-sm hover:bg-[var(--color-bg)] disabled:opacity-60"
+          type="submit"
+          disabled={busy === 'rename' || workspaceName.trim() === data.workspace.name}
+        >
+          {busy === 'rename' ? 'Saving…' : 'Rename'}
+        </button>
+      </form>
+    {:else}
+      <p class="text-sm text-[var(--color-muted)]">
+        You're in <strong>{data.workspace.name}</strong>. Only owners and admins can rename it.
+      </p>
+    {/if}
+
+    {#if data.memberships.length > 1}
+      <ul class="flex flex-col divide-y divide-[var(--color-border)]">
+        {#each data.memberships as m (m.workspaceId)}
+          <li class="flex items-center justify-between gap-3 py-2 text-sm">
+            <span class="truncate">{m.workspaceName}</span>
+            <span class="cap-label shrink-0 text-[var(--color-muted)]">
+              {m.workspaceId === data.workspace.id ? 'current' : m.role}
+            </span>
+          </li>
+        {/each}
+      </ul>
+    {/if}
+
+    <form class="flex flex-wrap items-center gap-2 border-t border-[var(--color-border)] pt-4" onsubmit={createWorkspace}>
+      <input
+        class="min-w-0 flex-1 rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-bg)] px-3 py-2 text-sm"
+        type="text"
+        placeholder="New workspace name"
+        maxlength="80"
+        bind:value={newWorkspaceName}
+        required
+      />
+      <button
+        class="rounded-[var(--radius-sm)] border border-[var(--color-border)] px-3 py-2 text-sm hover:bg-[var(--color-bg)] disabled:opacity-60"
+        type="submit"
+        disabled={busy === 'newWorkspace'}
+      >
+        {busy === 'newWorkspace' ? 'Creating…' : 'Create workspace'}
+      </button>
+    </form>
+    <p class="text-xs text-[var(--color-muted)]">
+      A new workspace starts empty and you own it. Creating one switches you into it.
+    </p>
+  </section>
 
   <section class="flex flex-col gap-4 rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)] p-5">
     <h2 class="flex items-center gap-2 text-sm font-medium">

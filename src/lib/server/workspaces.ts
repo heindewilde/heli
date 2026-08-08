@@ -2,6 +2,7 @@ import { createId } from '@paralleldrive/cuid2';
 import { and, asc, desc, eq, sql } from 'drizzle-orm';
 import { client, db } from './db';
 import { PERSONAL_TABLES, TENANT_TABLES } from './migrate';
+import { sanitizePlainText } from './sanitize';
 import { sessions, users, workspaces, workspaceMembers, type WorkspaceRole } from './schema';
 
 export type Membership = {
@@ -34,7 +35,14 @@ export async function createWorkspace(
       {
         sql: `INSERT INTO workspaces (id, name, region, owner_user_id, plan, seat_limit, created_at, updated_at)
               VALUES (?, ?, ?, ?, 'free', NULL, ?, ?)`,
-        args: [id, name.trim() || 'My workspace', region, ownerUserId, now, now]
+        args: [
+          id,
+          sanitizePlainText(name, WORKSPACE_NAME_MAX) || 'My workspace',
+          region,
+          ownerUserId,
+          now,
+          now
+        ]
       },
       {
         sql: `INSERT INTO workspace_members (workspace_id, user_id, role, created_at)
@@ -156,6 +164,34 @@ export async function reassignAuthorship(
       args: [toUserId, workspaceId, fromUserId]
     });
   }
+}
+
+export const WORKSPACE_NAME_MAX = 80;
+
+/** How many workspaces one account may own. A durable backstop to the rate limit. */
+export const MAX_OWNED_WORKSPACES = 10;
+
+export async function renameWorkspace(
+  region: string,
+  workspaceId: string,
+  name: string
+): Promise<string> {
+  const clean = sanitizePlainText(name, WORKSPACE_NAME_MAX);
+  if (!clean) throw new Error('invalid_name');
+  await db(region)
+    .update(workspaces)
+    .set({ name: clean, updatedAt: Date.now() })
+    .where(eq(workspaces.id, workspaceId));
+  return clean;
+}
+
+export async function countOwnedWorkspaces(region: string, userId: string): Promise<number> {
+  const row = await db(region)
+    .select({ n: sql<number>`COUNT(*)` })
+    .from(workspaces)
+    .where(eq(workspaces.ownerUserId, userId))
+    .get();
+  return Number(row?.n ?? 0);
 }
 
 export async function getWorkspace(region: string, workspaceId: string) {
