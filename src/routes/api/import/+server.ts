@@ -1,4 +1,4 @@
-import { requireScope } from '$lib/server/scope';
+import { requireScope, requireRole } from '$lib/server/scope';
 import { error, json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { getPendingImport, deletePendingImport, CONTACTS_IMPORT_COOKIE } from '$lib/server/google';
@@ -9,6 +9,9 @@ import { sanitize } from '$lib/server/sanitize';
 
 export const POST: RequestHandler = async ({ locals, cookies }) => {
   const s = requireScope(locals);
+  // Bulk insert into the shared people table, unbounded by design (it commits
+  // whatever the staged import holds). Admin-only.
+  requireRole(s, 'owner', 'admin');
 
   const importId = cookies.get(CONTACTS_IMPORT_COOKIE);
   if (!importId) throw error(400, 'no_pending_import');

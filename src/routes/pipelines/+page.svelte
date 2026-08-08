@@ -9,6 +9,8 @@
   import { toast } from '$lib/toasts.svelte';
 
   let { data } = $props();
+  // Deleting a pipeline is admin-only server-side; don't offer it to members.
+  const canManage = $derived(data.user?.role === 'owner' || data.user?.role === 'admin');
 
   // svelte-ignore state_referenced_locally
   let q = $state(data.q);
@@ -190,7 +192,7 @@
             stageCount={p.stageCount}
             selected={i === selected}
             onArchive={() => archive(p.id, p.name, p.isArchived)}
-            onDelete={() => del(p.id, p.name)}
+            onDelete={canManage ? () => del(p.id, p.name) : undefined}
           />
         </li>
       {/each}

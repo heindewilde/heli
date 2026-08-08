@@ -11,6 +11,8 @@
   import type { PipelineView } from '$lib/server/schema';
 
   let { data } = $props();
+  // Delete and the stage editor are admin-only server-side; hide them for members.
+  const canManage = $derived(data.user?.role === 'owner' || data.user?.role === 'admin');
   const pipeline = $derived(data.pipeline);
   const sync = $derived(data.sync);
 
@@ -201,12 +203,14 @@ async function patch(body: Record<string, unknown>): Promise<boolean> {
         onclick={toggleArchive}
         class="rounded-[var(--radius-sm)] p-2 text-[var(--color-subtle)] hover:bg-[var(--color-surface)]"
       ><Archive size={16} strokeWidth={2} /></button>
-      <button
-        type="button"
-        title="Delete"
-        onclick={del}
-        class="rounded-[var(--radius-sm)] p-2 text-[var(--color-subtle)] hover:bg-[var(--color-danger-bg)] hover:text-[var(--color-danger)]"
-      ><Trash2 size={16} strokeWidth={2} /></button>
+      {#if canManage}
+        <button
+          type="button"
+          title="Delete"
+          onclick={del}
+          class="rounded-[var(--radius-sm)] p-2 text-[var(--color-subtle)] hover:bg-[var(--color-danger-bg)] hover:text-[var(--color-danger)]"
+        ><Trash2 size={16} strokeWidth={2} /></button>
+      {/if}
     </div>
   </header>
 
@@ -238,7 +242,7 @@ async function patch(body: Record<string, unknown>): Promise<boolean> {
   {/if}
 
   {#if stageEditorOpen}
-    <StageEditor pipelineId={pipeline.id} stages={pipeline.stages} onClose={() => (stageEditorOpen = false)} />
+    <StageEditor pipelineId={pipeline.id} stages={pipeline.stages} {canManage} onClose={() => (stageEditorOpen = false)} />
   {/if}
 
   {#if pipeline.stages.length === 0}

@@ -9,9 +9,12 @@
     pipelineId: string;
     stages: PipelineStage[];
     onClose?: () => void;
+    /** Reordering and deleting stages are admin-only server-side; renaming and
+        recolouring stay open to members. */
+    canManage?: boolean;
   };
 
-  let { pipelineId, stages, onClose }: Props = $props();
+  let { pipelineId, stages, onClose, canManage = true }: Props = $props();
 
   let newName = $state('');
   let newColor = $state<StageColor>('gray');
@@ -118,20 +121,22 @@
     {#each stages as stage, i (stage.id)}
       {@const stageColor = (stage.color ?? 'gray') as StageColor}
       <div class="flex items-center gap-2 rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-bg)] p-2">
-        <div class="flex flex-col">
-          <button
-            type="button"
-            onclick={() => moveStage(i, -1)}
-            disabled={i === 0}
-            class="rounded-[var(--radius-sm)] p-0.5 text-[var(--color-subtle)] hover:bg-[var(--color-surface)] disabled:opacity-30"
-          ><ArrowUp size={12} strokeWidth={2} /></button>
-          <button
-            type="button"
-            onclick={() => moveStage(i, 1)}
-            disabled={i === stages.length - 1}
-            class="rounded-[var(--radius-sm)] p-0.5 text-[var(--color-subtle)] hover:bg-[var(--color-surface)] disabled:opacity-30"
-          ><ArrowDown size={12} strokeWidth={2} /></button>
-        </div>
+        {#if canManage}
+          <div class="flex flex-col">
+            <button
+              type="button"
+              onclick={() => moveStage(i, -1)}
+              disabled={i === 0}
+              class="rounded-[var(--radius-sm)] p-0.5 text-[var(--color-subtle)] hover:bg-[var(--color-surface)] disabled:opacity-30"
+            ><ArrowUp size={12} strokeWidth={2} /></button>
+            <button
+              type="button"
+              onclick={() => moveStage(i, 1)}
+              disabled={i === stages.length - 1}
+              class="rounded-[var(--radius-sm)] p-0.5 text-[var(--color-subtle)] hover:bg-[var(--color-surface)] disabled:opacity-30"
+            ><ArrowDown size={12} strokeWidth={2} /></button>
+          </div>
+        {/if}
         <input
           value={stage.name}
           onblur={(e) => {
@@ -167,11 +172,13 @@
             </div>
           {/if}
         </div>
-        <button
-          type="button"
-          onclick={() => deleteStage(stage.id, stage.name)}
-          class="rounded-[var(--radius-sm)] p-1 text-[var(--color-subtle)] hover:bg-[var(--color-danger-bg)] hover:text-[var(--color-danger)]"
-        ><Trash2 size={12} strokeWidth={2} /></button>
+        {#if canManage}
+          <button
+            type="button"
+            onclick={() => deleteStage(stage.id, stage.name)}
+            class="rounded-[var(--radius-sm)] p-1 text-[var(--color-subtle)] hover:bg-[var(--color-danger-bg)] hover:text-[var(--color-danger)]"
+          ><Trash2 size={12} strokeWidth={2} /></button>
+        {/if}
       </div>
     {/each}
 

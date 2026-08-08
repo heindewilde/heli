@@ -1,4 +1,4 @@
-import { requireScope } from '$lib/server/scope';
+import { requireScope, requireRole } from '$lib/server/scope';
 import { error, json, type RequestHandler } from '@sveltejs/kit';
 import { createStatus, deleteStatus, listStatuses } from '$lib/server/statuses';
 import type { Kind } from '$lib/server/classify';
@@ -43,6 +43,9 @@ export const POST: RequestHandler = async ({ url, request, locals }) => {
 export const DELETE: RequestHandler = async ({ url, locals }) => {
   if (!locals.user) throw error(401, 'unauthorized');
   const s = requireScope(locals);
+  // status_id is ON DELETE SET NULL, so this strips the status from every
+  // person or company carrying it. Admin-only.
+  requireRole(s, 'owner', 'admin');
   const scope = parseScope(url.searchParams.get('scope'));
   const id = url.searchParams.get('id');
   if (!id) throw error(400, 'missing_id');

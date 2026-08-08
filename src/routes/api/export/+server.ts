@@ -25,6 +25,11 @@ function isKind(v: string | null): v is Kind {
 export const GET: RequestHandler = async ({ url, locals }) => {
   const s = requireScope(locals);
   // Export now covers the whole workspace, not just your own rows.
+  //
+  // Friction, not containment: a member can read substantially the same data
+  // through /api/people, /api/companies and /api/search. This makes bulk
+  // extraction a deliberate act rather than a one-click one; don't mistake it
+  // for a security boundary.
   requireRole(s, 'owner', 'admin');
   const kind = url.searchParams.get('kind');
   if (!isKind(kind)) throw error(400, 'invalid_kind');

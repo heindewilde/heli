@@ -1,4 +1,4 @@
-import { requireScope } from '$lib/server/scope';
+import { requireScope, requireRole } from '$lib/server/scope';
 import { error, json, type RequestHandler } from '@sveltejs/kit';
 import { addStage, updateStage, deleteStage, reorderStages } from '$lib/server/pipelines';
 
@@ -44,6 +44,9 @@ export const PATCH: RequestHandler = async ({ request, params, locals }) => {
   }
 
   if (Array.isArray(body.order) && body.order.every((s) => typeof s === 'string')) {
+    // Reordering rewrites the board for everyone; renaming or recolouring a
+    // single stage below stays open to members.
+    requireRole(s, 'owner', 'admin');
     try {
       await reorderStages(
         s,
@@ -76,6 +79,8 @@ export const PATCH: RequestHandler = async ({ request, params, locals }) => {
 export const DELETE: RequestHandler = async ({ url, request, params, locals }) => {
   if (!locals.user) throw error(401, 'unauthorized');
   const s = requireScope(locals);
+  // Deletes a stage and bulk-reassigns its items. Admin-only.
+  requireRole(s, 'owner', 'admin');
   const stageId = url.searchParams.get('stageId');
   const moveTo = url.searchParams.get('moveTo');
   let stageIdFinal = stageId;

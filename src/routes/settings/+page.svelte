@@ -638,6 +638,7 @@
     </div>
   </section>
 
+  {#if teamAdmin}
   <section class="flex flex-col gap-3 rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)] p-5">
     <h2 class="flex items-center gap-2 text-sm font-medium"><Download size={14} strokeWidth={2} /> Export</h2>
     <p class="text-sm text-[var(--color-muted)]">
@@ -655,8 +656,11 @@
       </a>
     </div>
   </section>
+  {/if}
 
-  {#if data.googleAuthEnabled}
+  <!-- Importing bulk-inserts into the shared people table, so POST /api/import
+       is admin-only; don't show members a flow that ends in a 403. -->
+  {#if data.googleAuthEnabled && teamAdmin}
     <section class="flex flex-col gap-3 rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)] p-5">
       <h2 class="flex items-center gap-2 text-sm font-medium"><Users size={14} strokeWidth={2} /> Google Contacts</h2>
 

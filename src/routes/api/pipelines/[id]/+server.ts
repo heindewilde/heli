@@ -1,4 +1,4 @@
-import { requireScope } from '$lib/server/scope';
+import { requireScope, requireRole } from '$lib/server/scope';
 import { error, json, type RequestHandler } from '@sveltejs/kit';
 import {
   getPipeline,
@@ -37,6 +37,8 @@ export const PATCH: RequestHandler = async ({ request, params, locals }) => {
 export const DELETE: RequestHandler = async ({ params, locals }) => {
   if (!locals.user) throw error(401, 'unauthorized');
   const s = requireScope(locals);
+  // Takes the pipeline's stages and items with it. Admin-only.
+  requireRole(s, 'owner', 'admin');
   await deletePipeline(s, params.id!);
   return new Response(null, { status: 204 });
 };
