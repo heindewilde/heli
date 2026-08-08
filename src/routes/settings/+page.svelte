@@ -28,6 +28,7 @@
 
   // ── Team ───────────────────────────────────────────────────────────────────
   const teamAdmin = $derived(data.workspace.role === 'owner' || data.workspace.role === 'admin');
+  const isOwner = $derived(data.workspace.role === 'owner');
   let inviteEmail = $state('');
   let inviteRole = $state<'member' | 'admin'>('member');
   let busy = $state<string | null>(null);
@@ -110,6 +111,75 @@
     } catch {
       toast.danger('Could not remove that member.');
     } finally {
+      busy = null;
+    }
+  }
+
+  async function changeRole(userId: string, role: string) {
+    busy = userId;
+    try {
+      const res = await fetch(`/api/workspace/members/${encodeURIComponent(userId)}`, {
+        method: 'PATCH',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ role })
+      });
+      if (!res.ok) throw new Error();
+      toast.success('Role updated.');
+      await invalidateAll();
+    } catch {
+      toast.danger('Could not change that role.');
+      await invalidateAll(); // put the select back where it was
+    } finally {
+      busy = null;
+    }
+  }
+
+  async function makeOwner(userId: string, label: string) {
+    if (
+      !confirm(
+        `Make ${label} the owner of ${data.workspace.name}? You stay on as an admin and cannot undo this yourself.`
+      )
+    ) {
+      return;
+    }
+    busy = userId;
+    try {
+      const res = await fetch('/api/workspace/transfer', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ userId })
+      });
+      if (!res.ok) throw new Error();
+      toast.success(`${label} is now the owner.`);
+      await invalidateAll();
+    } catch {
+      toast.danger('Could not transfer ownership.');
+    } finally {
+      busy = null;
+    }
+  }
+
+  async function leaveWorkspace() {
+    if (
+      !confirm(
+        `Leave ${data.workspace.name}? The people, companies and notes you added stay with the workspace, reattributed to its owner. Your reminders are deleted.`
+      )
+    ) {
+      return;
+    }
+    busy = 'leave';
+    try {
+      const res = await fetch(`/api/workspace/members/${encodeURIComponent(data.user.id)}`, {
+        method: 'DELETE'
+      });
+      if (!res.ok) throw new Error();
+      // The session now points at a different workspace, so every cached
+      // /api/* response and every $state island on the page belongs to the one
+      // just left. Same purge-and-hard-navigate as WorkspaceSwitcher.
+      navigator.serviceWorker?.controller?.postMessage('PURGE_API');
+      location.assign('/');
+    } catch {
+      toast.danger('Could not leave that workspace.');
       busy = null;
     }
   }
@@ -252,7 +322,15 @@
     try {
       const r = await postUser({ action: 'deleteAccount', ...(data.hasPassword ? { currentPassword: deletePwd } : {}) });
       if (!r.ok) {
-        toast.danger(r.status === 403 ? 'Current password is incorrect' : 'Could not delete account');
+        // owner_must_transfer tells the user to do something specific — say what
+        // it is, rather than falling through to the generic failure.
+        toast.danger(
+          r.status === 403
+            ? 'Current password is incorrect'
+            : r.body?.message === 'owner_must_transfer'
+              ? 'Make someone else the owner, or remove the other members, before deleting your account.'
+              : 'Could not delete account'
+        );
         return;
       }
       toast.success('Account deleted');
@@ -297,7 +375,31 @@
             <div class="truncate text-xs text-[var(--color-muted)]">{m.email}</div>
           </div>
           <div class="flex shrink-0 items-center gap-2">
-            <span class="cap-label text-[var(--color-muted)]">{m.role}</span>
+            {#if teamAdmin && !m.isOwner && m.userId !== data.user.id}
+              <!-- Self excluded deliberately: an admin demoting themselves would
+                   lose the page they are standing on. -->
+              <select
+                class="rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-bg)] px-2 py-1 text-xs"
+                value={m.role}
+                onchange={(e) => changeRole(m.userId, e.currentTarget.value)}
+                disabled={busy === m.userId}
+                aria-label="Role for {m.username ?? m.email}"
+              >
+                <option value="member">Member</option>
+                <option value="admin">Admin</option>
+              </select>
+            {:else}
+              <span class="cap-label text-[var(--color-muted)]">{m.role}</span>
+            {/if}
+            {#if isOwner && !m.isOwner && m.userId !== data.user.id}
+              <button
+                class="text-xs underline"
+                onclick={() => makeOwner(m.userId, m.username ?? m.email)}
+                disabled={busy === m.userId}
+              >
+                Make owner
+              </button>
+            {/if}
             {#if teamAdmin && !m.isOwner && m.userId !== data.user.id}
               <button
                 class="text-xs text-[var(--color-danger)] underline"
@@ -360,6 +462,23 @@
           {/each}
         </div>
       {/if}
+    {/if}
+
+    {#if !isOwner}
+      <!-- The owner can't leave — removeMember refuses (cannot_remove_owner).
+           They hand the workspace over first, or delete the account. -->
+      <div class="flex items-center justify-between gap-3 border-t border-[var(--color-border)] pt-4">
+        <span class="text-sm text-[var(--color-muted)]">
+          Leave this workspace and go back to your own.
+        </span>
+        <button
+          class="shrink-0 rounded-[var(--radius-sm)] border border-[var(--color-danger-border)] px-3 py-2 text-sm text-[var(--color-danger)] disabled:opacity-60"
+          onclick={leaveWorkspace}
+          disabled={busy === 'leave'}
+        >
+          {busy === 'leave' ? 'Leaving…' : 'Leave workspace'}
+        </button>
+      </div>
     {/if}
   </section>
 

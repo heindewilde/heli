@@ -26,21 +26,24 @@ export async function createWorkspace(
   id: string = ownerUserId
 ): Promise<string> {
   const now = Date.now();
-  await db(region)
-    .insert(workspaces)
-    .values({
-      id,
-      name: name.trim() || 'My workspace',
-      region,
-      ownerUserId,
-      plan: 'free',
-      seatLimit: null,
-      createdAt: now,
-      updatedAt: now
-    });
-  await db(region)
-    .insert(workspaceMembers)
-    .values({ workspaceId: id, userId: ownerUserId, role: 'owner', createdAt: now });
+  // Batched: a workspace row without its owner membership is unreachable — the
+  // owner can't see it, can't switch to it, and can't delete it. Harmless when
+  // this only ran at signup; not once users can create workspaces on demand.
+  await client(region).batch(
+    [
+      {
+        sql: `INSERT INTO workspaces (id, name, region, owner_user_id, plan, seat_limit, created_at, updated_at)
+              VALUES (?, ?, ?, ?, 'free', NULL, ?, ?)`,
+        args: [id, name.trim() || 'My workspace', region, ownerUserId, now, now]
+      },
+      {
+        sql: `INSERT INTO workspace_members (workspace_id, user_id, role, created_at)
+              VALUES (?, ?, 'owner', ?)`,
+        args: [id, ownerUserId, now]
+      }
+    ],
+    'write'
+  );
   return id;
 }
 
@@ -206,38 +209,54 @@ export async function setMemberRole(
     );
 }
 
+/**
+ * Hand a workspace to another member. The outgoing owner stays on as an admin
+ * rather than being dropped.
+ *
+ * `actingUserId` is checked against `workspaces.owner_user_id` rather than
+ * relying on the caller's `Scope.role`: role lives in workspace_members, which
+ * is exactly the column that can drift from owner_user_id, and the workspaces
+ * row is the source of truth for who may hand the place over.
+ *
+ * Self-transfer is rejected because it is unrecoverable, not merely useless:
+ * the promote-then-demote pair would leave the workspace with *no* member
+ * holding the owner role while owner_user_id still names them — at which point
+ * requireRole(s,'owner') fails for everyone, so it can never be transferred
+ * again, removeMember still refuses to remove them, and deleteAccount still
+ * counts the workspace as owned. A permanent lockout.
+ */
 export async function transferOwnership(
   region: string,
   workspaceId: string,
+  actingUserId: string,
   newOwnerUserId: string
 ): Promise<void> {
-  const m = await getMembership(region, workspaceId, newOwnerUserId);
-  if (!m) throw new Error('not_a_member');
   const ws = await getWorkspace(region, workspaceId);
   if (!ws) throw new Error('workspace_not_found');
-  await db(region)
-    .update(workspaces)
-    .set({ ownerUserId: newOwnerUserId, updatedAt: Date.now() })
-    .where(eq(workspaces.id, workspaceId));
-  await db(region)
-    .update(workspaceMembers)
-    .set({ role: 'owner' })
-    .where(
-      and(
-        eq(workspaceMembers.workspaceId, workspaceId),
-        eq(workspaceMembers.userId, newOwnerUserId)
-      )
-    );
-  // The previous owner stays on as an admin rather than being dropped.
-  await db(region)
-    .update(workspaceMembers)
-    .set({ role: 'admin' })
-    .where(
-      and(
-        eq(workspaceMembers.workspaceId, workspaceId),
-        eq(workspaceMembers.userId, ws.ownerUserId)
-      )
-    );
+  if (ws.ownerUserId !== actingUserId) throw new Error('not_owner');
+  if (ws.ownerUserId === newOwnerUserId) throw new Error('already_owner');
+  const m = await getMembership(region, workspaceId, newOwnerUserId);
+  if (!m) throw new Error('not_a_member');
+
+  // One batch: a partial application would leave owner_user_id disagreeing with
+  // the owner-role row, which is the divergence every guard above assumes away.
+  await client(region).batch(
+    [
+      {
+        sql: `UPDATE workspaces SET owner_user_id = ?, updated_at = ? WHERE id = ?`,
+        args: [newOwnerUserId, Date.now(), workspaceId]
+      },
+      {
+        sql: `UPDATE workspace_members SET role = 'owner' WHERE workspace_id = ? AND user_id = ?`,
+        args: [workspaceId, newOwnerUserId]
+      },
+      {
+        sql: `UPDATE workspace_members SET role = 'admin' WHERE workspace_id = ? AND user_id = ?`,
+        args: [workspaceId, ws.ownerUserId]
+      }
+    ],
+    'write'
+  );
 }
 
 export type MemberRow = {
