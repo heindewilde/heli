@@ -1,7 +1,8 @@
 import { createId } from '@paralleldrive/cuid2';
 import bcrypt from 'bcryptjs';
 import { and, eq, lt, ne } from 'drizzle-orm';
-import { db, primaryDb, defaultRegion } from './db';
+import { client, db, primaryDb, defaultRegion } from './db';
+import { TENANT_TABLES } from './migrate';
 import {
   users,
   sessions,
@@ -555,12 +556,33 @@ export async function deleteAccount(userId: string, region: string): Promise<voi
       );
   }
 
-  // Sole-owner workspaces go with the account — cascade takes their content,
-  // which matches the pre-workspaces behaviour exactly.
+  // Sole-owner workspaces go with the account, matching the pre-workspaces
+  // behaviour. There is no cascade to lean on: workspace_id was added by ALTER
+  // (migrate.ts) as a plain `REFERENCES workspaces(id)` with no ON DELETE, so
+  // with PRAGMA foreign_keys = ON a bare `DELETE FROM workspaces` fails the
+  // moment the workspace holds a single row. Deleting the user first fails too
+  // — workspaces.owner_user_id references users(id) and deliberately doesn't
+  // cascade. So the content has to go explicitly, oldest reference last.
+  //
+  // Batched per workspace so a failure can't leave a half-emptied tenant.
   for (const workspaceId of owned) {
-    await db(region).delete(workspaces).where(eq(workspaces.id, workspaceId));
+    const c = client(region);
+    await c.batch(
+      [
+        ...TENANT_TABLES.map((table) => ({
+          sql: `DELETE FROM ${table} WHERE workspace_id = ?`,
+          args: [workspaceId]
+        })),
+        { sql: `DELETE FROM workspaces WHERE id = ?`, args: [workspaceId] }
+      ],
+      'write'
+    );
   }
 
+  // Cascades sessions, oauth_accounts and password_reset_tokens. Note it also
+  // cascades invites this user sent into *other* people's workspaces
+  // (invited_by_user_id ON DELETE CASCADE) — acceptable, but it means a
+  // pending invite can vanish when its sender deletes their account.
   await db(region).delete(users).where(eq(users.id, userId));
   await primaryDb().delete(emailRouting).where(eq(emailRouting.email, user.email));
 }

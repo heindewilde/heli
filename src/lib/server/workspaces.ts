@@ -1,7 +1,7 @@
 import { createId } from '@paralleldrive/cuid2';
 import { and, asc, desc, eq, sql } from 'drizzle-orm';
 import { client, db } from './db';
-import { TENANT_TABLES } from './migrate';
+import { PERSONAL_TABLES, TENANT_TABLES } from './migrate';
 import { sessions, users, workspaces, workspaceMembers, type WorkspaceRole } from './schema';
 
 export type Membership = {
@@ -128,6 +128,10 @@ export async function countMembers(region: string, workspaceId: string): Promise
  * Note this is exactly why the old per-user unique indexes had to be dropped —
  * the owner may already hold a row with the same url/slug/name in a *different*
  * workspace, and uq_people_user_url would have rejected the reassignment.
+ *
+ * PERSONAL_TABLES are the exception: their user_id is a real owner, not
+ * attribution, so those rows are deleted rather than handed over. Reassigning a
+ * reminder would put someone's private follow-ups in the owner's sidebar.
  */
 export async function reassignAuthorship(
   region: string,
@@ -137,6 +141,13 @@ export async function reassignAuthorship(
 ): Promise<void> {
   const c = client(region);
   for (const table of TENANT_TABLES) {
+    if (PERSONAL_TABLES.includes(table)) {
+      await c.execute({
+        sql: `DELETE FROM ${table} WHERE workspace_id = ? AND user_id = ?`,
+        args: [workspaceId, fromUserId]
+      });
+      continue;
+    }
     await c.execute({
       sql: `UPDATE ${table} SET user_id = ? WHERE workspace_id = ? AND user_id = ?`,
       args: [toUserId, workspaceId, fromUserId]

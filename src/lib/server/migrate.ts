@@ -545,6 +545,17 @@ export const TENANT_TABLES = [
   'collection_pipeline_syncs'
 ] as const;
 
+/**
+ * Tenant tables whose rows belong to *a person*, not to the workspace.
+ *
+ * These still carry workspace_id — they live in a workspace — but user_id is a
+ * real owner rather than created-by attribution, and reads filter on both. So
+ * they must not be handed to the workspace owner when someone leaves: that
+ * would drop a departing member's private reminders into the owner's sidebar.
+ * `reassignAuthorship` deletes them instead.
+ */
+export const PERSONAL_TABLES: readonly string[] = ['reminders'];
+
 // Applied after the backfill so they are built against real data.
 const WORKSPACE_INDEXES = `
 CREATE INDEX IF NOT EXISTS idx_companies_ws_arch ON companies(workspace_id, is_archived);
