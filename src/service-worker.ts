@@ -106,6 +106,24 @@ function isCacheable(res: Response): boolean {
 
 sw.addEventListener('message', (event) => {
   if (event.data === 'SKIP_WAITING') sw.skipWaiting();
+  // Drop every cached /api/* response. Sent on workspace switch and on sign-out.
+  // `Vary: Cookie` protects us between different users, but a workspace switch
+  // used to keep the same cookie — so the header alone can't tell workspace A's
+  // cached people list from workspace B's. (The switch also rotates the session
+  // id now; this is the belt to that pair of braces.)
+  if (event.data === 'PURGE_API') {
+    event.waitUntil(
+      (async () => {
+        const cache = await caches.open(CACHE);
+        const keys = await cache.keys();
+        await Promise.all(
+          keys
+            .filter((req) => SWR_PATHS.test(new URL(req.url).pathname))
+            .map((req) => cache.delete(req))
+        );
+      })()
+    );
+  }
 });
 
 export {};

@@ -2,6 +2,7 @@
   import '../app.css';
   import Toaster from '$lib/components/Toaster.svelte';
   import SaveBar from '$lib/components/SaveBar.svelte';
+  import WorkspaceSwitcher from '$lib/components/WorkspaceSwitcher.svelte';
   import CommandPalette from '$lib/components/CommandPalette.svelte';
   import ShortcutHelp from '$lib/components/ShortcutHelp.svelte';
   import RemindersPopover from '$lib/components/RemindersPopover.svelte';
@@ -202,6 +203,11 @@
           <span class="text-lg leading-none" aria-hidden="true">🚁</span>
           <span class="hidden text-xl font-bold tracking-[-0.04em] sm:inline">heli</span>
         </a>
+        <!-- Renders nothing unless the user belongs to more than one workspace. -->
+        <WorkspaceSwitcher
+          memberships={data.memberships ?? []}
+          activeId={data.user?.workspaceId ?? ''}
+        />
       </div>
       <!-- SaveBar: same left padding as main content (md:pl-6) -->
       <div class="min-w-0 flex-1 md:pl-6">
@@ -233,7 +239,15 @@
           class="rounded-[var(--radius-sm)] p-1.5 text-[var(--color-subtle)] transition-colors hover:bg-[var(--color-surface)] hover:text-[var(--color-text)]"
         ><Settings size={14} strokeWidth={2} /></a>
         <span aria-hidden="true" class="mx-1 hidden h-4 w-px bg-[var(--color-border)] sm:inline-block"></span>
-        <form method="POST" action="/auth/logout" class="contents">
+        <!-- Drop cached /api/* responses on the way out so the next person to
+             sign in on this device can't be served the previous workspace's
+             lists from the service worker. -->
+        <form
+          method="POST"
+          action="/auth/logout"
+          class="contents"
+          onsubmit={() => navigator.serviceWorker?.controller?.postMessage('PURGE_API')}
+        >
           <button
             type="submit"
             title="Sign out"
