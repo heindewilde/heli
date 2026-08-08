@@ -5,9 +5,10 @@
 // hold. We mirror the constraint here: cursor is the only knob; archived,
 // favorite, q, tag, priority, status are intentionally not accepted.
 
-import { error, type RequestHandler } from '@sveltejs/kit';
+import { type RequestHandler } from '@sveltejs/kit';
 import { sql } from 'drizzle-orm';
 import { db } from '$lib/server/db';
+import { requireScope } from '$lib/server/scope';
 import {
   PERSON_ROW_COLS,
   personLastInteractionJoin,
@@ -19,12 +20,11 @@ import { jsonWithEtag } from '$lib/server/cache';
 const PAGE_SIZE = 50;
 
 export const GET: RequestHandler = async ({ url, locals, request }) => {
-  if (!locals.user) throw error(401, 'unauthorized');
+  const s = requireScope(locals);
   const cursor = decodeCursor(url.searchParams.get('cursor'));
 
-  const d = db(locals.user.region);
-  const userId = locals.user.id;
-  const LAST_INTERACTION_JOIN = personLastInteractionJoin(userId);
+  const d = db(s.region);
+  const LAST_INTERACTION_JOIN = personLastInteractionJoin(s.workspaceId);
 
   const cursorClause = cursor
     ? sql`AND (p.created_at, p.id) < (${cursor.createdAt}, ${cursor.id})`
@@ -35,7 +35,7 @@ export const GET: RequestHandler = async ({ url, locals, request }) => {
     FROM people p
     LEFT JOIN companies co ON co.id = p.company_id
     ${LAST_INTERACTION_JOIN}
-    WHERE p.user_id = ${userId}
+    WHERE p.workspace_id = ${s.workspaceId}
       AND p.is_archived = 0
       ${cursorClause}
     ORDER BY p.created_at DESC, p.id DESC

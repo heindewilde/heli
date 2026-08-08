@@ -50,13 +50,14 @@ export async function listMemberships(region: string, userId: string): Promise<M
       workspaceId: workspaceMembers.workspaceId,
       workspaceName: workspaces.name,
       role: workspaceMembers.role,
-      isOwn: sql<number>`(${workspaces.ownerUserId} = ${userId})`,
       joinedAt: workspaceMembers.createdAt
     })
     .from(workspaceMembers)
     .innerJoin(workspaces, eq(workspaces.id, workspaceMembers.workspaceId))
     .where(eq(workspaceMembers.userId, userId))
-    .orderBy(desc(sql`isOwn`), asc(workspaceMembers.createdAt));
+    // Own workspace first, then oldest membership. Order by the expression
+    // rather than a select alias — SQLite can't resolve an alias here.
+    .orderBy(desc(sql`(${workspaces.ownerUserId} = ${userId})`), asc(workspaceMembers.createdAt));
   return rows.map((r) => ({
     workspaceId: r.workspaceId,
     workspaceName: r.workspaceName,

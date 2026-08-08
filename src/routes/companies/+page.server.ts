@@ -87,7 +87,6 @@ export const load: PageServerLoad = async ({ locals, url }) => {
     }
   }
 
-  const userId = locals.user.id;
   // Only the default unfiltered view exposes a cursor for Load More.
   const isDefaultView =
     !fts &&
@@ -119,7 +118,7 @@ export const load: PageServerLoad = async ({ locals, url }) => {
       ])
     : sql``;
 
-  const LAST_INTERACTION_JOIN = companyLastInteractionJoin(userId);
+  const LAST_INTERACTION_JOIN = companyLastInteractionJoin(s.workspaceId);
 
   let orderClause;
   if (sort === 'name') orderClause = sql`c.name COLLATE NOCASE ASC`;
@@ -138,7 +137,7 @@ export const load: PageServerLoad = async ({ locals, url }) => {
       FROM companies c
       JOIN companies_fts f ON f.rowid = c.rowid
       ${LAST_INTERACTION_JOIN}
-      WHERE c.user_id = ${userId}
+      WHERE c.workspace_id = ${s.workspaceId}
         AND f.companies_fts MATCH ${fts}
         ${archived ? sql`` : sql`AND c.is_archived = 0`}
         ${favorite ? sql`AND c.is_favorite = 1` : sql``}
@@ -153,7 +152,7 @@ export const load: PageServerLoad = async ({ locals, url }) => {
       SELECT ${COMPANY_ROW_COLS}
       FROM companies c
       ${LAST_INTERACTION_JOIN}
-      WHERE c.user_id = ${userId}
+      WHERE c.workspace_id = ${s.workspaceId}
         ${archived ? sql`` : sql`AND c.is_archived = 0`}
         ${favorite ? sql`AND c.is_favorite = 1` : sql``}
         ${tagInClause}

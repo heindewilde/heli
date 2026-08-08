@@ -90,7 +90,6 @@ export const load: PageServerLoad = async ({ locals, url }) => {
     }
   }
 
-  const userId = locals.user.id;
   // Detect "default unfiltered view" — only in this state is cursor pagination
   // valid for the API's Load More endpoint. Filtered/sorted/searched views
   // ship the first 50 and don't expose a cursor.
@@ -124,7 +123,7 @@ export const load: PageServerLoad = async ({ locals, url }) => {
       ])
     : sql``;
 
-  const LAST_INTERACTION_JOIN = personLastInteractionJoin(userId);
+  const LAST_INTERACTION_JOIN = personLastInteractionJoin(s.workspaceId);
 
   // ORDER BY clause built per sort key. NULLs handled inline.
   let orderClause;
@@ -147,7 +146,7 @@ export const load: PageServerLoad = async ({ locals, url }) => {
       JOIN people_fts f ON f.rowid = p.rowid
       LEFT JOIN companies co ON co.id = p.company_id
       ${LAST_INTERACTION_JOIN}
-      WHERE p.user_id = ${userId}
+      WHERE p.workspace_id = ${s.workspaceId}
         AND f.people_fts MATCH ${fts}
         ${archived ? sql`` : sql`AND p.is_archived = 0`}
         ${favorite ? sql`AND p.is_favorite = 1` : sql``}
@@ -163,7 +162,7 @@ export const load: PageServerLoad = async ({ locals, url }) => {
       FROM people p
       LEFT JOIN companies co ON co.id = p.company_id
       ${LAST_INTERACTION_JOIN}
-      WHERE p.user_id = ${userId}
+      WHERE p.workspace_id = ${s.workspaceId}
         ${archived ? sql`` : sql`AND p.is_archived = 0`}
         ${favorite ? sql`AND p.is_favorite = 1` : sql``}
         ${tagInClause}

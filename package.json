@@ -10,7 +10,7 @@
     "dev": "vite dev",
     "build": "vite build",
     "preview": "vite preview",
-    "check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json && tsx scripts/check-classify.ts",
+    "check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json && tsx scripts/check-classify.ts && tsx scripts/check-tenancy.ts",
     "check:watch": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --watch"
   },
   "dependencies": {
