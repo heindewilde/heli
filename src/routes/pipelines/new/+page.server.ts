@@ -1,3 +1,4 @@
+import { requireScope } from '$lib/server/scope';
 import { fail, redirect, type Actions } from '@sveltejs/kit';
 import { createPipeline, isPipelineView, seedPipelineFromCollection } from '$lib/server/pipelines';
 import { getCollection } from '$lib/server/collections';
@@ -8,7 +9,8 @@ import type { PipelineView } from '$lib/server/schema';
 export const load: PageServerLoad = async ({ locals, url }) => {
   const collectionId = url.searchParams.get('fromCollection');
   if (!collectionId || !locals.user) return { fromCollection: null };
-  const collection = await getCollection(locals.user.id, locals.user.region, collectionId);
+  const s = requireScope(locals);
+  const collection = await getCollection(s, collectionId);
   if (!collection) return { fromCollection: null };
   const peopleCount = collection.members.filter((m) => m.kind === 'person').length;
   const companyCount = collection.members.filter((m) => m.kind === 'company').length;
@@ -25,6 +27,7 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 export const actions: Actions = {
   default: async ({ request, locals }) => {
     if (!locals.user) throw redirect(303, '/auth?next=/pipelines/new');
+    const s = requireScope(locals);
     const data = await request.formData();
     const name = String(data.get('name') ?? '').trim();
     if (!name) return fail(400, { error: 'Name is required.' });
@@ -46,7 +49,7 @@ export const actions: Actions = {
 
     let id: string;
     try {
-      const result = await createPipeline(locals.user.id, locals.user.region, {
+      const result = await createPipeline(s, {
         name,
         description,
         defaultView,
@@ -59,9 +62,9 @@ export const actions: Actions = {
 
     const fromCollectionId = String(data.get('fromCollectionId') ?? '').trim();
     if (fromCollectionId) {
-      await seedPipelineFromCollection(locals.user.id, locals.user.region, id, fromCollectionId);
+      await seedPipelineFromCollection(s, id, fromCollectionId);
       if (data.get('syncWithCollection') === '1') {
-        await createCollectionSync(locals.user.id, locals.user.region, fromCollectionId, id);
+        await createCollectionSync(s, fromCollectionId, id);
       }
     }
 

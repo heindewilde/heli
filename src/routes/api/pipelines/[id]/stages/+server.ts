@@ -1,3 +1,4 @@
+import { requireScope } from '$lib/server/scope';
 import { error, json, type RequestHandler } from '@sveltejs/kit';
 import { addStage, updateStage, deleteStage, reorderStages } from '$lib/server/pipelines';
 
@@ -12,6 +13,7 @@ type PatchBody = {
 
 export const POST: RequestHandler = async ({ request, params, locals }) => {
   if (!locals.user) throw error(401, 'unauthorized');
+  const s = requireScope(locals);
   let body: AddBody;
   try {
     body = (await request.json()) as AddBody;
@@ -20,7 +22,7 @@ export const POST: RequestHandler = async ({ request, params, locals }) => {
   }
   if (typeof body.name !== 'string') throw error(400, 'missing_name');
   try {
-    const result = await addStage(locals.user.id, locals.user.region, params.id!, {
+    const result = await addStage(s, params.id!, {
       name: body.name,
       color: typeof body.color === 'string' ? body.color : null,
       position: typeof body.position === 'number' ? body.position : undefined
@@ -33,6 +35,7 @@ export const POST: RequestHandler = async ({ request, params, locals }) => {
 
 export const PATCH: RequestHandler = async ({ request, params, locals }) => {
   if (!locals.user) throw error(401, 'unauthorized');
+  const s = requireScope(locals);
   let body: PatchBody;
   try {
     body = (await request.json()) as PatchBody;
@@ -43,8 +46,7 @@ export const PATCH: RequestHandler = async ({ request, params, locals }) => {
   if (Array.isArray(body.order) && body.order.every((s) => typeof s === 'string')) {
     try {
       await reorderStages(
-        locals.user.id,
-        locals.user.region,
+        s,
         params.id!,
         body.order as string[]
       );
@@ -60,8 +62,7 @@ export const PATCH: RequestHandler = async ({ request, params, locals }) => {
   if ('color' in body) updates.color = typeof body.color === 'string' ? body.color : null;
   try {
     await updateStage(
-      locals.user.id,
-      locals.user.region,
+      s,
       params.id!,
       body.stageId,
       updates
@@ -74,6 +75,7 @@ export const PATCH: RequestHandler = async ({ request, params, locals }) => {
 
 export const DELETE: RequestHandler = async ({ url, request, params, locals }) => {
   if (!locals.user) throw error(401, 'unauthorized');
+  const s = requireScope(locals);
   const stageId = url.searchParams.get('stageId');
   const moveTo = url.searchParams.get('moveTo');
   let stageIdFinal = stageId;
@@ -90,8 +92,7 @@ export const DELETE: RequestHandler = async ({ url, request, params, locals }) =
   if (!stageIdFinal) throw error(400, 'missing_stageId');
   try {
     await deleteStage(
-      locals.user.id,
-      locals.user.region,
+      s,
       params.id!,
       stageIdFinal,
       moveToFinal

@@ -15,6 +15,10 @@ export const sessions = sqliteTable(
     userId: text('user_id')
       .notNull()
       .references(() => users.id, { onDelete: 'cascade' }),
+    // Which workspace this device is currently looking at. Nullable: a session
+    // can outlive the workspace it pointed at (removed member, deleted
+    // workspace), in which case validateSession falls back to another membership.
+    activeWorkspaceId: text('active_workspace_id'),
     expiresAt: integer('expires_at').notNull()
   },
   (t) => [index('idx_sessions_user').on(t.userId)]
@@ -34,10 +38,88 @@ export const emailRouting = sqliteTable('email_routing', {
   region: text('region').notNull()
 });
 
+// Tenancy. A workspace owns every CRM entity; `user_id` on those tables is kept
+// purely as created-by attribution. A workspace is pinned to exactly one region
+// because its rows live in that region's libSQL database — see `db(region)` —
+// so every member must resolve to the same region.
+export const workspaces = sqliteTable(
+  'workspaces',
+  {
+    id: text('id').primaryKey(),
+    name: text('name').notNull(),
+    region: text('region').notNull(),
+    ownerUserId: text('owner_user_id')
+      .notNull()
+      .references(() => users.id),
+    plan: text('plan').notNull().default('free'),
+    // NULL means unlimited — the self-host default. Cloud provisioning sets a number.
+    seatLimit: integer('seat_limit'),
+    createdAt: integer('created_at').notNull(),
+    updatedAt: integer('updated_at').notNull()
+  },
+  (t) => [index('idx_workspaces_owner').on(t.ownerUserId)]
+);
+
+export const workspaceMembers = sqliteTable(
+  'workspace_members',
+  {
+    workspaceId: text('workspace_id')
+      .notNull()
+      .references(() => workspaces.id, { onDelete: 'cascade' }),
+    userId: text('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    role: text('role').notNull().default('member'),
+    createdAt: integer('created_at').notNull()
+  },
+  (t) => [
+    primaryKey({ columns: [t.workspaceId, t.userId] }),
+    index('idx_workspace_members_user').on(t.userId)
+  ]
+);
+
+export const workspaceInvites = sqliteTable(
+  'workspace_invites',
+  {
+    token: text('token').primaryKey(),
+    workspaceId: text('workspace_id')
+      .notNull()
+      .references(() => workspaces.id, { onDelete: 'cascade' }),
+    email: text('email').notNull(),
+    role: text('role').notNull().default('member'),
+    invitedByUserId: text('invited_by_user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    expiresAt: integer('expires_at').notNull(),
+    acceptedAt: integer('accepted_at'),
+    // Revoked rather than deleted, so a re-invite after revoke is possible
+    // without tripping the pending-invite unique index (declared in migrate.ts —
+    // it is partial, which Drizzle's schema DSL can't express).
+    revokedAt: integer('revoked_at'),
+    createdAt: integer('created_at').notNull()
+  },
+  (t) => [
+    index('idx_workspace_invites_ws').on(t.workspaceId, t.createdAt),
+    index('idx_workspace_invites_email').on(t.email)
+  ]
+);
+
+// The version tracking this migrator otherwise lacks. Used to gate one-shot
+// backfills so they don't re-scan every table on each boot.
+export const schemaMeta = sqliteTable('schema_meta', {
+  key: text('key').primaryKey(),
+  value: text('value').notNull()
+});
+
 export const companies = sqliteTable(
   'companies',
   {
     id: text('id').primaryKey(),
+    workspaceId: text('workspace_id')
+      .notNull()
+      .references(() => workspaces.id, { onDelete: 'cascade' }),
+    // Created-by attribution, not tenancy. Reassigned to the workspace owner
+    // when a member leaves so their records survive.
     userId: text('user_id')
       .notNull()
       .references(() => users.id, { onDelete: 'cascade' }),
@@ -62,12 +144,12 @@ export const companies = sqliteTable(
     updatedAt: integer('updated_at').notNull()
   },
   (t) => [
-    index('idx_companies_user_arch').on(t.userId, t.isArchived),
-    index('idx_companies_user_fav').on(t.userId, t.isFavorite),
-    index('idx_companies_user_domain').on(t.userId, t.domain),
-    index('idx_companies_user_priority').on(t.userId, t.priority),
-    index('idx_companies_user_status').on(t.userId, t.statusId),
-    uniqueIndex('uq_companies_user_url').on(t.userId, t.url)
+    index('idx_companies_ws_arch').on(t.workspaceId, t.isArchived),
+    index('idx_companies_ws_fav').on(t.workspaceId, t.isFavorite),
+    index('idx_companies_ws_domain').on(t.workspaceId, t.domain),
+    index('idx_companies_ws_priority').on(t.workspaceId, t.priority),
+    index('idx_companies_ws_status').on(t.workspaceId, t.statusId),
+    uniqueIndex('uq_companies_ws_url').on(t.workspaceId, t.url)
   ]
 );
 
@@ -75,6 +157,9 @@ export const companyStatuses = sqliteTable(
   'company_statuses',
   {
     id: text('id').primaryKey(),
+    workspaceId: text('workspace_id')
+      .notNull()
+      .references(() => workspaces.id, { onDelete: 'cascade' }),
     userId: text('user_id')
       .notNull()
       .references(() => users.id, { onDelete: 'cascade' }),
@@ -84,8 +169,8 @@ export const companyStatuses = sqliteTable(
     createdAt: integer('created_at').notNull()
   },
   (t) => [
-    index('idx_company_statuses_user_sort').on(t.userId, t.sortOrder),
-    uniqueIndex('uq_company_statuses_user_name').on(t.userId, t.name)
+    index('idx_company_statuses_ws_sort').on(t.workspaceId, t.sortOrder),
+    uniqueIndex('uq_company_statuses_ws_name').on(t.workspaceId, t.name)
   ]
 );
 
@@ -93,6 +178,9 @@ export const people = sqliteTable(
   'people',
   {
     id: text('id').primaryKey(),
+    workspaceId: text('workspace_id')
+      .notNull()
+      .references(() => workspaces.id, { onDelete: 'cascade' }),
     userId: text('user_id')
       .notNull()
       .references(() => users.id, { onDelete: 'cascade' }),
@@ -121,13 +209,13 @@ export const people = sqliteTable(
     updatedAt: integer('updated_at').notNull()
   },
   (t) => [
-    index('idx_people_user_arch').on(t.userId, t.isArchived),
-    index('idx_people_user_fav').on(t.userId, t.isFavorite),
-    index('idx_people_user_company').on(t.userId, t.companyId),
-    index('idx_people_user_domain').on(t.userId, t.domain),
-    index('idx_people_user_priority').on(t.userId, t.priority),
-    index('idx_people_user_status').on(t.userId, t.statusId),
-    uniqueIndex('uq_people_user_url').on(t.userId, t.url)
+    index('idx_people_ws_arch').on(t.workspaceId, t.isArchived),
+    index('idx_people_ws_fav').on(t.workspaceId, t.isFavorite),
+    index('idx_people_ws_company').on(t.workspaceId, t.companyId),
+    index('idx_people_ws_domain').on(t.workspaceId, t.domain),
+    index('idx_people_ws_priority').on(t.workspaceId, t.priority),
+    index('idx_people_ws_status').on(t.workspaceId, t.statusId),
+    uniqueIndex('uq_people_ws_url').on(t.workspaceId, t.url)
   ]
 );
 
@@ -135,6 +223,9 @@ export const peopleStatuses = sqliteTable(
   'people_statuses',
   {
     id: text('id').primaryKey(),
+    workspaceId: text('workspace_id')
+      .notNull()
+      .references(() => workspaces.id, { onDelete: 'cascade' }),
     userId: text('user_id')
       .notNull()
       .references(() => users.id, { onDelete: 'cascade' }),
@@ -144,8 +235,8 @@ export const peopleStatuses = sqliteTable(
     createdAt: integer('created_at').notNull()
   },
   (t) => [
-    index('idx_people_statuses_user_sort').on(t.userId, t.sortOrder),
-    uniqueIndex('uq_people_statuses_user_name').on(t.userId, t.name)
+    index('idx_people_statuses_ws_sort').on(t.workspaceId, t.sortOrder),
+    uniqueIndex('uq_people_statuses_ws_name').on(t.workspaceId, t.name)
   ]
 );
 
@@ -153,6 +244,9 @@ export const interactions = sqliteTable(
   'interactions',
   {
     id: text('id').primaryKey(),
+    workspaceId: text('workspace_id')
+      .notNull()
+      .references(() => workspaces.id, { onDelete: 'cascade' }),
     userId: text('user_id')
       .notNull()
       .references(() => users.id, { onDelete: 'cascade' }),
@@ -165,8 +259,8 @@ export const interactions = sqliteTable(
     updatedAt: integer('updated_at').notNull()
   },
   (t) => [
-    index('idx_interactions_user_occurred').on(t.userId, t.occurredAt),
-    index('idx_interactions_user_company').on(t.userId, t.companyId)
+    index('idx_interactions_ws_occurred').on(t.workspaceId, t.occurredAt),
+    index('idx_interactions_ws_company').on(t.workspaceId, t.companyId)
   ]
 );
 
@@ -190,6 +284,9 @@ export const tags = sqliteTable(
   'tags',
   {
     id: text('id').primaryKey(),
+    workspaceId: text('workspace_id')
+      .notNull()
+      .references(() => workspaces.id, { onDelete: 'cascade' }),
     userId: text('user_id')
       .notNull()
       .references(() => users.id, { onDelete: 'cascade' }),
@@ -197,7 +294,7 @@ export const tags = sqliteTable(
     slug: text('slug').notNull(),
     scope: text('scope').notNull()
   },
-  (t) => [uniqueIndex('uq_tags_user_slug_scope').on(t.userId, t.slug, t.scope)]
+  (t) => [uniqueIndex('uq_tags_ws_slug_scope').on(t.workspaceId, t.slug, t.scope)]
 );
 
 export const personTags = sqliteTable(
@@ -230,6 +327,9 @@ export const reminders = sqliteTable(
   'reminders',
   {
     id: text('id').primaryKey(),
+    workspaceId: text('workspace_id')
+      .notNull()
+      .references(() => workspaces.id, { onDelete: 'cascade' }),
     userId: text('user_id')
       .notNull()
       .references(() => users.id, { onDelete: 'cascade' }),
@@ -238,13 +338,20 @@ export const reminders = sqliteTable(
     remindAt: integer('remind_at').notNull(),
     createdAt: integer('created_at').notNull()
   },
-  (t) => [index('idx_reminders_user_at').on(t.userId, t.remindAt)]
+  // Reminders are PERSONAL: "remind me about this person". `workspace_id` exists
+  // for the tenancy invariant and the cascade, but reads must filter on
+  // (workspace_id, user_id) — scoping by workspace alone would put every
+  // member's reminders in everyone else's sidebar. Hence user_id in the index.
+  (t) => [index('idx_reminders_ws_user_at').on(t.workspaceId, t.userId, t.remindAt)]
 );
 
 export const tasks = sqliteTable(
   'tasks',
   {
     id: text('id').primaryKey(),
+    workspaceId: text('workspace_id')
+      .notNull()
+      .references(() => workspaces.id, { onDelete: 'cascade' }),
     userId: text('user_id')
       .notNull()
       .references(() => users.id, { onDelete: 'cascade' }),
@@ -257,8 +364,8 @@ export const tasks = sqliteTable(
     updatedAt: integer('updated_at').notNull()
   },
   (t) => [
-    index('idx_tasks_ref').on(t.userId, t.kind, t.refId, t.completedAt),
-    index('idx_tasks_user_due').on(t.userId, t.dueAt)
+    index('idx_tasks_ws_ref').on(t.workspaceId, t.kind, t.refId, t.completedAt),
+    index('idx_tasks_ws_due').on(t.workspaceId, t.dueAt)
   ]
 );
 
@@ -266,6 +373,9 @@ export const projects = sqliteTable(
   'projects',
   {
     id: text('id').primaryKey(),
+    workspaceId: text('workspace_id')
+      .notNull()
+      .references(() => workspaces.id, { onDelete: 'cascade' }),
     userId: text('user_id')
       .notNull()
       .references(() => users.id, { onDelete: 'cascade' }),
@@ -284,9 +394,9 @@ export const projects = sqliteTable(
     updatedAt: integer('updated_at').notNull()
   },
   (t) => [
-    index('idx_projects_user_status').on(t.userId, t.status),
-    index('idx_projects_user_end').on(t.userId, t.endDate),
-    index('idx_projects_user_updated').on(t.userId, t.updatedAt)
+    index('idx_projects_ws_status').on(t.workspaceId, t.status),
+    index('idx_projects_ws_end').on(t.workspaceId, t.endDate),
+    index('idx_projects_ws_updated').on(t.workspaceId, t.updatedAt)
   ]
 );
 
@@ -356,6 +466,9 @@ export const collections = sqliteTable(
   'collections',
   {
     id: text('id').primaryKey(),
+    workspaceId: text('workspace_id')
+      .notNull()
+      .references(() => workspaces.id, { onDelete: 'cascade' }),
     userId: text('user_id')
       .notNull()
       .references(() => users.id, { onDelete: 'cascade' }),
@@ -367,8 +480,8 @@ export const collections = sqliteTable(
     updatedAt: integer('updated_at').notNull()
   },
   (t) => [
-    index('idx_collections_user_arch').on(t.userId, t.isArchived),
-    index('idx_collections_user_updated').on(t.userId, t.updatedAt)
+    index('idx_collections_ws_arch').on(t.workspaceId, t.isArchived),
+    index('idx_collections_ws_updated').on(t.workspaceId, t.updatedAt)
   ]
 );
 
@@ -392,6 +505,9 @@ export const pipelines = sqliteTable(
   'pipelines',
   {
     id: text('id').primaryKey(),
+    workspaceId: text('workspace_id')
+      .notNull()
+      .references(() => workspaces.id, { onDelete: 'cascade' }),
     userId: text('user_id')
       .notNull()
       .references(() => users.id, { onDelete: 'cascade' }),
@@ -403,8 +519,8 @@ export const pipelines = sqliteTable(
     updatedAt: integer('updated_at').notNull()
   },
   (t) => [
-    index('idx_pipelines_user_arch').on(t.userId, t.isArchived),
-    index('idx_pipelines_user_updated').on(t.userId, t.updatedAt)
+    index('idx_pipelines_ws_arch').on(t.workspaceId, t.isArchived),
+    index('idx_pipelines_ws_updated').on(t.workspaceId, t.updatedAt)
   ]
 );
 
@@ -505,6 +621,9 @@ export const collectionPipelineSync = sqliteTable(
     pipelineId: text('pipeline_id')
       .notNull()
       .references(() => pipelines.id, { onDelete: 'cascade' }),
+    workspaceId: text('workspace_id')
+      .notNull()
+      .references(() => workspaces.id, { onDelete: 'cascade' }),
     userId: text('user_id')
       .notNull()
       .references(() => users.id, { onDelete: 'cascade' }),
@@ -515,6 +634,9 @@ export const collectionPipelineSync = sqliteTable(
 
 export type User = typeof users.$inferSelect;
 export type Session = typeof sessions.$inferSelect;
+export type Workspace = typeof workspaces.$inferSelect;
+export type WorkspaceMember = typeof workspaceMembers.$inferSelect;
+export type WorkspaceInvite = typeof workspaceInvites.$inferSelect;
 export type Person = typeof people.$inferSelect;
 export type Company = typeof companies.$inferSelect;
 export type Interaction = typeof interactions.$inferSelect;
@@ -531,6 +653,13 @@ export type PipelineStage = typeof pipelineStages.$inferSelect;
 export type PipelineItem = typeof pipelineItems.$inferSelect;
 export type PipelineItemEvent = typeof pipelineItemEvents.$inferSelect;
 export type DailyMetric = typeof dailyMetrics.$inferSelect;
+
+// Ordered most- to least-privileged. `owner` can delete the workspace and
+// transfer ownership; `owner`/`admin` can invite and remove members; `member`
+// does everything else. Keep permission checks to those cases — don't scatter
+// finer-grained rules until there's a reason.
+export const WORKSPACE_ROLES = ['owner', 'admin', 'member'] as const;
+export type WorkspaceRole = (typeof WORKSPACE_ROLES)[number];
 
 export const TAG_SCOPES = ['person', 'company'] as const;
 export type TagScope = (typeof TAG_SCOPES)[number];

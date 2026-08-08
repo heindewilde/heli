@@ -1,3 +1,4 @@
+import { requireScope } from '$lib/server/scope';
 import { error, json, type RequestHandler } from '@sveltejs/kit';
 import { listProjects, searchProjects } from '$lib/server/projects-query';
 import { createProject, type ManualProjectInput } from '$lib/server/saveProject';
@@ -13,6 +14,7 @@ function isStatusOrAll(v: unknown): v is ProjectStatus | 'all' {
 
 export const GET: RequestHandler = async ({ url, locals, request }) => {
   if (!locals.user) throw error(401, 'unauthorized');
+  const s = requireScope(locals);
   const q = url.searchParams.get('q')?.trim() ?? '';
   const limitParam = Number.parseInt(url.searchParams.get('limit') ?? '', 10);
   const statusParam = url.searchParams.get('status');
@@ -23,8 +25,7 @@ export const GET: RequestHandler = async ({ url, locals, request }) => {
   // Typeahead mode: short list, no extra columns. Used by ProjectPicker.
   if (url.searchParams.get('mode') === 'typeahead' || (Number.isFinite(limitParam) && limitParam <= 20 && !sortParam && !statusParam && !personId && !companyId)) {
     const items = await searchProjects(
-      locals.user.id,
-      locals.user.region,
+      s,
       q,
       Number.isFinite(limitParam) ? Math.min(Math.max(limitParam, 1), 50) : 8
     );
@@ -41,7 +42,7 @@ export const GET: RequestHandler = async ({ url, locals, request }) => {
       ? sortParam
       : undefined;
 
-  const items = await listProjects(locals.user.id, locals.user.region, {
+  const items = await listProjects(s, {
     q,
     status,
     personId,
@@ -54,6 +55,7 @@ export const GET: RequestHandler = async ({ url, locals, request }) => {
 
 export const POST: RequestHandler = async ({ request, locals }) => {
   if (!locals.user) throw error(401, 'unauthorized');
+  const s = requireScope(locals);
   let body: Partial<ManualProjectInput>;
   try {
     body = await request.json();
@@ -62,7 +64,7 @@ export const POST: RequestHandler = async ({ request, locals }) => {
   }
   if (!body.name || typeof body.name !== 'string') throw error(400, 'missing_name');
   try {
-    const result = await createProject(locals.user.id, locals.user.region, body as ManualProjectInput);
+    const result = await createProject(s, body as ManualProjectInput);
     return json(result, { status: 201 });
   } catch (err) {
     throw error(400, (err as Error).message);

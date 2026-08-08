@@ -37,12 +37,12 @@ export const COMPANY_ROW_COLS: SQL = sql`
 
 // Companies link directly to interactions via i.company_id (no junction
 // table on this side), unlike people.
-export function companyLastInteractionJoin(userId: string): SQL {
+export function companyLastInteractionJoin(workspaceId: string): SQL {
   return sql`
     LEFT JOIN (
       SELECT i.company_id AS cid, MAX(i.occurred_at) AS last_at
       FROM interactions i
-      WHERE i.user_id = ${userId}
+      WHERE i.workspace_id = ${workspaceId}
       GROUP BY i.company_id
     ) li ON li.cid = c.id
   `;

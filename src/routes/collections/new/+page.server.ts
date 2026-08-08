@@ -1,3 +1,4 @@
+import { requireScope } from '$lib/server/scope';
 import { fail, redirect, type Actions } from '@sveltejs/kit';
 import { createCollection, addToCollection } from '$lib/server/collections';
 import type { MemberKind } from '$lib/server/schema';
@@ -5,6 +6,7 @@ import type { MemberKind } from '$lib/server/schema';
 export const actions: Actions = {
   default: async ({ request, locals }) => {
     if (!locals.user) throw redirect(303, '/auth?next=/collections/new');
+    const s = requireScope(locals);
     const data = await request.formData();
     const name = String(data.get('name') ?? '').trim();
     if (!name) return fail(400, { error: 'Name is required.' });
@@ -14,7 +16,7 @@ export const actions: Actions = {
 
     let id: string;
     try {
-      const result = await createCollection(locals.user.id, locals.user.region, {
+      const result = await createCollection(s, {
         name,
         description,
         icon
@@ -31,7 +33,7 @@ export const actions: Actions = {
       const refId = entry.slice(sep + 1);
       if (kind !== 'person' && kind !== 'company') continue;
       try {
-        await addToCollection(locals.user.id, locals.user.region, id, kind, refId);
+        await addToCollection(s, id, kind, refId);
       } catch {
         // non-fatal: member may not exist
       }

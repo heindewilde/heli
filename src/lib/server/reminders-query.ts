@@ -1,6 +1,7 @@
 import { and, asc, eq, inArray } from 'drizzle-orm';
 import { db } from './db';
 import { reminders, people, companies, interactions, projects, type ReminderKind } from './schema';
+import type { Scope } from './scope';
 
 export type ReminderRow = {
   id: string;
@@ -12,17 +13,25 @@ export type ReminderRow = {
   createdAt: number;
 };
 
+/**
+ * Reminders are PERSONAL — "remind me about this person" — so this filters on
+ * both workspace and user. Scoping by workspace alone would drop every
+ * colleague's reminders into your sidebar. The (workspace_id, user_id,
+ * remind_at) index exists for exactly this query.
+ *
+ * The label lookups below are workspace-scoped, which is correct: you may hold
+ * a reminder about any record in the workspace.
+ */
 export async function listReminders(
-  userId: string,
-  region: string,
+  s: Scope,
   opts: { limit?: number } = {}
 ): Promise<ReminderRow[]> {
-  const d = db(region);
+  const d = db(s.region);
   const limit = Math.min(opts.limit ?? 100, 500);
   const rows = await d
     .select()
     .from(reminders)
-    .where(eq(reminders.userId, userId))
+    .where(and(eq(reminders.workspaceId, s.workspaceId), eq(reminders.userId, s.userId)))
     .orderBy(asc(reminders.remindAt))
     .limit(limit);
   if (rows.length === 0) return [];
@@ -41,7 +50,7 @@ export async function listReminders(
     const ps = await d
       .select({ id: people.id, name: people.name })
       .from(people)
-      .where(and(eq(people.userId, userId), inArray(people.id, personIds)));
+      .where(and(eq(people.workspaceId, s.workspaceId), inArray(people.id, personIds)));
     for (const p of ps) labels.set(`person:${p.id}`, { label: p.name, href: `/people/${p.id}` });
   }
   const companyIds = groups.get('company') ?? [];
@@ -49,7 +58,7 @@ export async function listReminders(
     const cs = await d
       .select({ id: companies.id, name: companies.name })
       .from(companies)
-      .where(and(eq(companies.userId, userId), inArray(companies.id, companyIds)));
+      .where(and(eq(companies.workspaceId, s.workspaceId), inArray(companies.id, companyIds)));
     for (const c of cs) labels.set(`company:${c.id}`, { label: c.name, href: `/companies/${c.id}` });
   }
   const interactionIds = groups.get('interaction') ?? [];
@@ -57,7 +66,9 @@ export async function listReminders(
     const is = await d
       .select({ id: interactions.id, title: interactions.title })
       .from(interactions)
-      .where(and(eq(interactions.userId, userId), inArray(interactions.id, interactionIds)));
+      .where(
+        and(eq(interactions.workspaceId, s.workspaceId), inArray(interactions.id, interactionIds))
+      );
     for (const i of is) labels.set(`interaction:${i.id}`, { label: i.title, href: `/interactions/${i.id}` });
   }
   const projectIds = groups.get('project') ?? [];
@@ -65,7 +76,7 @@ export async function listReminders(
     const ps = await d
       .select({ id: projects.id, name: projects.name })
       .from(projects)
-      .where(and(eq(projects.userId, userId), inArray(projects.id, projectIds)));
+      .where(and(eq(projects.workspaceId, s.workspaceId), inArray(projects.id, projectIds)));
     for (const p of ps) labels.set(`project:${p.id}`, { label: p.name, href: `/projects/${p.id}` });
   }
 

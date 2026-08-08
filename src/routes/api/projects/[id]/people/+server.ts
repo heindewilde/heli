@@ -1,3 +1,4 @@
+import { requireScope } from '$lib/server/scope';
 import { error, type RequestHandler } from '@sveltejs/kit';
 import { attachPerson, detachPerson } from '$lib/server/saveProject';
 
@@ -11,10 +12,11 @@ async function readBody(request: Request): Promise<{ personId?: unknown }> {
 
 export const POST: RequestHandler = async ({ request, params, locals }) => {
   if (!locals.user) throw error(401, 'unauthorized');
+  const s = requireScope(locals);
   const body = await readBody(request);
   if (typeof body.personId !== 'string') throw error(400, 'missing_personId');
   try {
-    await attachPerson(locals.user.id, locals.user.region, params.id!, body.personId);
+    await attachPerson(s, params.id!, body.personId);
   } catch (err) {
     throw error((err as Error).message === 'not_found' ? 404 : 400, (err as Error).message);
   }
@@ -23,10 +25,11 @@ export const POST: RequestHandler = async ({ request, params, locals }) => {
 
 export const DELETE: RequestHandler = async ({ request, params, locals }) => {
   if (!locals.user) throw error(401, 'unauthorized');
+  const s = requireScope(locals);
   const body = await readBody(request);
   if (typeof body.personId !== 'string') throw error(400, 'missing_personId');
   try {
-    await detachPerson(locals.user.id, locals.user.region, params.id!, body.personId);
+    await detachPerson(s, params.id!, body.personId);
   } catch (err) {
     throw error((err as Error).message === 'not_found' ? 404 : 400, (err as Error).message);
   }

@@ -40,12 +40,12 @@ export const PERSON_ROW_COLS: SQL = sql`
   li.last_at AS lastAt
 `;
 
-export function personLastInteractionJoin(userId: string): SQL {
+export function personLastInteractionJoin(workspaceId: string): SQL {
   return sql`
     LEFT JOIN (
       SELECT ip.person_id AS pid, MAX(i.occurred_at) AS last_at
       FROM interaction_people ip
-      JOIN interactions i ON i.id = ip.interaction_id AND i.user_id = ${userId}
+      JOIN interactions i ON i.id = ip.interaction_id AND i.workspace_id = ${workspaceId}
       GROUP BY ip.person_id
     ) li ON li.pid = p.id
   `;

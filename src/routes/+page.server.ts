@@ -1,3 +1,4 @@
+import { requireScope } from '$lib/server/scope';
 import { and, asc, desc, eq, gte, lte, ne, or, sql } from 'drizzle-orm';
 import { redirect } from '@sveltejs/kit';
 import type { PageServerLoad } from './$types';
@@ -27,6 +28,7 @@ export const load: PageServerLoad = async ({ locals, setHeaders }) => {
       }
     };
   }
+  const s = requireScope(locals);
   const d = db(locals.user.region);
   const fourteenDaysAgo = Date.now() - 14 * 86_400_000;
   const sevenDaysAgo = Date.now() - 7 * 86_400_000;
@@ -47,24 +49,24 @@ export const load: PageServerLoad = async ({ locals, setHeaders }) => {
     d
       .select({ n: sql<number>`COUNT(*)` })
       .from(people)
-      .where(and(eq(people.userId, locals.user.id), eq(people.isArchived, 0)))
+      .where(and(eq(people.workspaceId, s.workspaceId), eq(people.isArchived, 0)))
       .get(),
     d
       .select({ n: sql<number>`COUNT(*)` })
       .from(companies)
-      .where(and(eq(companies.userId, locals.user.id), eq(companies.isArchived, 0)))
+      .where(and(eq(companies.workspaceId, s.workspaceId), eq(companies.isArchived, 0)))
       .get(),
     d
       .select({ n: sql<number>`COUNT(*)` })
       .from(interactionsTable)
-      .where(and(eq(interactionsTable.userId, locals.user.id), gte(interactionsTable.occurredAt, monthStart.getTime())))
+      .where(and(eq(interactionsTable.workspaceId, s.workspaceId), gte(interactionsTable.occurredAt, monthStart.getTime())))
       .get(),
     d
       .select({ n: sql<number>`COUNT(*)` })
       .from(projects)
-      .where(and(eq(projects.userId, locals.user.id), eq(projects.status, 'active')))
+      .where(and(eq(projects.workspaceId, s.workspaceId), eq(projects.status, 'active')))
       .get(),
-    listInteractions(locals.user.id, locals.user.region, { from: fourteenDaysAgo, limit: 10 }),
+    listInteractions(s, { from: fourteenDaysAgo, limit: 10 }),
     d
       .select({
         id: people.id,
@@ -76,7 +78,7 @@ export const load: PageServerLoad = async ({ locals, setHeaders }) => {
         createdAt: people.createdAt
       })
       .from(people)
-      .where(and(eq(people.userId, locals.user.id), eq(people.isArchived, 0)))
+      .where(and(eq(people.workspaceId, s.workspaceId), eq(people.isArchived, 0)))
       .orderBy(desc(people.createdAt))
       .limit(5),
     d
@@ -90,7 +92,7 @@ export const load: PageServerLoad = async ({ locals, setHeaders }) => {
         createdAt: companies.createdAt
       })
       .from(companies)
-      .where(and(eq(companies.userId, locals.user.id), eq(companies.isArchived, 0)))
+      .where(and(eq(companies.workspaceId, s.workspaceId), eq(companies.isArchived, 0)))
       .orderBy(desc(companies.createdAt))
       .limit(5),
     // "Ending soon": active projects whose endDate is within the next 14
@@ -105,7 +107,7 @@ export const load: PageServerLoad = async ({ locals, setHeaders }) => {
       .from(projects)
       .where(
         and(
-          eq(projects.userId, locals.user.id),
+          eq(projects.workspaceId, s.workspaceId),
           eq(projects.status, 'active'),
           or(
             and(gte(projects.endDate, 0), sql`${projects.endDate} < ${Date.now()}`),
@@ -118,7 +120,7 @@ export const load: PageServerLoad = async ({ locals, setHeaders }) => {
     d
       .select({ n: sql<number>`COUNT(*)` })
       .from(reminders)
-      .where(and(eq(reminders.userId, locals.user.id), lte(reminders.remindAt, endOfTodayMs)))
+      .where(and(eq(reminders.workspaceId, s.workspaceId), lte(reminders.remindAt, endOfTodayMs)))
       .get(),
     d
       .select({

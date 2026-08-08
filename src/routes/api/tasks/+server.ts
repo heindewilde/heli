@@ -1,3 +1,4 @@
+import { requireScope } from '$lib/server/scope';
 import { error, json, type RequestHandler } from '@sveltejs/kit';
 import { MEMBER_KINDS, type MemberKind } from '$lib/server/schema';
 import { createTask, listTasksForEntity } from '$lib/server/tasks';
@@ -9,16 +10,18 @@ function isMemberKind(v: unknown): v is MemberKind {
 
 export const GET: RequestHandler = async ({ request, url, locals }) => {
   if (!locals.user) throw error(401, 'unauthorized');
+  const s = requireScope(locals);
   const kind = url.searchParams.get('kind');
   const refId = url.searchParams.get('refId');
   if (!isMemberKind(kind)) throw error(400, 'invalid_kind');
   if (!refId) throw error(400, 'missing_refId');
-  const items = await listTasksForEntity(locals.user.id, locals.user.region, kind, refId);
+  const items = await listTasksForEntity(s, kind, refId);
   return jsonWithEtag(request, { items });
 };
 
 export const POST: RequestHandler = async ({ request, locals }) => {
   if (!locals.user) throw error(401, 'unauthorized');
+  const s = requireScope(locals);
   let body: { kind?: unknown; refId?: unknown; title?: unknown; dueAt?: unknown };
   try {
     body = await request.json();
@@ -42,7 +45,7 @@ export const POST: RequestHandler = async ({ request, locals }) => {
   }
 
   try {
-    const task = await createTask(locals.user.id, locals.user.region, {
+    const task = await createTask(s, {
       kind: body.kind,
       refId: body.refId,
       title: body.title,

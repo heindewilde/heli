@@ -1,3 +1,4 @@
+import { requireScope } from '$lib/server/scope';
 import { error, json, type RequestHandler } from '@sveltejs/kit';
 import { addLink, removeLink, updateLink } from '$lib/server/saveProject';
 
@@ -11,11 +12,11 @@ async function readBody(request: Request): Promise<Record<string, unknown>> {
 
 export const POST: RequestHandler = async ({ request, params, locals }) => {
   if (!locals.user) throw error(401, 'unauthorized');
+  const s = requireScope(locals);
   const body = await readBody(request);
   try {
     const result = await addLink(
-      locals.user.id,
-      locals.user.region,
+      s,
       params.id!,
       body.url,
       body.label
@@ -28,12 +29,12 @@ export const POST: RequestHandler = async ({ request, params, locals }) => {
 
 export const PATCH: RequestHandler = async ({ request, params, locals }) => {
   if (!locals.user) throw error(401, 'unauthorized');
+  const s = requireScope(locals);
   const body = await readBody(request);
   if (typeof body.id !== 'string') throw error(400, 'missing_id');
   try {
     await updateLink(
-      locals.user.id,
-      locals.user.region,
+      s,
       params.id!,
       body.id,
       body.url,
@@ -47,10 +48,11 @@ export const PATCH: RequestHandler = async ({ request, params, locals }) => {
 
 export const DELETE: RequestHandler = async ({ request, params, locals }) => {
   if (!locals.user) throw error(401, 'unauthorized');
+  const s = requireScope(locals);
   const body = await readBody(request);
   if (typeof body.id !== 'string') throw error(400, 'missing_id');
   try {
-    await removeLink(locals.user.id, locals.user.region, params.id!, body.id);
+    await removeLink(s, params.id!, body.id);
   } catch (err) {
     throw error((err as Error).message === 'not_found' ? 404 : 400, (err as Error).message);
   }

@@ -3,6 +3,7 @@ import { db } from './db';
 import { interactions, interactionPeople, interactionProjects, people, companies, projects } from './schema';
 import { ftsQuery } from './search';
 import type { ProjectStatus } from './schema';
+import type { Scope } from './scope';
 
 export type InteractionRow = {
   id: string;
@@ -29,11 +30,10 @@ export type ListFilters = {
 };
 
 export async function listInteractions(
-  userId: string,
-  region: string,
+  s: Scope,
   filters: ListFilters = {}
 ): Promise<InteractionRow[]> {
-  const d = db(region);
+  const d = db(s.region);
   const limit = Math.min(filters.limit ?? 200, 500);
 
   let ids: string[] | null = null;
@@ -44,7 +44,7 @@ export async function listInteractions(
         SELECT i.id
         FROM interactions i
         JOIN interactions_fts f ON f.rowid = i.rowid
-        WHERE i.user_id = ${userId}
+        WHERE i.workspace_id = ${s.workspaceId}
           AND f.interactions_fts MATCH ${fq}
         ORDER BY rank
         LIMIT ${limit}
@@ -64,7 +64,7 @@ export async function listInteractions(
     if (ids.length === 0) return [];
   }
 
-  const where = [eq(interactions.userId, userId)];
+  const where = [eq(interactions.workspaceId, s.workspaceId)];
   if (ids) where.push(inArray(interactions.id, ids));
   if (filters.companyId) where.push(eq(interactions.companyId, filters.companyId));
   if (filters.type) where.push(eq(interactions.type, filters.type));
@@ -112,7 +112,7 @@ export async function listInteractions(
       })
       .from(interactionProjects)
       .innerJoin(projects, eq(projects.id, interactionProjects.projectId))
-      .where(and(eq(projects.userId, userId), inArray(interactionProjects.interactionId, itemIds)))
+      .where(and(eq(projects.workspaceId, s.workspaceId), inArray(interactionProjects.interactionId, itemIds)))
   ]);
 
   const byInteraction = new Map<string, InteractionRow['people']>();
@@ -136,11 +136,10 @@ export async function listInteractions(
 }
 
 export async function getInteraction(
-  userId: string,
-  region: string,
+  s: Scope,
   id: string
 ): Promise<InteractionRow | null> {
-  const d = db(region);
+  const d = db(s.region);
   const item = await d
     .select({
       id: interactions.id,
@@ -155,7 +154,7 @@ export async function getInteraction(
     })
     .from(interactions)
     .leftJoin(companies, eq(companies.id, interactions.companyId))
-    .where(and(eq(interactions.id, id), eq(interactions.userId, userId)))
+    .where(and(eq(interactions.id, id), eq(interactions.workspaceId, s.workspaceId)))
     .get();
   if (!item) return null;
   const [links, projLinks] = await Promise.all([
@@ -176,7 +175,7 @@ export async function getInteraction(
       })
       .from(interactionProjects)
       .innerJoin(projects, eq(projects.id, interactionProjects.projectId))
-      .where(and(eq(projects.userId, userId), eq(interactionProjects.interactionId, id)))
+      .where(and(eq(projects.workspaceId, s.workspaceId), eq(interactionProjects.interactionId, id)))
   ]);
   return {
     ...item,

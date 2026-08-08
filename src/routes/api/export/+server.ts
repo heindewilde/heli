@@ -1,3 +1,4 @@
+import { requireScope, requireRole } from '$lib/server/scope';
 import { error, type RequestHandler } from '@sveltejs/kit';
 import { eq, asc, inArray } from 'drizzle-orm';
 import { db } from '$lib/server/db';
@@ -22,13 +23,13 @@ function isKind(v: string | null): v is Kind {
 }
 
 export const GET: RequestHandler = async ({ url, locals }) => {
-  if (!locals.user) throw error(401, 'unauthorized');
+  const s = requireScope(locals);
+  // Export now covers the whole workspace, not just your own rows.
+  requireRole(s, 'owner', 'admin');
   const kind = url.searchParams.get('kind');
   if (!isKind(kind)) throw error(400, 'invalid_kind');
 
-  const userId = locals.user.id;
-  const region = locals.user.region;
-  const d = db(region);
+  const d = db(s.region);
 
   let stream: ReadableStream<Uint8Array>;
 
@@ -36,8 +37,8 @@ export const GET: RequestHandler = async ({ url, locals }) => {
     const rows = await d
       .select()
       .from(people)
-      .where(eq(people.userId, userId));
-    const tagMap = await getTagsForEntities(userId, region, 'person', rows.map((r) => r.id));
+      .where(eq(people.workspaceId, s.workspaceId));
+    const tagMap = await getTagsForEntities(s, 'person', rows.map((r) => r.id));
     stream = csvStream({
       header: [
         'id',
@@ -83,8 +84,8 @@ export const GET: RequestHandler = async ({ url, locals }) => {
     const rows = await d
       .select()
       .from(companies)
-      .where(eq(companies.userId, userId));
-    const tagMap = await getTagsForEntities(userId, region, 'company', rows.map((r) => r.id));
+      .where(eq(companies.workspaceId, s.workspaceId));
+    const tagMap = await getTagsForEntities(s, 'company', rows.map((r) => r.id));
     stream = csvStream({
       header: [
         'id',
@@ -124,7 +125,7 @@ export const GET: RequestHandler = async ({ url, locals }) => {
     const rows = await d
       .select()
       .from(interactions)
-      .where(eq(interactions.userId, userId));
+      .where(eq(interactions.workspaceId, s.workspaceId));
     // Person links: one query, group by interactionId.
     const interactionIds = rows.map((r) => r.id);
     const links = interactionIds.length
@@ -172,7 +173,7 @@ export const GET: RequestHandler = async ({ url, locals }) => {
     const rows = await d
       .select()
       .from(projects)
-      .where(eq(projects.userId, userId));
+      .where(eq(projects.workspaceId, s.workspaceId));
     const ids = rows.map((r) => r.id);
     // Sub-resources fetched in parallel; the empty-id-array case still works
     // because the IN clause naturally returns nothing.

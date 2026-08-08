@@ -1,3 +1,4 @@
+import { requireScope } from '$lib/server/scope';
 import { error, json, type RequestHandler } from '@sveltejs/kit';
 import {
   addItemToPipeline,
@@ -20,6 +21,7 @@ type DeleteBody = { itemId?: unknown };
 
 export const POST: RequestHandler = async ({ request, params, locals }) => {
   if (!locals.user) throw error(401, 'unauthorized');
+  const s = requireScope(locals);
   let body: AddBody;
   try {
     body = (await request.json()) as AddBody;
@@ -29,19 +31,18 @@ export const POST: RequestHandler = async ({ request, params, locals }) => {
   if (!isMemberKind(body.kind)) throw error(400, 'invalid_kind');
   if (typeof body.refId !== 'string' || !body.refId) throw error(400, 'missing_refId');
   const stageId = typeof body.stageId === 'string' ? body.stageId : undefined;
-  const { id: userId, region } = locals.user;
   const pipelineId = params.id!;
   let result: { id: string; alreadyExisted: boolean };
   try {
-    result = await addItemToPipeline(userId, region, pipelineId, { kind: body.kind, refId: body.refId, stageId });
+    result = await addItemToPipeline(s, pipelineId, { kind: body.kind, refId: body.refId, stageId });
   } catch (err) {
     throw error(400, (err as Error).message);
   }
   if (!result.alreadyExisted) {
-    const sync = await getPipelineSync(userId, region, pipelineId);
+    const sync = await getPipelineSync(s, pipelineId);
     if (sync) {
       try {
-        await addToCollection(userId, region, sync.collectionId, body.kind, body.refId);
+        await addToCollection(s, sync.collectionId, body.kind, body.refId);
       } catch { /* item may already be in the collection */ }
     }
   }
@@ -50,6 +51,7 @@ export const POST: RequestHandler = async ({ request, params, locals }) => {
 
 export const PATCH: RequestHandler = async ({ request, params, locals }) => {
   if (!locals.user) throw error(401, 'unauthorized');
+  const s = requireScope(locals);
   let body: PatchBody;
   try {
     body = (await request.json()) as PatchBody;
@@ -76,7 +78,7 @@ export const PATCH: RequestHandler = async ({ request, params, locals }) => {
         : null;
   }
   try {
-    await updatePipelineItem(locals.user.id, locals.user.region, params.id!, body.itemId, updates);
+    await updatePipelineItem(s, params.id!, body.itemId, updates);
     return new Response(null, { status: 204 });
   } catch (err) {
     throw error(400, (err as Error).message);
@@ -85,6 +87,7 @@ export const PATCH: RequestHandler = async ({ request, params, locals }) => {
 
 export const DELETE: RequestHandler = async ({ request, url, params, locals }) => {
   if (!locals.user) throw error(401, 'unauthorized');
+  const s = requireScope(locals);
   let itemId: string | null = url.searchParams.get('itemId');
   if (!itemId) {
     try {
@@ -95,19 +98,18 @@ export const DELETE: RequestHandler = async ({ request, url, params, locals }) =
     }
   }
   if (!itemId) throw error(400, 'missing_itemId');
-  const { id: userId, region } = locals.user;
   const pipelineId = params.id!;
-  const itemRef = await getPipelineItemRef(userId, region, pipelineId, itemId);
+  const itemRef = await getPipelineItemRef(s, pipelineId, itemId);
   try {
-    await removePipelineItem(userId, region, pipelineId, itemId);
+    await removePipelineItem(s, pipelineId, itemId);
   } catch (err) {
     throw error(400, (err as Error).message);
   }
   if (itemRef) {
-    const sync = await getPipelineSync(userId, region, pipelineId);
+    const sync = await getPipelineSync(s, pipelineId);
     if (sync) {
       try {
-        await removeFromCollection(userId, region, sync.collectionId, itemRef.kind, itemRef.refId);
+        await removeFromCollection(s, sync.collectionId, itemRef.kind, itemRef.refId);
       } catch { /* item may not be in the collection */ }
     }
   }

@@ -1,3 +1,4 @@
+import { requireScope } from '$lib/server/scope';
 import { error, json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { getPendingImport, deletePendingImport, CONTACTS_IMPORT_COOKIE } from '$lib/server/google';
@@ -7,15 +8,15 @@ import { createId } from '@paralleldrive/cuid2';
 import { sanitize } from '$lib/server/sanitize';
 
 export const POST: RequestHandler = async ({ locals, cookies }) => {
-  if (!locals.user) throw error(401, 'unauthorized');
+  const s = requireScope(locals);
 
   const importId = cookies.get(CONTACTS_IMPORT_COOKIE);
   if (!importId) throw error(400, 'no_pending_import');
 
-  const pending = getPendingImport(importId, locals.user.id);
+  const pending = getPendingImport(importId, s.userId);
   if (!pending) throw error(400, 'import_expired');
 
-  const d = db(locals.user.region);
+  const d = db(s.region);
   const now = Date.now();
   let imported = 0;
   let errors = 0;
@@ -24,7 +25,8 @@ export const POST: RequestHandler = async ({ locals, cookies }) => {
     try {
       await d.insert(people).values({
         id: createId(),
-        userId: locals.user.id,
+        workspaceId: s.workspaceId,
+        userId: s.userId,
         name: contact.name,
         email: contact.email ?? null,
         phone: contact.phone ?? null,
@@ -51,7 +53,7 @@ export const POST: RequestHandler = async ({ locals, cookies }) => {
 };
 
 export const DELETE: RequestHandler = async ({ locals, cookies }) => {
-  if (!locals.user) throw error(401, 'unauthorized');
+  const s = requireScope(locals);
 
   const importId = cookies.get(CONTACTS_IMPORT_COOKIE);
   if (importId) {

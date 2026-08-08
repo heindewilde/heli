@@ -11,6 +11,7 @@ import {
 } from './schema';
 import { ftsQuery } from './search';
 import { sanitizePlainText } from './sanitize';
+import type { Scope } from './scope';
 
 export type CollectionListRow = {
   id: string;
@@ -33,11 +34,10 @@ export type CollectionListFilters = {
 };
 
 export async function listCollections(
-  userId: string,
-  region: string,
+  s: Scope,
   filters: CollectionListFilters = {}
 ): Promise<CollectionListRow[]> {
-  const d = db(region);
+  const d = db(s.region);
   const limit = Math.min(filters.limit ?? 200, 500);
   const fts = filters.q ? ftsQuery(filters.q) : null;
   const archived = filters.archived ?? 'active';
@@ -53,7 +53,7 @@ export async function listCollections(
     ? sql`AND c.id IN (
         SELECT cc.id FROM collections cc
         JOIN collections_fts f ON f.rowid = cc.rowid
-        WHERE cc.user_id = ${userId} AND f.collections_fts MATCH ${fts}
+        WHERE cc.workspace_id = ${s.workspaceId} AND f.collections_fts MATCH ${fts}
       )`
     : sql``;
 
@@ -74,7 +74,7 @@ export async function listCollections(
       (SELECT COUNT(*) FROM collection_items WHERE collection_id = c.id AND kind = 'person') AS peopleCount,
       (SELECT COUNT(*) FROM collection_items WHERE collection_id = c.id AND kind = 'company') AS companyCount
     FROM collections c
-    WHERE c.user_id = ${userId}
+    WHERE c.workspace_id = ${s.workspaceId}
       ${archivedClause}
       ${ftsClause}
     ${orderClause}
@@ -110,15 +110,14 @@ export type CollectionDetail = Collection & {
 };
 
 export async function getCollection(
-  userId: string,
-  region: string,
+  s: Scope,
   id: string
 ): Promise<CollectionDetail | null> {
-  const d = db(region);
+  const d = db(s.region);
   const collection = await d
     .select()
     .from(collections)
-    .where(and(eq(collections.id, id), eq(collections.userId, userId)))
+    .where(and(eq(collections.id, id), eq(collections.workspaceId, s.workspaceId)))
     .get();
   if (!collection) return null;
 
@@ -145,7 +144,7 @@ export async function getCollection(
             avatarUrl: people.avatarUrl
           })
           .from(people)
-          .where(and(eq(people.userId, userId), inArray(people.id, personIds)))
+          .where(and(eq(people.workspaceId, s.workspaceId), inArray(people.id, personIds)))
       : Promise.resolve([] as { id: string; name: string; role: string | null; avatarUrl: string | null }[]),
     companyIds.length > 0
       ? d
@@ -157,7 +156,7 @@ export async function getCollection(
             domain: companies.domain
           })
           .from(companies)
-          .where(and(eq(companies.userId, userId), inArray(companies.id, companyIds)))
+          .where(and(eq(companies.workspaceId, s.workspaceId), inArray(companies.id, companyIds)))
       : Promise.resolve([] as { id: string; name: string; logoUrl: string | null; faviconUrl: string | null; domain: string | null }[])
   ]);
 
@@ -202,11 +201,10 @@ export type ManualCollectionInput = {
 };
 
 export async function createCollection(
-  userId: string,
-  region: string,
+  s: Scope,
   input: ManualCollectionInput
 ): Promise<{ id: string }> {
-  const d = db(region);
+  const d = db(s.region);
   const name = sanitizePlainText(input.name, 200);
   if (!name) throw new Error('missing_name');
   const description = input.description ? sanitizePlainText(input.description, 1000) : null;
@@ -215,7 +213,8 @@ export async function createCollection(
   const now = Date.now();
   await d.insert(collections).values({
     id,
-    userId,
+    workspaceId: s.workspaceId,
+    userId: s.userId,
     name,
     description: description || null,
     icon: icon || null,
@@ -234,12 +233,11 @@ export type UpdateCollectionInput = {
 };
 
 export async function updateCollection(
-  userId: string,
-  region: string,
+  s: Scope,
   id: string,
   input: UpdateCollectionInput
 ): Promise<void> {
-  const d = db(region);
+  const d = db(s.region);
   const updates: Partial<typeof collections.$inferInsert> = { updatedAt: Date.now() };
   if (input.name != null) {
     const next = sanitizePlainText(input.name, 200);
@@ -260,36 +258,35 @@ export async function updateCollection(
   await d
     .update(collections)
     .set(updates)
-    .where(and(eq(collections.id, id), eq(collections.userId, userId)));
+    .where(and(eq(collections.id, id), eq(collections.workspaceId, s.workspaceId)));
 }
 
 export async function deleteCollection(
-  userId: string,
-  region: string,
+  s: Scope,
   id: string
 ): Promise<void> {
-  const d = db(region);
+  const d = db(s.region);
   await d
     .delete(collections)
-    .where(and(eq(collections.id, id), eq(collections.userId, userId)));
+    .where(and(eq(collections.id, id), eq(collections.workspaceId, s.workspaceId)));
 }
 
 async function ensureCollectionOwned(
   d: ReturnType<typeof db>,
-  userId: string,
+  workspaceId: string,
   collectionId: string
 ): Promise<boolean> {
   const found = await d
     .select({ id: collections.id })
     .from(collections)
-    .where(and(eq(collections.id, collectionId), eq(collections.userId, userId)))
+    .where(and(eq(collections.id, collectionId), eq(collections.workspaceId, workspaceId)))
     .get();
   return !!found;
 }
 
 async function ensureMember(
   d: ReturnType<typeof db>,
-  userId: string,
+  workspaceId: string,
   kind: MemberKind,
   refId: string
 ): Promise<boolean> {
@@ -297,28 +294,27 @@ async function ensureMember(
     const r = await d
       .select({ id: people.id })
       .from(people)
-      .where(and(eq(people.id, refId), eq(people.userId, userId)))
+      .where(and(eq(people.id, refId), eq(people.workspaceId, workspaceId)))
       .get();
     return !!r;
   }
   const r = await d
     .select({ id: companies.id })
     .from(companies)
-    .where(and(eq(companies.id, refId), eq(companies.userId, userId)))
+    .where(and(eq(companies.id, refId), eq(companies.workspaceId, workspaceId)))
     .get();
   return !!r;
 }
 
 export async function addToCollection(
-  userId: string,
-  region: string,
+  s: Scope,
   collectionId: string,
   kind: MemberKind,
   refId: string
 ): Promise<void> {
-  const d = db(region);
-  if (!(await ensureCollectionOwned(d, userId, collectionId))) throw new Error('not_found');
-  if (!(await ensureMember(d, userId, kind, refId))) throw new Error('not_found');
+  const d = db(s.region);
+  if (!(await ensureCollectionOwned(d, s.workspaceId, collectionId))) throw new Error('not_found');
+  if (!(await ensureMember(d, s.workspaceId, kind, refId))) throw new Error('not_found');
   await d
     .insert(collectionItems)
     .values({ collectionId, kind, refId, addedAt: Date.now() })
@@ -330,14 +326,13 @@ export async function addToCollection(
 }
 
 export async function removeFromCollection(
-  userId: string,
-  region: string,
+  s: Scope,
   collectionId: string,
   kind: MemberKind,
   refId: string
 ): Promise<void> {
-  const d = db(region);
-  if (!(await ensureCollectionOwned(d, userId, collectionId))) throw new Error('not_found');
+  const d = db(s.region);
+  if (!(await ensureCollectionOwned(d, s.workspaceId, collectionId))) throw new Error('not_found');
   await d
     .delete(collectionItems)
     .where(
@@ -361,12 +356,11 @@ export type CollectionMembershipForEntity = {
 };
 
 export async function listCollectionsForEntity(
-  userId: string,
-  region: string,
+  s: Scope,
   kind: MemberKind,
   refId: string
 ): Promise<CollectionMembershipForEntity[]> {
-  const d = db(region);
+  const d = db(s.region);
   const rows = await d
     .select({
       id: collections.id,
@@ -378,7 +372,7 @@ export async function listCollectionsForEntity(
     .innerJoin(collections, eq(collections.id, collectionItems.collectionId))
     .where(
       and(
-        eq(collections.userId, userId),
+        eq(collections.workspaceId, s.workspaceId),
         eq(collectionItems.kind, kind),
         eq(collectionItems.refId, refId)
       )
@@ -393,18 +387,17 @@ export async function listCollectionsForEntity(
 
 /** Lightweight typeahead for the CollectionPicker / CommandPalette. */
 export async function searchCollections(
-  userId: string,
-  region: string,
+  s: Scope,
   q: string,
   limit = 8
 ): Promise<{ id: string; name: string; isArchived: number }[]> {
-  const d = db(region);
+  const d = db(s.region);
   const fts = ftsQuery(q);
   if (!fts) {
     const rows = await d
       .select({ id: collections.id, name: collections.name, isArchived: collections.isArchived })
       .from(collections)
-      .where(eq(collections.userId, userId))
+      .where(eq(collections.workspaceId, s.workspaceId))
       .orderBy(desc(collections.updatedAt))
       .limit(limit);
     return rows.map((r) => ({ ...r, isArchived: Number(r.isArchived ?? 0) }));
@@ -413,7 +406,7 @@ export async function searchCollections(
     SELECT c.id, c.name, c.is_archived AS isArchived
     FROM collections c
     JOIN collections_fts f ON f.rowid = c.rowid
-    WHERE c.user_id = ${userId} AND f.collections_fts MATCH ${fts}
+    WHERE c.workspace_id = ${s.workspaceId} AND f.collections_fts MATCH ${fts}
     ORDER BY rank
     LIMIT ${limit}
   `);

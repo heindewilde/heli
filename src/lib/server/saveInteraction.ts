@@ -4,6 +4,8 @@ import { db } from './db';
 import { interactions, interactionPeople, interactionProjects, people, companies, projects } from './schema';
 import { sanitize, sanitizePlainText } from './sanitize';
 import { INTERACTION_TYPES, isInteractionType, type InteractionType } from '$lib/interactions';
+import type { Scope } from './scope';
+import { bumpSearchEpoch } from './search';
 
 export { INTERACTION_TYPES, isInteractionType };
 export type { InteractionType };
@@ -18,36 +20,35 @@ export type InteractionInput = {
   projectIds?: string[];
 };
 
-async function validatePeopleIds(userId: string, region: string, ids: string[]): Promise<string[]> {
+async function validatePeopleIds(s: Scope, ids: string[]): Promise<string[]> {
   if (ids.length === 0) return [];
-  const rows = await db(region)
+  const rows = await db(s.region)
     .select({ id: people.id })
     .from(people)
-    .where(and(eq(people.userId, userId), inArray(people.id, ids)));
+    .where(and(eq(people.workspaceId, s.workspaceId), inArray(people.id, ids)));
   return rows.map((r) => r.id);
 }
 
-async function validateCompanyId(userId: string, region: string, id: string): Promise<string | null> {
-  const row = await db(region)
+async function validateCompanyId(s: Scope, id: string): Promise<string | null> {
+  const row = await db(s.region)
     .select({ id: companies.id })
     .from(companies)
-    .where(and(eq(companies.userId, userId), eq(companies.id, id)))
+    .where(and(eq(companies.workspaceId, s.workspaceId), eq(companies.id, id)))
     .get();
   return row?.id ?? null;
 }
 
-async function validateProjectIds(userId: string, region: string, ids: string[]): Promise<string[]> {
+async function validateProjectIds(s: Scope, ids: string[]): Promise<string[]> {
   if (ids.length === 0) return [];
-  const rows = await db(region)
+  const rows = await db(s.region)
     .select({ id: projects.id })
     .from(projects)
-    .where(and(eq(projects.userId, userId), inArray(projects.id, ids)));
+    .where(and(eq(projects.workspaceId, s.workspaceId), inArray(projects.id, ids)));
   return rows.map((r) => r.id);
 }
 
 export async function createInteraction(
-  userId: string,
-  region: string,
+  s: Scope,
   input: InteractionInput
 ): Promise<{ id: string }> {
   const id = createId();
@@ -58,19 +59,20 @@ export async function createInteraction(
   const occurredAt = Number.isFinite(input.occurredAt) ? Math.floor(input.occurredAt) : now;
   const body = input.body ? sanitize(input.body) : null;
   const companyId = input.companyId
-    ? await validateCompanyId(userId, region, input.companyId)
+    ? await validateCompanyId(s, input.companyId)
     : null;
   const personIds = input.personIds
-    ? await validatePeopleIds(userId, region, input.personIds)
+    ? await validatePeopleIds(s, input.personIds)
     : [];
   const projectIds = input.projectIds
-    ? await validateProjectIds(userId, region, input.projectIds)
+    ? await validateProjectIds(s, input.projectIds)
     : [];
 
-  const d = db(region);
+  const d = db(s.region);
   await d.insert(interactions).values({
     id,
-    userId,
+    workspaceId: s.workspaceId,
+    userId: s.userId,
     occurredAt,
     type: input.type,
     title,
@@ -87,20 +89,20 @@ export async function createInteraction(
       .insert(interactionProjects)
       .values(projectIds.map((projectId) => ({ interactionId: id, projectId })));
   }
+  bumpSearchEpoch(s.workspaceId);
   return { id };
 }
 
 export async function updateInteraction(
-  userId: string,
-  region: string,
+  s: Scope,
   id: string,
   patch: Partial<InteractionInput>
 ): Promise<void> {
-  const d = db(region);
+  const d = db(s.region);
   const existing = await d
     .select({ id: interactions.id })
     .from(interactions)
-    .where(and(eq(interactions.id, id), eq(interactions.userId, userId)))
+    .where(and(eq(interactions.id, id), eq(interactions.workspaceId, s.workspaceId)))
     .get();
   if (!existing) throw new Error('not_found');
 
@@ -120,16 +122,16 @@ export async function updateInteraction(
   }
   if (patch.companyId !== undefined) {
     updates.companyId = patch.companyId
-      ? await validateCompanyId(userId, region, patch.companyId)
+      ? await validateCompanyId(s, patch.companyId)
       : null;
   }
   await d
     .update(interactions)
     .set(updates)
-    .where(and(eq(interactions.id, id), eq(interactions.userId, userId)));
+    .where(and(eq(interactions.id, id), eq(interactions.workspaceId, s.workspaceId)));
 
   if (patch.personIds !== undefined) {
-    const valid = await validatePeopleIds(userId, region, patch.personIds);
+    const valid = await validatePeopleIds(s, patch.personIds);
     await d.delete(interactionPeople).where(eq(interactionPeople.interactionId, id));
     if (valid.length > 0) {
       await d
@@ -138,7 +140,7 @@ export async function updateInteraction(
     }
   }
   if (patch.projectIds !== undefined) {
-    const valid = await validateProjectIds(userId, region, patch.projectIds);
+    const valid = await validateProjectIds(s, patch.projectIds);
     await d.delete(interactionProjects).where(eq(interactionProjects.interactionId, id));
     if (valid.length > 0) {
       await d
@@ -146,28 +148,29 @@ export async function updateInteraction(
         .values(valid.map((projectId) => ({ interactionId: id, projectId })));
     }
   }
+  bumpSearchEpoch(s.workspaceId);
 }
 
-export async function deleteInteraction(userId: string, region: string, id: string): Promise<void> {
-  await db(region)
+export async function deleteInteraction(s: Scope, id: string): Promise<void> {
+  await db(s.region)
     .delete(interactions)
-    .where(and(eq(interactions.id, id), eq(interactions.userId, userId)));
+    .where(and(eq(interactions.id, id), eq(interactions.workspaceId, s.workspaceId)));
+  bumpSearchEpoch(s.workspaceId);
 }
 
 export async function attachPerson(
-  userId: string,
-  region: string,
+  s: Scope,
   interactionId: string,
   personId: string
 ): Promise<void> {
-  const d = db(region);
+  const d = db(s.region);
   const owns = await d
     .select({ id: interactions.id })
     .from(interactions)
-    .where(and(eq(interactions.id, interactionId), eq(interactions.userId, userId)))
+    .where(and(eq(interactions.id, interactionId), eq(interactions.workspaceId, s.workspaceId)))
     .get();
   if (!owns) throw new Error('not_found');
-  const valid = await validatePeopleIds(userId, region, [personId]);
+  const valid = await validatePeopleIds(s, [personId]);
   if (valid.length === 0) throw new Error('person_not_found');
   // INSERT OR IGNORE behavior: composite PK collides — Drizzle exposes onConflictDoNothing.
   await d
@@ -177,16 +180,15 @@ export async function attachPerson(
 }
 
 export async function detachPerson(
-  userId: string,
-  region: string,
+  s: Scope,
   interactionId: string,
   personId: string
 ): Promise<void> {
-  const d = db(region);
+  const d = db(s.region);
   const owns = await d
     .select({ id: interactions.id })
     .from(interactions)
-    .where(and(eq(interactions.id, interactionId), eq(interactions.userId, userId)))
+    .where(and(eq(interactions.id, interactionId), eq(interactions.workspaceId, s.workspaceId)))
     .get();
   if (!owns) throw new Error('not_found');
   await d

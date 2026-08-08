@@ -3,6 +3,7 @@ import { and, asc, eq, max } from 'drizzle-orm';
 import { db } from './db';
 import { peopleStatuses, companyStatuses } from './schema';
 import { sanitizePlainText } from './sanitize';
+import type { Scope } from './scope';
 import type { Kind } from './classify';
 
 // Limited palette so the table reads coherently. The render side maps each
@@ -26,17 +27,13 @@ export type StatusRow = {
   sortOrder: number;
 };
 
-export async function listStatuses(
-  scope: Kind,
-  userId: string,
-  region: string
-): Promise<StatusRow[]> {
-  const t = TABLE[scope];
-  const d = db(region);
+export async function listStatuses(kind: Kind, s: Scope): Promise<StatusRow[]> {
+  const t = TABLE[kind];
+  const d = db(s.region);
   const rows = await d
     .select({ id: t.id, name: t.name, tone: t.tone, sortOrder: t.sortOrder })
     .from(t)
-    .where(eq(t.userId, userId))
+    .where(eq(t.workspaceId, s.workspaceId))
     .orderBy(asc(t.sortOrder), asc(t.createdAt));
   return rows.map((r) => ({
     id: r.id,
@@ -49,37 +46,49 @@ export async function listStatuses(
 }
 
 export async function createStatus(
-  scope: Kind,
-  userId: string,
-  region: string,
+  kind: Kind,
+  s: Scope,
   input: { name: string; tone: string }
 ): Promise<StatusRow> {
   const name = sanitizePlainText(String(input.name ?? ''), 64);
   if (!name) throw new Error('missing_name');
   const tone: StatusTone = isStatusTone(input.tone) ? input.tone : 'gray';
-  const t = TABLE[scope];
-  const d = db(region);
+  const t = TABLE[kind];
+  const d = db(s.region);
 
   // Sort-order auto-appends; we don't reuse gaps. New statuses go to the end.
   const top = await d
     .select({ v: max(t.sortOrder) })
     .from(t)
-    .where(eq(t.userId, userId))
+    .where(eq(t.workspaceId, s.workspaceId))
     .get();
   const sortOrder = (top?.v ?? -1) + 1;
 
   const id = createId();
   try {
-    await d.insert(t).values({ id, userId, name, tone, sortOrder, createdAt: Date.now() });
+    await d
+      .insert(t)
+      .values({
+        id,
+        workspaceId: s.workspaceId,
+        userId: s.userId,
+        name,
+        tone,
+        sortOrder,
+        createdAt: Date.now()
+      });
   } catch (err) {
     const msg = (err as Error).message ?? '';
-    if (/uq_.*_user_name/i.test(msg) || /UNIQUE/i.test(msg)) {
+    // Index was renamed uq_*_user_name → uq_*_ws_name with workspaces; match both
+    // so the friendly "name already used" path doesn't silently fall through to
+    // the generic UNIQUE branch.
+    if (/uq_.*_(user|ws)_name/i.test(msg) || /UNIQUE/i.test(msg)) {
       // Race: another concurrent create won the unique index. Return the
       // pre-existing row so the caller can move on.
       const existing = await d
         .select({ id: t.id, name: t.name, tone: t.tone, sortOrder: t.sortOrder })
         .from(t)
-        .where(and(eq(t.userId, userId), eq(t.name, name)))
+        .where(and(eq(t.workspaceId, s.workspaceId), eq(t.name, name)))
         .get();
       if (existing) {
         return {
@@ -95,13 +104,8 @@ export async function createStatus(
   return { id, name, tone, sortOrder };
 }
 
-export async function deleteStatus(
-  scope: Kind,
-  userId: string,
-  region: string,
-  id: string
-): Promise<void> {
-  const t = TABLE[scope];
-  const d = db(region);
-  await d.delete(t).where(and(eq(t.id, id), eq(t.userId, userId)));
+export async function deleteStatus(kind: Kind, s: Scope, id: string): Promise<void> {
+  const t = TABLE[kind];
+  const d = db(s.region);
+  await d.delete(t).where(and(eq(t.id, id), eq(t.workspaceId, s.workspaceId)));
 }

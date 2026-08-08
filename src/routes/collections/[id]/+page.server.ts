@@ -1,3 +1,4 @@
+import { requireScope } from '$lib/server/scope';
 import { error } from '@sveltejs/kit';
 import type { PageServerLoad } from './$types';
 import { getCollection } from '$lib/server/collections';
@@ -5,9 +6,10 @@ import { getCollectionSync } from '$lib/server/sync';
 
 export const load: PageServerLoad = async ({ locals, params, url }) => {
   if (!locals.user) throw error(401, 'unauthorized');
+  const s = requireScope(locals);
   const [collection, sync] = await Promise.all([
-    getCollection(locals.user.id, locals.user.region, params.id),
-    getCollectionSync(locals.user.id, locals.user.region, params.id)
+    getCollection(s, params.id),
+    getCollectionSync(s, params.id)
   ]);
   if (!collection) throw error(404, 'not_found');
 

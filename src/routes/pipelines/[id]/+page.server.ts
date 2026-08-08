@@ -1,3 +1,4 @@
+import { requireScope } from '$lib/server/scope';
 import { error } from '@sveltejs/kit';
 import type { PageServerLoad } from './$types';
 import { getPipeline } from '$lib/server/pipelines';
@@ -5,9 +6,10 @@ import { getPipelineSync } from '$lib/server/sync';
 
 export const load: PageServerLoad = async ({ locals, params, url }) => {
   if (!locals.user) throw error(401, 'unauthorized');
+  const s = requireScope(locals);
   const [pipeline, sync] = await Promise.all([
-    getPipeline(locals.user.id, locals.user.region, params.id),
-    getPipelineSync(locals.user.id, locals.user.region, params.id)
+    getPipeline(s, params.id),
+    getPipelineSync(s, params.id)
   ]);
   if (!pipeline) throw error(404, 'not_found');
 

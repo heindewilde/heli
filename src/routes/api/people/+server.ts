@@ -1,3 +1,4 @@
+import { requireScope } from '$lib/server/scope';
 import { error, json, type RequestHandler } from '@sveltejs/kit';
 import { and, desc, eq, sql } from 'drizzle-orm';
 import { db } from '$lib/server/db';
@@ -9,6 +10,7 @@ import { jsonWithEtag } from '$lib/server/cache';
 
 export const GET: RequestHandler = async ({ url, locals, request }) => {
   if (!locals.user) throw error(401, 'unauthorized');
+  const s = requireScope(locals);
   const q = url.searchParams.get('q')?.trim() ?? '';
   const limit = Math.min(Number.parseInt(url.searchParams.get('limit') ?? '20', 10) || 20, 100);
   const includeArchived = url.searchParams.get('archived') === '1';
@@ -32,7 +34,7 @@ export const GET: RequestHandler = async ({ url, locals, request }) => {
              p.source, p.created_at AS createdAt, p.updated_at AS updatedAt
       FROM people p
       JOIN people_fts f ON f.rowid = p.rowid
-      WHERE p.user_id = ${locals.user.id}
+      WHERE p.workspace_id = ${s.workspaceId}
         AND f.people_fts MATCH ${fts}
         ${includeArchived ? sql`` : sql`AND p.is_archived = 0`}
         ${favOnly ? sql`AND p.is_favorite = 1` : sql``}
@@ -41,7 +43,7 @@ export const GET: RequestHandler = async ({ url, locals, request }) => {
       LIMIT ${limit}
     `);
   } else {
-    const filters = [eq(people.userId, locals.user.id)];
+    const filters = [eq(people.workspaceId, s.workspaceId)];
     if (!includeArchived) filters.push(eq(people.isArchived, 0));
     if (favOnly) filters.push(eq(people.isFavorite, 1));
     if (companyId) filters.push(eq(people.companyId, companyId));
@@ -72,6 +74,7 @@ export const GET: RequestHandler = async ({ url, locals, request }) => {
 
 export const POST: RequestHandler = async ({ request, locals }) => {
   if (!locals.user) throw error(401, 'unauthorized');
+  const s = requireScope(locals);
   let body: Partial<ManualPersonInput>;
   try {
     body = await request.json();
@@ -80,7 +83,7 @@ export const POST: RequestHandler = async ({ request, locals }) => {
   }
   const name = sanitizePlainText(String(body.name ?? ''), 200);
   if (!name) throw error(400, 'missing_name');
-  const result = await savePerson(locals.user.id, locals.user.region, null, {
+  const result = await savePerson(s, null, {
     name,
     role: body.role ? sanitizePlainText(String(body.role), 200) : null,
     companyId: body.companyId ? String(body.companyId) : null,

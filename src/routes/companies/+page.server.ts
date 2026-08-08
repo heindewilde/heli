@@ -1,3 +1,4 @@
+import { requireScope } from '$lib/server/scope';
 import { redirect } from '@sveltejs/kit';
 import { and, eq, sql } from 'drizzle-orm';
 import type { PageServerLoad } from './$types';
@@ -42,6 +43,7 @@ function parseStatusFilter(raw: string | null): Set<string> | null {
 
 export const load: PageServerLoad = async ({ locals, url }) => {
   if (!locals.user) throw redirect(303, '/auth');
+  const s = requireScope(locals);
   const q = url.searchParams.get('q')?.trim() ?? '';
   const archived = url.searchParams.get('archived') === '1';
   const favorite = url.searchParams.get('favorite') === '1';
@@ -57,14 +59,14 @@ export const load: PageServerLoad = async ({ locals, url }) => {
   let activeTag: { id: string; name: string; slug: string } | null = null;
   let tagFilterIds: string[] | null = null;
   if (tagSlug) {
-    const t = await findTagBySlug(locals.user.id, locals.user.region, 'company', tagSlug);
+    const t = await findTagBySlug(s, 'company', tagSlug);
     if (t) {
       activeTag = { id: t.id, name: t.name, slug: t.slug };
-      tagFilterIds = await entityIdsForTag(locals.user.id, locals.user.region, 'company', t.id);
+      tagFilterIds = await entityIdsForTag(s, 'company', t.id);
       if (tagFilterIds.length === 0) {
         const [allTags, statuses] = await Promise.all([
-          listTagsWithCounts(locals.user.id, locals.user.region, 'company'),
-          listStatuses('company', locals.user.id, locals.user.region)
+          listTagsWithCounts(s, 'company'),
+          listStatuses('company', s)
         ]);
         return {
           q,
@@ -174,11 +176,11 @@ export const load: PageServerLoad = async ({ locals, url }) => {
     d
       .select({ n: sql<number>`COUNT(*)` })
       .from(companies)
-      .where(and(eq(companies.userId, locals.user.id), eq(companies.isArchived, 0)))
+      .where(and(eq(companies.workspaceId, s.workspaceId), eq(companies.isArchived, 0)))
       .get(),
-    getTagsForEntities(locals.user.id, locals.user.region, 'company', items.map((i) => i.id)),
-    listTagsWithCounts(locals.user.id, locals.user.region, 'company'),
-    listStatuses('company', locals.user.id, locals.user.region)
+    getTagsForEntities(s, 'company', items.map((i) => i.id)),
+    listTagsWithCounts(s, 'company'),
+    listStatuses('company', s)
   ]);
   const itemTags: Record<string, { id: string; name: string; slug: string }[]> = {};
   for (const [k, v] of tagMap) itemTags[k] = v;

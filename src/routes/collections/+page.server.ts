@@ -1,3 +1,4 @@
+import { requireScope } from '$lib/server/scope';
 import type { PageServerLoad } from './$types';
 import { listCollections } from '$lib/server/collections';
 
@@ -9,6 +10,7 @@ export const load: PageServerLoad = async ({ locals, url }) => {
   if (!locals.user) {
     return { items: [], q: '', archived: 'active' as const, sort: 'updated' as const, total: 0 };
   }
+  const s = requireScope(locals);
 
   const q = url.searchParams.get('q')?.trim() ?? '';
   const archivedParam = url.searchParams.get('archived');
@@ -21,7 +23,7 @@ export const load: PageServerLoad = async ({ locals, url }) => {
       ? sortParam
       : 'updated';
 
-  const items = await listCollections(locals.user.id, locals.user.region, {
+  const items = await listCollections(s, {
     q,
     archived,
     sort,
@@ -32,7 +34,7 @@ export const load: PageServerLoad = async ({ locals, url }) => {
   const totalActive =
     archived === 'active'
       ? items.length
-      : (await listCollections(locals.user.id, locals.user.region, { archived: 'active', limit: 500 }))
+      : (await listCollections(s, { archived: 'active', limit: 500 }))
           .length;
 
   return { items, q, archived, sort, total: totalActive };

@@ -1,3 +1,4 @@
+import { requireScope } from '$lib/server/scope';
 import { error, redirect } from '@sveltejs/kit';
 import { and, desc, eq } from 'drizzle-orm';
 import type { PageServerLoad } from './$types';
@@ -12,11 +13,12 @@ import { listTasksForEntity } from '$lib/server/tasks';
 
 export const load: PageServerLoad = async ({ locals, params, url }) => {
   if (!locals.user) throw redirect(303, '/auth');
+  const s = requireScope(locals);
   const d = db(locals.user.region);
   const company = await d
     .select()
     .from(companies)
-    .where(and(eq(companies.id, params.id), eq(companies.userId, locals.user.id)))
+    .where(and(eq(companies.id, params.id), eq(companies.workspaceId, s.workspaceId)))
     .get();
   if (!company) throw error(404, 'not_found');
 
@@ -34,23 +36,23 @@ export const load: PageServerLoad = async ({ locals, params, url }) => {
       isArchived: people.isArchived
     })
     .from(people)
-    .where(and(eq(people.companyId, company.id), eq(people.userId, locals.user.id), eq(people.isArchived, 0)))
+    .where(and(eq(people.companyId, company.id), eq(people.workspaceId, s.workspaceId), eq(people.isArchived, 0)))
     .orderBy(desc(people.updatedAt))
     .limit(50);
 
-  const interactions = await listInteractions(locals.user.id, locals.user.region, {
+  const interactions = await listInteractions(s, {
     companyId: company.id,
     limit: 50
   });
 
-  const tags = await getTagsForEntity(locals.user.id, locals.user.region, 'company', company.id);
+  const tags = await getTagsForEntity(s, 'company', company.id);
 
-  const projects = await projectsForCompany(locals.user.id, locals.user.region, company.id);
+  const projects = await projectsForCompany(s, company.id);
 
   const [collections, pipelines, tasks] = await Promise.all([
-    listCollectionsForEntity(locals.user.id, locals.user.region, 'company', company.id),
-    listPipelinesForEntity(locals.user.id, locals.user.region, 'company', company.id),
-    listTasksForEntity(locals.user.id, locals.user.region, 'company', company.id)
+    listCollectionsForEntity(s, 'company', company.id),
+    listPipelinesForEntity(s, 'company', company.id),
+    listTasksForEntity(s, 'company', company.id)
   ]);
 
   return {

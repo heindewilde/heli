@@ -1,3 +1,4 @@
+import { requireScope } from '$lib/server/scope';
 import { error, json, type RequestHandler } from '@sveltejs/kit';
 import { listInteractions } from '$lib/server/interactions-query';
 import { createInteraction, isInteractionType } from '$lib/server/saveInteraction';
@@ -5,8 +6,9 @@ import { jsonWithEtag } from '$lib/server/cache';
 
 export const GET: RequestHandler = async ({ url, locals, request }) => {
   if (!locals.user) throw error(401, 'unauthorized');
+  const s = requireScope(locals);
   const limit = Math.min(Number.parseInt(url.searchParams.get('limit') ?? '200', 10) || 200, 500);
-  const items = await listInteractions(locals.user.id, locals.user.region, {
+  const items = await listInteractions(s, {
     q: url.searchParams.get('q') ?? undefined,
     personId: url.searchParams.get('personId') ?? undefined,
     companyId: url.searchParams.get('companyId') ?? undefined,
@@ -26,6 +28,7 @@ function parseTs(v: string | null): number | undefined {
 
 export const POST: RequestHandler = async ({ request, locals }) => {
   if (!locals.user) throw error(401, 'unauthorized');
+  const s = requireScope(locals);
   let body: Record<string, unknown>;
   try {
     body = await request.json();
@@ -42,7 +45,7 @@ export const POST: RequestHandler = async ({ request, locals }) => {
     ? (body.projectIds as unknown[]).filter((p): p is string => typeof p === 'string')
     : [];
   try {
-    const result = await createInteraction(locals.user.id, locals.user.region, {
+    const result = await createInteraction(s, {
       occurredAt,
       type: body.type,
       title: body.title,

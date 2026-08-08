@@ -1,8 +1,10 @@
+import { requireScope } from '$lib/server/scope';
 import { error, json, type RequestHandler } from '@sveltejs/kit';
 import { deleteTask, updateTask } from '$lib/server/tasks';
 
 export const PATCH: RequestHandler = async ({ request, params, locals }) => {
   if (!locals.user) throw error(401, 'unauthorized');
+  const s = requireScope(locals);
   let body: { title?: unknown; dueAt?: unknown; completedAt?: unknown };
   try {
     body = await request.json();
@@ -44,7 +46,7 @@ export const PATCH: RequestHandler = async ({ request, params, locals }) => {
   }
 
   try {
-    const updated = await updateTask(locals.user.id, locals.user.region, params.id!, patch);
+    const updated = await updateTask(s, params.id!, patch);
     if (!updated) throw error(404, 'not_found');
     return json(updated);
   } catch (err) {
@@ -56,7 +58,8 @@ export const PATCH: RequestHandler = async ({ request, params, locals }) => {
 
 export const DELETE: RequestHandler = async ({ params, locals }) => {
   if (!locals.user) throw error(401, 'unauthorized');
-  const ok = await deleteTask(locals.user.id, locals.user.region, params.id!);
+  const s = requireScope(locals);
+  const ok = await deleteTask(s, params.id!);
   if (!ok) throw error(404, 'not_found');
   return new Response(null, { status: 204 });
 };

@@ -1,3 +1,4 @@
+import { requireScope } from '$lib/server/scope';
 import { error, type RequestHandler } from '@sveltejs/kit';
 import { moveItemToStage } from '$lib/server/pipelines';
 
@@ -5,6 +6,7 @@ type Body = { toStageId?: unknown };
 
 export const POST: RequestHandler = async ({ request, params, locals }) => {
   if (!locals.user) throw error(401, 'unauthorized');
+  const s = requireScope(locals);
   let body: Body;
   try {
     body = (await request.json()) as Body;
@@ -16,8 +18,7 @@ export const POST: RequestHandler = async ({ request, params, locals }) => {
   }
   try {
     await moveItemToStage(
-      locals.user.id,
-      locals.user.region,
+      s,
       params.id!,
       params.itemId!,
       body.toStageId

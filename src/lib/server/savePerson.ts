@@ -16,6 +16,8 @@ import {
 } from './og';
 import { sanitize } from './sanitize';
 import { cacheRemoteImage } from './imageCache';
+import type { Scope } from './scope';
+import { bumpSearchEpoch } from './search';
 
 export type SaveResult = { id: string; kind: 'person' | 'company'; dedup: boolean };
 
@@ -37,13 +39,12 @@ function fallbackName(u: URL): string {
 }
 
 export async function savePerson(
-  userId: string,
-  region: string,
+  s: Scope,
   rawUrl: string | null,
   manual?: ManualPersonInput
 ): Promise<SaveResult> {
   const now = Date.now();
-  const d = db(region);
+  const d = db(s.region);
 
   if (rawUrl) {
     const u = new URL(cleanUrl(rawUrl));
@@ -51,14 +52,15 @@ export async function savePerson(
     const existing = await d
       .select({ id: people.id })
       .from(people)
-      .where(and(eq(people.userId, userId), eq(people.url, url)))
+      .where(and(eq(people.workspaceId, s.workspaceId), eq(people.url, url)))
       .get();
     if (existing) return { id: existing.id, kind: 'person', dedup: true };
 
     const id = createId();
     await d.insert(people).values({
       id,
-      userId,
+      workspaceId: s.workspaceId,
+      userId: s.userId,
       name: fallbackName(u),
       url,
       domain: domainOf(u),
@@ -69,7 +71,8 @@ export async function savePerson(
       createdAt: now,
       updatedAt: now
     });
-    void enrichPerson(id, userId, region, u);
+    void enrichPerson(id, s, u);
+    bumpSearchEpoch(s.workspaceId);
     return { id, kind: 'person', dedup: false };
   }
 
@@ -77,7 +80,8 @@ export async function savePerson(
   const id = createId();
   await d.insert(people).values({
     id,
-    userId,
+    workspaceId: s.workspaceId,
+    userId: s.userId,
     name: manual.name.trim(),
     role: manual.role ?? null,
     companyId: manual.companyId ?? null,
@@ -91,6 +95,7 @@ export async function savePerson(
     createdAt: now,
     updatedAt: now
   });
+  bumpSearchEpoch(s.workspaceId);
   return { id, kind: 'person', dedup: false };
 }
 
@@ -103,8 +108,8 @@ function cleanDescription(raw: string | undefined): string | null {
   return sanitize(capped);
 }
 
-export async function enrichPerson(id: string, userId: string, region: string, url: URL): Promise<void> {
-  const d = db(region);
+export async function enrichPerson(id: string, s: Scope, url: URL): Promise<void> {
+  const d = db(s.region);
   try {
     const og = await fetchOg(url);
 
@@ -153,7 +158,7 @@ export async function enrichPerson(id: string, userId: string, region: string, u
     };
     if (finalName) updates.name = finalName;
 
-    await d.update(people).set(updates).where(and(eq(people.id, id), eq(people.userId, userId)));
+    await d.update(people).set(updates).where(and(eq(people.id, id), eq(people.workspaceId, s.workspaceId)));
 
     if (worksFor?.url) {
       try {
@@ -174,7 +179,7 @@ export async function enrichPerson(id: string, userId: string, region: string, u
         const company = await d
           .select({ id: companies.id })
           .from(companies)
-          .where(and(eq(companies.userId, userId), eq(companies.domain, employerDomain)))
+          .where(and(eq(companies.workspaceId, s.workspaceId), eq(companies.domain, employerDomain)))
           .get();
         if (company) {
           await d
@@ -209,8 +214,9 @@ export async function enrichPerson(id: string, userId: string, region: string, u
     await d
       .update(people)
       .set({ source: null, updatedAt: Date.now() })
-      .where(and(eq(people.id, id), eq(people.userId, userId)));
+      .where(and(eq(people.id, id), eq(people.workspaceId, s.workspaceId)));
   }
+  bumpSearchEpoch(s.workspaceId);
 }
 
 // Fetch a LinkedIn company page once and try to find the company's real

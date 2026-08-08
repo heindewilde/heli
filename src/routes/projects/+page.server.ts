@@ -1,3 +1,4 @@
+import { requireScope } from '$lib/server/scope';
 import type { PageServerLoad } from './$types';
 import { listProjects, getCompaniesForProjects, type ProjectCompany } from '$lib/server/projects-query';
 import { PROJECT_STATUSES, type ProjectStatus } from '$lib/server/schema';
@@ -8,6 +9,7 @@ function isStatusFilter(v: string | null): v is ProjectStatus | 'all' {
 
 export const load: PageServerLoad = async ({ locals, url }) => {
   if (!locals.user) return { items: [], q: '', status: 'active' as const, sort: 'updated' as const, itemCompanies: {}, total: 0 };
+  const s = requireScope(locals);
 
   const q = url.searchParams.get('q')?.trim() ?? '';
   const statusParam = url.searchParams.get('status');
@@ -18,7 +20,7 @@ export const load: PageServerLoad = async ({ locals, url }) => {
       ? sortParam
       : 'updated';
 
-  const items = await listProjects(locals.user.id, locals.user.region, {
+  const items = await listProjects(s, {
     q,
     status,
     sort,
@@ -27,12 +29,12 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 
   const projectIds = items.map((i) => i.id);
 
-  const companyMap = await getCompaniesForProjects(locals.user.id, locals.user.region, projectIds);
+  const companyMap = await getCompaniesForProjects(s, projectIds);
 
   const itemCompanies: Record<string, ProjectCompany[]> = {};
   for (const [k, v] of companyMap) itemCompanies[k] = v;
 
-  const totalActive = await listProjects(locals.user.id, locals.user.region, {
+  const totalActive = await listProjects(s, {
     status: 'active',
     sort: 'updated',
     limit: 500

@@ -6,6 +6,7 @@
 
 import { sql } from 'drizzle-orm';
 import { db } from './db';
+import type { Scope } from './scope';
 
 const FTS_RESERVED = /[\"():*]/g;
 
@@ -104,20 +105,31 @@ function cacheSet(key: string, value: CommandHit[]): void {
   }
 }
 
+// Bumped whenever a workspace writes a searchable row. Folded into the cache
+// key so a colleague's new person shows up immediately rather than after the
+// 30s TTL — with one writer that lag was invisible, with a team it isn't.
+const epochs = new Map<string, number>();
+
+export function bumpSearchEpoch(workspaceId: string): void {
+  epochs.set(workspaceId, (epochs.get(workspaceId) ?? 0) + 1);
+}
+
 export async function searchAll(
-  userId: string,
-  region: string,
+  s: Scope,
   rawQ: string,
   perKind = 5
 ): Promise<CommandHit[]> {
-  const cacheKey = `${region}:${userId}:${perKind}:${rawQ}`;
+  // Keyed by workspace, NOT user — keying by user here while the queries below
+  // filter by workspace would be a cross-tenant leak straight out of the cache.
+  const epoch = epochs.get(s.workspaceId) ?? 0;
+  const cacheKey = `${s.region}:${s.workspaceId}:${epoch}:${perKind}:${rawQ}`;
   const cached = cacheGet(cacheKey);
   if (cached) return cached;
 
   const { scope, q } = parseQueryScope(rawQ);
   const fts = ftsQuery(q);
   if (!fts) return [];
-  const d = db(region);
+  const d = db(s.region);
 
   // When a scope is forced, devote the whole budget to that table so the user
   // can scroll deeper into one kind.
@@ -136,7 +148,7 @@ export async function searchAll(
           SELECT p.id, p.name, p.role, p.domain, p.avatar_url AS avatarUrl
           FROM people p
           JOIN people_fts f ON f.rowid = p.rowid
-          WHERE p.user_id = ${userId} AND f.people_fts MATCH ${fts} AND p.is_archived = 0
+          WHERE p.workspace_id = ${s.workspaceId} AND f.people_fts MATCH ${fts} AND p.is_archived = 0
           ORDER BY rank
           LIMIT ${scope === 'person' ? SCOPED_LIMIT : perKind}
         `)
@@ -146,7 +158,7 @@ export async function searchAll(
           SELECT c.id, c.name, c.description, c.domain, c.logo_url AS logoUrl, c.favicon_url AS faviconUrl
           FROM companies c
           JOIN companies_fts f ON f.rowid = c.rowid
-          WHERE c.user_id = ${userId} AND f.companies_fts MATCH ${fts} AND c.is_archived = 0
+          WHERE c.workspace_id = ${s.workspaceId} AND f.companies_fts MATCH ${fts} AND c.is_archived = 0
           ORDER BY rank
           LIMIT ${scope === 'company' ? SCOPED_LIMIT : perKind}
         `)
@@ -156,7 +168,7 @@ export async function searchAll(
           SELECT i.id, i.title, i.type, i.occurred_at AS occurredAt
           FROM interactions i
           JOIN interactions_fts f ON f.rowid = i.rowid
-          WHERE i.user_id = ${userId} AND f.interactions_fts MATCH ${fts}
+          WHERE i.workspace_id = ${s.workspaceId} AND f.interactions_fts MATCH ${fts}
           ORDER BY rank
           LIMIT ${scope === 'interaction' ? SCOPED_LIMIT : perKind}
         `)
@@ -166,7 +178,7 @@ export async function searchAll(
           SELECT p.id, p.name, p.status, p.description
           FROM projects p
           JOIN projects_fts f ON f.rowid = p.rowid
-          WHERE p.user_id = ${userId}
+          WHERE p.workspace_id = ${s.workspaceId}
             AND f.projects_fts MATCH ${fts}
             AND p.status != 'archived'
           ORDER BY rank
@@ -178,7 +190,7 @@ export async function searchAll(
           SELECT c.id, c.name, c.description
           FROM collections c
           JOIN collections_fts f ON f.rowid = c.rowid
-          WHERE c.user_id = ${userId}
+          WHERE c.workspace_id = ${s.workspaceId}
             AND f.collections_fts MATCH ${fts}
             AND c.is_archived = 0
           ORDER BY rank
@@ -190,7 +202,7 @@ export async function searchAll(
           SELECT p.id, p.name, p.description
           FROM pipelines p
           JOIN pipelines_fts f ON f.rowid = p.rowid
-          WHERE p.user_id = ${userId}
+          WHERE p.workspace_id = ${s.workspaceId}
             AND f.pipelines_fts MATCH ${fts}
             AND p.is_archived = 0
           ORDER BY rank

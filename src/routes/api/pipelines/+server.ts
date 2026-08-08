@@ -1,3 +1,4 @@
+import { requireScope } from '$lib/server/scope';
 import { error, json, type RequestHandler } from '@sveltejs/kit';
 import {
   listPipelines,
@@ -8,6 +9,7 @@ import {
 
 export const GET: RequestHandler = async ({ url, locals }) => {
   if (!locals.user) throw error(401, 'unauthorized');
+  const s = requireScope(locals);
   const q = url.searchParams.get('q')?.trim() ?? '';
   const limitParam = Number.parseInt(url.searchParams.get('limit') ?? '', 10);
   const archivedParam = url.searchParams.get('archived');
@@ -17,8 +19,7 @@ export const GET: RequestHandler = async ({ url, locals }) => {
     (Number.isFinite(limitParam) && limitParam <= 20 && !archivedParam)
   ) {
     const items = await searchPipelines(
-      locals.user.id,
-      locals.user.region,
+      s,
       q,
       Number.isFinite(limitParam) ? Math.min(Math.max(limitParam, 1), 50) : 8
     );
@@ -27,7 +28,7 @@ export const GET: RequestHandler = async ({ url, locals }) => {
 
   const archived =
     archivedParam === 'archived' || archivedParam === 'all' ? archivedParam : 'active';
-  const items = await listPipelines(locals.user.id, locals.user.region, {
+  const items = await listPipelines(s, {
     q,
     archived,
     limit: 200
@@ -37,6 +38,7 @@ export const GET: RequestHandler = async ({ url, locals }) => {
 
 export const POST: RequestHandler = async ({ request, locals }) => {
   if (!locals.user) throw error(401, 'unauthorized');
+  const s = requireScope(locals);
   let body: Partial<ManualPipelineInput>;
   try {
     body = await request.json();
@@ -46,8 +48,7 @@ export const POST: RequestHandler = async ({ request, locals }) => {
   if (!body.name || typeof body.name !== 'string') throw error(400, 'missing_name');
   try {
     const result = await createPipeline(
-      locals.user.id,
-      locals.user.region,
+      s,
       body as ManualPipelineInput
     );
     return json(result, { status: 201 });

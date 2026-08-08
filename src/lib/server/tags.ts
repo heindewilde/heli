@@ -11,6 +11,7 @@ import {
   companies
 } from './schema';
 import { sanitizePlainText } from './sanitize';
+import type { Scope } from './scope';
 
 export function isTagScope(v: unknown): v is TagScope {
   return typeof v === 'string' && (TAG_SCOPES as readonly string[]).includes(v);
@@ -33,18 +34,14 @@ const JOIN_TABLE = {
 } as const;
 
 const ENTITY_TABLE = {
-  person: { table: people, idCol: people.id, userCol: people.userId },
-  company: { table: companies, idCol: companies.id, userCol: companies.userId }
+  person: { table: people, idCol: people.id, wsCol: people.workspaceId },
+  company: { table: companies, idCol: companies.id, wsCol: companies.workspaceId }
 } as const;
 
 export type TagWithCount = { id: string; name: string; slug: string; scope: TagScope; count: number };
 
-export async function listTagsWithCounts(
-  userId: string,
-  region: string,
-  scope: TagScope
-): Promise<TagWithCount[]> {
-  const d = db(region);
+export async function listTagsWithCounts(s: Scope, scope: TagScope): Promise<TagWithCount[]> {
+  const d = db(s.region);
   const join = JOIN_TABLE[scope];
   const rows = await d
     .select({
@@ -55,35 +52,29 @@ export async function listTagsWithCounts(
     })
     .from(tags)
     .leftJoin(join.table, eq(join.table.tagId, tags.id))
-    .where(and(eq(tags.userId, userId), eq(tags.scope, scope)))
+    .where(and(eq(tags.workspaceId, s.workspaceId), eq(tags.scope, scope)))
     .groupBy(tags.id)
     .orderBy(asc(tags.name));
   return rows.map((r) => ({ ...r, scope, count: Number(r.count) }));
 }
 
-async function ensureEntity(
-  userId: string,
-  region: string,
-  scope: TagScope,
-  entityId: string
-): Promise<boolean> {
-  const d = db(region);
+async function ensureEntity(s: Scope, scope: TagScope, entityId: string): Promise<boolean> {
+  const d = db(s.region);
   const meta = ENTITY_TABLE[scope];
   const found = await d
     .select({ id: meta.idCol })
     .from(meta.table)
-    .where(and(eq(meta.idCol, entityId), eq(meta.userCol, userId)))
+    .where(and(eq(meta.idCol, entityId), eq(meta.wsCol, s.workspaceId)))
     .get();
   return !!found;
 }
 
 export async function ensureTag(
-  userId: string,
-  region: string,
+  s: Scope,
   scope: TagScope,
   rawName: string
 ): Promise<{ id: string; name: string; slug: string; scope: TagScope }> {
-  const d = db(region);
+  const d = db(s.region);
   const name = sanitizePlainText(rawName, 64);
   if (!name) throw new Error('missing_name');
   const slug = slugify(name);
@@ -92,28 +83,29 @@ export async function ensureTag(
   const existing = await d
     .select()
     .from(tags)
-    .where(and(eq(tags.userId, userId), eq(tags.scope, scope), eq(tags.slug, slug)))
+    .where(and(eq(tags.workspaceId, s.workspaceId), eq(tags.scope, scope), eq(tags.slug, slug)))
     .get();
   if (existing) return { id: existing.id, name: existing.name, slug: existing.slug, scope };
 
   const id = createId();
-  await d.insert(tags).values({ id, userId, name, slug, scope });
+  await d
+    .insert(tags)
+    .values({ id, workspaceId: s.workspaceId, userId: s.userId, name, slug, scope });
   return { id, name, slug, scope };
 }
 
 export async function attachTag(
-  userId: string,
-  region: string,
+  s: Scope,
   scope: TagScope,
   entityId: string,
   tagId: string
 ): Promise<void> {
-  const d = db(region);
-  if (!(await ensureEntity(userId, region, scope, entityId))) throw new Error('not_found');
+  const d = db(s.region);
+  if (!(await ensureEntity(s, scope, entityId))) throw new Error('not_found');
   const tag = await d
     .select({ id: tags.id })
     .from(tags)
-    .where(and(eq(tags.id, tagId), eq(tags.userId, userId), eq(tags.scope, scope)))
+    .where(and(eq(tags.id, tagId), eq(tags.workspaceId, s.workspaceId), eq(tags.scope, scope)))
     .get();
   if (!tag) throw new Error('not_found');
   if (scope === 'person') {
@@ -124,14 +116,13 @@ export async function attachTag(
 }
 
 export async function detachTag(
-  userId: string,
-  region: string,
+  s: Scope,
   scope: TagScope,
   entityId: string,
   tagId: string
 ): Promise<void> {
-  const d = db(region);
-  if (!(await ensureEntity(userId, region, scope, entityId))) throw new Error('not_found');
+  const d = db(s.region);
+  if (!(await ensureEntity(s, scope, entityId))) throw new Error('not_found');
   if (scope === 'person') {
     await d
       .delete(personTags)
@@ -143,49 +134,43 @@ export async function detachTag(
   }
 }
 
-export async function deleteTag(
-  userId: string,
-  region: string,
-  tagId: string
-): Promise<void> {
-  const d = db(region);
-  await d.delete(tags).where(and(eq(tags.id, tagId), eq(tags.userId, userId)));
+export async function deleteTag(s: Scope, tagId: string): Promise<void> {
+  const d = db(s.region);
+  await d.delete(tags).where(and(eq(tags.id, tagId), eq(tags.workspaceId, s.workspaceId)));
 }
 
 export type EntityTag = { id: string; name: string; slug: string };
 
 export async function getTagsForEntity(
-  userId: string,
-  region: string,
+  s: Scope,
   scope: TagScope,
   entityId: string
 ): Promise<EntityTag[]> {
-  const d = db(region);
+  const d = db(s.region);
   if (scope === 'person') {
     return d
       .select({ id: tags.id, name: tags.name, slug: tags.slug })
       .from(personTags)
       .innerJoin(tags, eq(tags.id, personTags.tagId))
-      .where(and(eq(personTags.personId, entityId), eq(tags.userId, userId)))
+      .where(and(eq(personTags.personId, entityId), eq(tags.workspaceId, s.workspaceId)))
       .orderBy(asc(tags.name));
   }
   return d
     .select({ id: tags.id, name: tags.name, slug: tags.slug })
     .from(companyTags)
     .innerJoin(tags, eq(tags.id, companyTags.tagId))
-    .where(and(eq(companyTags.companyId, entityId), eq(tags.userId, userId)))
+    .where(and(eq(companyTags.companyId, entityId), eq(tags.workspaceId, s.workspaceId)))
     .orderBy(asc(tags.name));
 }
 
 export async function getTagsForEntities(
-  userId: string,
-  region: string,
+  s: Scope,
   scope: TagScope,
   entityIds: string[]
 ): Promise<Map<string, EntityTag[]>> {
   const out = new Map<string, EntityTag[]>();
   if (entityIds.length === 0) return out;
-  const d = db(region);
+  const d = db(s.region);
   let rows: Array<{ entityId: string; id: string; name: string; slug: string }>;
   if (scope === 'person') {
     rows = await d
@@ -197,7 +182,7 @@ export async function getTagsForEntities(
       })
       .from(personTags)
       .innerJoin(tags, eq(tags.id, personTags.tagId))
-      .where(and(eq(tags.userId, userId), inArray(personTags.personId, entityIds)));
+      .where(and(eq(tags.workspaceId, s.workspaceId), inArray(personTags.personId, entityIds)));
   } else {
     rows = await d
       .select({
@@ -208,7 +193,7 @@ export async function getTagsForEntities(
       })
       .from(companyTags)
       .innerJoin(tags, eq(tags.id, companyTags.tagId))
-      .where(and(eq(tags.userId, userId), inArray(companyTags.companyId, entityIds)));
+      .where(and(eq(tags.workspaceId, s.workspaceId), inArray(companyTags.companyId, entityIds)));
   }
   for (const r of rows) {
     const list = out.get(r.entityId) ?? [];
@@ -219,40 +204,38 @@ export async function getTagsForEntities(
 }
 
 export async function findTagBySlug(
-  userId: string,
-  region: string,
+  s: Scope,
   scope: TagScope,
   slug: string
 ): Promise<{ id: string; name: string; slug: string; scope: TagScope } | null> {
-  const d = db(region);
+  const d = db(s.region);
   const t = await d
     .select()
     .from(tags)
-    .where(and(eq(tags.userId, userId), eq(tags.scope, scope), eq(tags.slug, slug)))
+    .where(and(eq(tags.workspaceId, s.workspaceId), eq(tags.scope, scope), eq(tags.slug, slug)))
     .get();
   if (!t) return null;
   return { id: t.id, name: t.name, slug: t.slug, scope };
 }
 
 export async function entityIdsForTag(
-  userId: string,
-  region: string,
+  s: Scope,
   scope: TagScope,
   tagId: string
 ): Promise<string[]> {
-  const d = db(region);
+  const d = db(s.region);
   if (scope === 'person') {
     const rows = await d
       .select({ id: personTags.personId })
       .from(personTags)
       .innerJoin(tags, eq(tags.id, personTags.tagId))
-      .where(and(eq(personTags.tagId, tagId), eq(tags.userId, userId)));
+      .where(and(eq(personTags.tagId, tagId), eq(tags.workspaceId, s.workspaceId)));
     return rows.map((r) => r.id);
   }
   const rows = await d
     .select({ id: companyTags.companyId })
     .from(companyTags)
     .innerJoin(tags, eq(tags.id, companyTags.tagId))
-    .where(and(eq(companyTags.tagId, tagId), eq(tags.userId, userId)));
+    .where(and(eq(companyTags.tagId, tagId), eq(tags.workspaceId, s.workspaceId)));
   return rows.map((r) => r.id);
 }

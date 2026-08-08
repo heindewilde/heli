@@ -38,6 +38,7 @@
     const now = Date.now();
     const optimistic: Task = {
       id: tempId,
+      workspaceId: '',
       userId: '',
       kind,
       refId,

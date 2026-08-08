@@ -1,3 +1,4 @@
+import { requireScope } from '$lib/server/scope';
 import { fail, redirect, type Actions } from '@sveltejs/kit';
 import {
   createProject,
@@ -19,6 +20,7 @@ function dollarsToCents(raw: string): number | null {
 export const actions: Actions = {
   default: async ({ request, locals }) => {
     if (!locals.user) throw redirect(303, '/auth?next=/projects/new');
+    const s = requireScope(locals);
     const data = await request.formData();
     const name = String(data.get('name') ?? '').trim();
     if (!name) return fail(400, { error: 'Name is required.' });
@@ -50,7 +52,7 @@ export const actions: Actions = {
 
     let id: string;
     try {
-      const result = await createProject(locals.user.id, locals.user.region, input);
+      const result = await createProject(s, input);
       id = result.id;
     } catch (err) {
       return fail(400, { error: (err as Error).message });
@@ -67,14 +69,14 @@ export const actions: Actions = {
       .filter(Boolean);
     for (const pid of personIds) {
       try {
-        await attachPerson(locals.user.id, locals.user.region, id, pid);
+        await attachPerson(s, id, pid);
       } catch {
         // Skip silently — best-effort during initial save.
       }
     }
     for (const cid of companyIds) {
       try {
-        await attachCompany(locals.user.id, locals.user.region, id, cid);
+        await attachCompany(s, id, cid);
       } catch {
         // ignore
       }

@@ -1,3 +1,4 @@
+import { requireScope } from '$lib/server/scope';
 import { redirect } from '@sveltejs/kit';
 import type { PageServerLoad } from './$types';
 import { db } from '$lib/server/db';
@@ -10,12 +11,13 @@ import { env } from '$env/dynamic/private';
 
 export const load: PageServerLoad = async ({ locals, url, cookies }) => {
   if (!locals.user) throw redirect(303, '/auth?next=/settings');
+  const s = requireScope(locals);
 
   const d = db(locals.user.region);
   const [p, c, i, u] = await Promise.all([
-    d.select({ n: sql<number>`COUNT(*)` }).from(people).where(eq(people.userId, locals.user.id)).get(),
-    d.select({ n: sql<number>`COUNT(*)` }).from(companies).where(eq(companies.userId, locals.user.id)).get(),
-    d.select({ n: sql<number>`COUNT(*)` }).from(interactions).where(eq(interactions.userId, locals.user.id)).get(),
+    d.select({ n: sql<number>`COUNT(*)` }).from(people).where(eq(people.workspaceId, s.workspaceId)).get(),
+    d.select({ n: sql<number>`COUNT(*)` }).from(companies).where(eq(companies.workspaceId, s.workspaceId)).get(),
+    d.select({ n: sql<number>`COUNT(*)` }).from(interactions).where(eq(interactions.workspaceId, s.workspaceId)).get(),
     d.select({ passwordHash: users.passwordHash }).from(users).where(eq(users.id, locals.user.id)).get()
   ]);
 

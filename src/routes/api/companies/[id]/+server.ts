@@ -1,3 +1,4 @@
+import { requireScope } from '$lib/server/scope';
 import { error, json, type RequestHandler } from '@sveltejs/kit';
 import { and, eq } from 'drizzle-orm';
 import { db } from '$lib/server/db';
@@ -28,12 +29,13 @@ const ALLOWED: Record<string, (v: unknown) => unknown> = {
 
 export const PATCH: RequestHandler = async ({ request, params, locals }) => {
   if (!locals.user) throw error(401, 'unauthorized');
+  const s = requireScope(locals);
   const d = db(locals.user.region);
   const id = params.id!;
   const existing = await d
     .select({ id: companies.id })
     .from(companies)
-    .where(and(eq(companies.id, id), eq(companies.userId, locals.user.id)))
+    .where(and(eq(companies.id, id), eq(companies.workspaceId, s.workspaceId)))
     .get();
   if (!existing) throw error(404, 'not_found');
 
@@ -50,15 +52,16 @@ export const PATCH: RequestHandler = async ({ request, params, locals }) => {
   if (Object.keys(updates).length === 1) throw error(400, 'no_updates');
   if ('name' in updates && !updates.name) throw error(400, 'missing_name');
 
-  await d.update(companies).set(updates).where(and(eq(companies.id, id), eq(companies.userId, locals.user.id)));
+  await d.update(companies).set(updates).where(and(eq(companies.id, id), eq(companies.workspaceId, s.workspaceId)));
   const fresh = await d.select().from(companies).where(eq(companies.id, id)).get();
   return json(fresh);
 };
 
 export const DELETE: RequestHandler = async ({ params, locals }) => {
   if (!locals.user) throw error(401, 'unauthorized');
+  const s = requireScope(locals);
   const d = db(locals.user.region);
   const id = params.id!;
-  await d.delete(companies).where(and(eq(companies.id, id), eq(companies.userId, locals.user.id)));
+  await d.delete(companies).where(and(eq(companies.id, id), eq(companies.workspaceId, s.workspaceId)));
   return new Response(null, { status: 204 });
 };

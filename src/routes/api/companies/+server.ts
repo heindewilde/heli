@@ -1,3 +1,4 @@
+import { requireScope } from '$lib/server/scope';
 import { error, json, type RequestHandler } from '@sveltejs/kit';
 import { and, desc, eq, sql } from 'drizzle-orm';
 import { db } from '$lib/server/db';
@@ -9,6 +10,7 @@ import { jsonWithEtag } from '$lib/server/cache';
 
 export const GET: RequestHandler = async ({ url, locals, request }) => {
   if (!locals.user) throw error(401, 'unauthorized');
+  const s = requireScope(locals);
   const q = url.searchParams.get('q')?.trim() ?? '';
   const limit = Math.min(Number.parseInt(url.searchParams.get('limit') ?? '20', 10) || 20, 100);
   const includeArchived = url.searchParams.get('archived') === '1';
@@ -33,7 +35,7 @@ export const GET: RequestHandler = async ({ url, locals, request }) => {
              c.source, c.created_at AS createdAt, c.updated_at AS updatedAt
       FROM companies c
       JOIN companies_fts f ON f.rowid = c.rowid
-      WHERE c.user_id = ${locals.user.id}
+      WHERE c.workspace_id = ${s.workspaceId}
         AND f.companies_fts MATCH ${fts}
         ${includeArchived ? sql`` : sql`AND c.is_archived = 0`}
         ${favOnly ? sql`AND c.is_favorite = 1` : sql``}
@@ -41,7 +43,7 @@ export const GET: RequestHandler = async ({ url, locals, request }) => {
       LIMIT ${limit}
     `);
   } else {
-    const filters = [eq(companies.userId, locals.user.id)];
+    const filters = [eq(companies.workspaceId, s.workspaceId)];
     if (!includeArchived) filters.push(eq(companies.isArchived, 0));
     if (favOnly) filters.push(eq(companies.isFavorite, 1));
     rows = await d
@@ -72,6 +74,7 @@ export const GET: RequestHandler = async ({ url, locals, request }) => {
 
 export const POST: RequestHandler = async ({ request, locals }) => {
   if (!locals.user) throw error(401, 'unauthorized');
+  const s = requireScope(locals);
   let body: Partial<ManualCompanyInput>;
   try {
     body = await request.json();
@@ -80,7 +83,7 @@ export const POST: RequestHandler = async ({ request, locals }) => {
   }
   const name = sanitizePlainText(String(body.name ?? ''), 200);
   if (!name) throw error(400, 'missing_name');
-  const result = await saveCompany(locals.user.id, locals.user.region, null, {
+  const result = await saveCompany(s, null, {
     name,
     industry: body.industry ? sanitizePlainText(String(body.industry), 200) : null,
     location: body.location ? sanitizePlainText(String(body.location), 200) : null,

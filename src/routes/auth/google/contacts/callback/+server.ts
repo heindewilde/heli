@@ -1,3 +1,4 @@
+import { requireScope } from '$lib/server/scope';
 import { redirect, error } from '@sveltejs/kit';
 import { dev } from '$app/environment';
 import type { RequestHandler } from './$types';
@@ -14,6 +15,7 @@ import { eq } from 'drizzle-orm';
 
 export const GET: RequestHandler = async ({ url, cookies, locals }) => {
   if (!locals.user) throw redirect(303, '/auth?next=/settings');
+  const s = requireScope(locals);
 
   const clientId = env.GOOGLE_CLIENT_ID;
   const clientSecret = env.GOOGLE_CLIENT_SECRET;
@@ -68,7 +70,7 @@ export const GET: RequestHandler = async ({ url, cookies, locals }) => {
   const existingRows = await db(locals.user.region)
     .select({ email: people.email })
     .from(people)
-    .where(eq(people.userId, locals.user.id));
+    .where(eq(people.workspaceId, s.workspaceId));
 
   const existingEmails = new Set(
     existingRows.map((p) => p.email?.toLowerCase().trim()).filter(Boolean) as string[]

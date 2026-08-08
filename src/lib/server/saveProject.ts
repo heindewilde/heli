@@ -13,6 +13,8 @@ import {
   type BillingType
 } from './schema';
 import { sanitize, sanitizePlainText } from './sanitize';
+import type { Scope } from './scope';
+import { bumpSearchEpoch } from './search';
 
 export type ManualProjectInput = {
   name: string;
@@ -106,8 +108,7 @@ function coerceFields(input: UpdateProjectInput): Partial<typeof projects.$infer
 }
 
 export async function createProject(
-  userId: string,
-  region: string,
+  s: Scope,
   input: ManualProjectInput
 ): Promise<{ id: string }> {
   const fields = coerceFields(input);
@@ -125,9 +126,10 @@ export async function createProject(
   }
   const id = createId();
   const now = Date.now();
-  await db(region).insert(projects).values({
+  await db(s.region).insert(projects).values({
     id,
-    userId,
+    workspaceId: s.workspaceId,
+    userId: s.userId,
     name: fields.name,
     description: fields.description ?? null,
     status: (fields.status as ProjectStatus | undefined) ?? 'active',
@@ -142,12 +144,12 @@ export async function createProject(
     createdAt: now,
     updatedAt: now
   });
+  bumpSearchEpoch(s.workspaceId);
   return { id };
 }
 
 export async function updateProject(
-  userId: string,
-  region: string,
+  s: Scope,
   id: string,
   input: UpdateProjectInput
 ): Promise<void> {
@@ -166,95 +168,90 @@ export async function updateProject(
       fields.hourlyRate = null;
     }
   }
-  await db(region)
+  await db(s.region)
     .update(projects)
     .set({ ...fields, updatedAt: Date.now() })
-    .where(and(eq(projects.id, id), eq(projects.userId, userId)));
+    .where(and(eq(projects.id, id), eq(projects.workspaceId, s.workspaceId)));
+  bumpSearchEpoch(s.workspaceId);
 }
 
 export async function deleteProject(
-  userId: string,
-  region: string,
+  s: Scope,
   id: string
 ): Promise<void> {
   // Cascades: project_links, project_people, project_companies,
   // interaction_projects, project_tags all FK with ON DELETE CASCADE.
-  await db(region).delete(projects).where(and(eq(projects.id, id), eq(projects.userId, userId)));
+  await db(s.region).delete(projects).where(and(eq(projects.id, id), eq(projects.workspaceId, s.workspaceId)));
+  bumpSearchEpoch(s.workspaceId);
 }
 
 // ----- Member sub-resources ------------------------------------------------
 
 export async function attachPerson(
-  userId: string,
-  region: string,
+  s: Scope,
   projectId: string,
   personId: string
 ): Promise<void> {
-  if (!(await projectExists(userId, region, projectId))) throw new Error('not_found');
-  await db(region)
+  if (!(await projectExists(s, projectId))) throw new Error('not_found');
+  await db(s.region)
     .insert(projectPeople)
     .values({ projectId, personId })
     .onConflictDoNothing();
 }
 
 export async function detachPerson(
-  userId: string,
-  region: string,
+  s: Scope,
   projectId: string,
   personId: string
 ): Promise<void> {
-  if (!(await projectExists(userId, region, projectId))) throw new Error('not_found');
-  await db(region)
+  if (!(await projectExists(s, projectId))) throw new Error('not_found');
+  await db(s.region)
     .delete(projectPeople)
     .where(and(eq(projectPeople.projectId, projectId), eq(projectPeople.personId, personId)));
 }
 
 export async function attachCompany(
-  userId: string,
-  region: string,
+  s: Scope,
   projectId: string,
   companyId: string
 ): Promise<void> {
-  if (!(await projectExists(userId, region, projectId))) throw new Error('not_found');
-  await db(region)
+  if (!(await projectExists(s, projectId))) throw new Error('not_found');
+  await db(s.region)
     .insert(projectCompanies)
     .values({ projectId, companyId })
     .onConflictDoNothing();
 }
 
 export async function detachCompany(
-  userId: string,
-  region: string,
+  s: Scope,
   projectId: string,
   companyId: string
 ): Promise<void> {
-  if (!(await projectExists(userId, region, projectId))) throw new Error('not_found');
-  await db(region)
+  if (!(await projectExists(s, projectId))) throw new Error('not_found');
+  await db(s.region)
     .delete(projectCompanies)
     .where(and(eq(projectCompanies.projectId, projectId), eq(projectCompanies.companyId, companyId)));
 }
 
 export async function attachInteraction(
-  userId: string,
-  region: string,
+  s: Scope,
   projectId: string,
   interactionId: string
 ): Promise<void> {
-  if (!(await projectExists(userId, region, projectId))) throw new Error('not_found');
-  await db(region)
+  if (!(await projectExists(s, projectId))) throw new Error('not_found');
+  await db(s.region)
     .insert(interactionProjects)
     .values({ projectId, interactionId })
     .onConflictDoNothing();
 }
 
 export async function detachInteraction(
-  userId: string,
-  region: string,
+  s: Scope,
   projectId: string,
   interactionId: string
 ): Promise<void> {
-  if (!(await projectExists(userId, region, projectId))) throw new Error('not_found');
-  await db(region)
+  if (!(await projectExists(s, projectId))) throw new Error('not_found');
+  await db(s.region)
     .delete(interactionProjects)
     .where(
       and(
@@ -278,17 +275,16 @@ function sanitizeLinkUrl(raw: unknown): string {
 }
 
 export async function addLink(
-  userId: string,
-  region: string,
+  s: Scope,
   projectId: string,
   rawUrl: unknown,
   rawLabel: unknown
 ): Promise<{ id: string }> {
-  if (!(await projectExists(userId, region, projectId))) throw new Error('not_found');
+  if (!(await projectExists(s, projectId))) throw new Error('not_found');
   const url = sanitizeLinkUrl(rawUrl);
   const label = rawLabel == null ? null : sanitizePlainText(String(rawLabel), LINK_LABEL_MAX) || null;
   const id = createId();
-  await db(region).insert(projectLinks).values({
+  await db(s.region).insert(projectLinks).values({
     id,
     projectId,
     url,
@@ -299,45 +295,43 @@ export async function addLink(
 }
 
 export async function updateLink(
-  userId: string,
-  region: string,
+  s: Scope,
   projectId: string,
   linkId: string,
   rawUrl: unknown,
   rawLabel: unknown
 ): Promise<void> {
-  if (!(await projectExists(userId, region, projectId))) throw new Error('not_found');
+  if (!(await projectExists(s, projectId))) throw new Error('not_found');
   const updates: Partial<typeof projectLinks.$inferInsert> = {};
   if (rawUrl !== undefined) updates.url = sanitizeLinkUrl(rawUrl);
   if (rawLabel !== undefined) {
     updates.label = rawLabel == null ? null : sanitizePlainText(String(rawLabel), LINK_LABEL_MAX) || null;
   }
   if (Object.keys(updates).length === 0) throw new Error('no_updates');
-  await db(region)
+  await db(s.region)
     .update(projectLinks)
     .set(updates)
     .where(and(eq(projectLinks.id, linkId), eq(projectLinks.projectId, projectId)));
 }
 
 export async function removeLink(
-  userId: string,
-  region: string,
+  s: Scope,
   projectId: string,
   linkId: string
 ): Promise<void> {
-  if (!(await projectExists(userId, region, projectId))) throw new Error('not_found');
-  await db(region)
+  if (!(await projectExists(s, projectId))) throw new Error('not_found');
+  await db(s.region)
     .delete(projectLinks)
     .where(and(eq(projectLinks.id, linkId), eq(projectLinks.projectId, projectId)));
 }
 
 // ----- Helpers -------------------------------------------------------------
 
-async function projectExists(userId: string, region: string, projectId: string): Promise<boolean> {
-  const row = await db(region)
+async function projectExists(s: Scope, projectId: string): Promise<boolean> {
+  const row = await db(s.region)
     .select({ id: projects.id })
     .from(projects)
-    .where(and(eq(projects.id, projectId), eq(projects.userId, userId)))
+    .where(and(eq(projects.id, projectId), eq(projects.workspaceId, s.workspaceId)))
     .get();
   return !!row;
 }

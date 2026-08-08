@@ -1,3 +1,4 @@
+import { requireScope } from '$lib/server/scope';
 import { redirect } from '@sveltejs/kit';
 import { and, eq } from 'drizzle-orm';
 import type { PageServerLoad } from './$types';
@@ -6,6 +7,7 @@ import { people, companies, projects } from '$lib/server/schema';
 
 export const load: PageServerLoad = async ({ locals, url }) => {
   if (!locals.user) throw redirect(303, '/auth');
+  const s = requireScope(locals);
   const d = db(locals.user.region);
   const presetPersonId = url.searchParams.get('person');
   const presetCompanyId = url.searchParams.get('company');
@@ -21,7 +23,7 @@ export const load: PageServerLoad = async ({ locals, url }) => {
             role: people.role
           })
           .from(people)
-          .where(and(eq(people.id, presetPersonId), eq(people.userId, locals.user.id)))
+          .where(and(eq(people.id, presetPersonId), eq(people.workspaceId, s.workspaceId)))
           .get()
       : null,
     presetCompanyId
@@ -34,7 +36,7 @@ export const load: PageServerLoad = async ({ locals, url }) => {
             domain: companies.domain
           })
           .from(companies)
-          .where(and(eq(companies.id, presetCompanyId), eq(companies.userId, locals.user.id)))
+          .where(and(eq(companies.id, presetCompanyId), eq(companies.workspaceId, s.workspaceId)))
           .get()
       : null,
     presetProjectId
@@ -45,7 +47,7 @@ export const load: PageServerLoad = async ({ locals, url }) => {
             status: projects.status
           })
           .from(projects)
-          .where(and(eq(projects.id, presetProjectId), eq(projects.userId, locals.user.id)))
+          .where(and(eq(projects.id, presetProjectId), eq(projects.workspaceId, s.workspaceId)))
           .get()
       : null
   ]);

@@ -1,3 +1,4 @@
+import { requireScope } from '$lib/server/scope';
 import { error, redirect } from '@sveltejs/kit';
 import { and, eq } from 'drizzle-orm';
 import type { PageServerLoad } from './$types';
@@ -13,11 +14,12 @@ import { domainOf } from '$lib/server/url';
 
 export const load: PageServerLoad = async ({ locals, params, url }) => {
   if (!locals.user) throw redirect(303, '/auth');
+  const s = requireScope(locals);
   const d = db(locals.user.region);
   const person = await d
     .select()
     .from(people)
-    .where(and(eq(people.id, params.id), eq(people.userId, locals.user.id)))
+    .where(and(eq(people.id, params.id), eq(people.workspaceId, s.workspaceId)))
     .get();
   if (!person) throw error(404, 'not_found');
 
@@ -39,16 +41,16 @@ export const load: PageServerLoad = async ({ locals, params, url }) => {
         faviconUrl: companies.faviconUrl
       })
       .from(companies)
-      .where(and(eq(companies.id, person.companyId), eq(companies.userId, locals.user.id)))
+      .where(and(eq(companies.id, person.companyId), eq(companies.workspaceId, s.workspaceId)))
       .get();
   }
 
-  const interactions = await listInteractions(locals.user.id, locals.user.region, {
+  const interactions = await listInteractions(s, {
     personId: person.id,
     limit: 50
   });
 
-  const tags = await getTagsForEntity(locals.user.id, locals.user.region, 'person', person.id);
+  const tags = await getTagsForEntity(s, 'person', person.id);
 
   // Re-check the suggested company against the user's companies on each load — a
   // matching company added later should auto-link instead of remaining a banner.
@@ -61,7 +63,7 @@ export const load: PageServerLoad = async ({ locals, params, url }) => {
         const co = await d
           .select({ id: companies.id })
           .from(companies)
-          .where(and(eq(companies.userId, locals.user.id), eq(companies.domain, dom)))
+          .where(and(eq(companies.workspaceId, s.workspaceId), eq(companies.domain, dom)))
           .get();
         matchId = co?.id ?? null;
       } catch {
@@ -79,9 +81,9 @@ export const load: PageServerLoad = async ({ locals, params, url }) => {
   // - projectsAll: every active project this person is on
   // - projectsTogetherList: subset that ALSO includes the linked company
   const [projectsAll, projectsTogetherList] = await Promise.all([
-    projectsForPerson(locals.user.id, locals.user.region, person.id),
+    projectsForPerson(s, person.id),
     company
-      ? projectsTogether(locals.user.id, locals.user.region, person.id, company.id)
+      ? projectsTogether(s, person.id, company.id)
       : Promise.resolve([])
   ]);
   const togetherIds = new Set(projectsTogetherList.map((p) => p.id));
@@ -89,9 +91,9 @@ export const load: PageServerLoad = async ({ locals, params, url }) => {
   const projectsOther = projectsAll.filter((p) => !togetherIds.has(p.id));
 
   const [collections, pipelines, tasks] = await Promise.all([
-    listCollectionsForEntity(locals.user.id, locals.user.region, 'person', person.id),
-    listPipelinesForEntity(locals.user.id, locals.user.region, 'person', person.id),
-    listTasksForEntity(locals.user.id, locals.user.region, 'person', person.id)
+    listCollectionsForEntity(s, 'person', person.id),
+    listPipelinesForEntity(s, 'person', person.id),
+    listTasksForEntity(s, 'person', person.id)
   ]);
 
   return {

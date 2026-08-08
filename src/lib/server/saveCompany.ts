@@ -13,6 +13,8 @@ import {
   type OgData
 } from './og';
 import { sanitize } from './sanitize';
+import type { Scope } from './scope';
+import { bumpSearchEpoch } from './search';
 
 export type SaveResult = { id: string; kind: 'company'; dedup: boolean };
 
@@ -26,13 +28,12 @@ export type ManualCompanyInput = {
 };
 
 export async function saveCompany(
-  userId: string,
-  region: string,
+  s: Scope,
   rawUrl: string | null,
   manual?: ManualCompanyInput
 ): Promise<SaveResult> {
   const now = Date.now();
-  const d = db(region);
+  const d = db(s.region);
 
   if (rawUrl) {
     const u = new URL(cleanUrl(rawUrl));
@@ -40,14 +41,15 @@ export async function saveCompany(
     const existing = await d
       .select({ id: companies.id })
       .from(companies)
-      .where(and(eq(companies.userId, userId), eq(companies.url, url)))
+      .where(and(eq(companies.workspaceId, s.workspaceId), eq(companies.url, url)))
       .get();
     if (existing) return { id: existing.id, kind: 'company', dedup: true };
 
     const id = createId();
     await d.insert(companies).values({
       id,
-      userId,
+      workspaceId: s.workspaceId,
+      userId: s.userId,
       name: domainOf(u),
       url,
       domain: domainOf(u),
@@ -57,7 +59,8 @@ export async function saveCompany(
       createdAt: now,
       updatedAt: now
     });
-    void enrichCompany(id, userId, region, u);
+    void enrichCompany(id, s, u);
+    bumpSearchEpoch(s.workspaceId);
     return { id, kind: 'company', dedup: false };
   }
 
@@ -65,7 +68,8 @@ export async function saveCompany(
   const id = createId();
   await d.insert(companies).values({
     id,
-    userId,
+    workspaceId: s.workspaceId,
+    userId: s.userId,
     name: manual.name.trim(),
     industry: manual.industry ?? null,
     location: manual.location ?? null,
@@ -77,6 +81,7 @@ export async function saveCompany(
     createdAt: now,
     updatedAt: now
   });
+  bumpSearchEpoch(s.workspaceId);
   return { id, kind: 'company', dedup: false };
 }
 
@@ -127,8 +132,8 @@ function cleanDescription(raw: string | undefined): string | null {
   return sanitize(capped);
 }
 
-export async function enrichCompany(id: string, userId: string, region: string, url: URL): Promise<void> {
-  const d = db(region);
+export async function enrichCompany(id: string, s: Scope, url: URL): Promise<void> {
+  const d = db(s.region);
   try {
     let og = await fetchOg(url);
 
@@ -180,12 +185,13 @@ export async function enrichCompany(id: string, userId: string, region: string, 
     };
     if (finalName) updates.name = finalName;
 
-    await d.update(companies).set(updates).where(and(eq(companies.id, id), eq(companies.userId, userId)));
+    await d.update(companies).set(updates).where(and(eq(companies.id, id), eq(companies.workspaceId, s.workspaceId)));
   } catch (err) {
     console.warn('[heli] company enrichment failed:', (err as Error).message);
     await d
       .update(companies)
       .set({ source: null, updatedAt: Date.now() })
-      .where(and(eq(companies.id, id), eq(companies.userId, userId)));
+      .where(and(eq(companies.id, id), eq(companies.workspaceId, s.workspaceId)));
   }
+  bumpSearchEpoch(s.workspaceId);
 }

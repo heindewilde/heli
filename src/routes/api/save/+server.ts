@@ -1,3 +1,4 @@
+import { requireScope } from '$lib/server/scope';
 import { error, json, type RequestHandler } from '@sveltejs/kit';
 import { cleanUrl, assertPublicUrl, UrlError } from '$lib/server/url';
 import { classify } from '$lib/server/classify';
@@ -7,6 +8,7 @@ import { checkRateLimit, LIMITS, RateLimitError } from '$lib/server/rate-limit';
 
 export const POST: RequestHandler = async ({ request, locals }) => {
   if (!locals.user) throw error(401, 'unauthorized');
+  const s = requireScope(locals);
   try {
     checkRateLimit(LIMITS.save, locals.user.id);
   } catch (err) {
@@ -39,7 +41,7 @@ export const POST: RequestHandler = async ({ request, locals }) => {
   const kind = classify(u);
   const result =
     kind === 'person'
-      ? await savePerson(locals.user.id, locals.user.region, cleaned)
-      : await saveCompany(locals.user.id, locals.user.region, cleaned);
+      ? await savePerson(s, cleaned)
+      : await saveCompany(s, cleaned);
   return json(result, { status: result.dedup ? 200 : 201 });
 };

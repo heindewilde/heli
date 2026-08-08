@@ -1,3 +1,4 @@
+import { requireScope } from '$lib/server/scope';
 import { error, json, type RequestHandler } from '@sveltejs/kit';
 import {
   attachTag,
@@ -9,14 +10,16 @@ import {
 
 export const GET: RequestHandler = async ({ url, locals }) => {
   if (!locals.user) throw error(401, 'unauthorized');
+  const s = requireScope(locals);
   const scope = url.searchParams.get('scope');
   if (!isTagScope(scope)) throw error(400, 'invalid_scope');
-  const items = await listTagsWithCounts(locals.user.id, locals.user.region, scope);
+  const items = await listTagsWithCounts(s, scope);
   return json({ items });
 };
 
 export const POST: RequestHandler = async ({ request, locals }) => {
   if (!locals.user) throw error(401, 'unauthorized');
+  const s = requireScope(locals);
   let body: { scope?: string; name?: string; entityId?: string };
   try {
     body = await request.json();
@@ -29,13 +32,13 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 
   let tag;
   try {
-    tag = await ensureTag(locals.user.id, locals.user.region, body.scope, name);
+    tag = await ensureTag(s, body.scope, name);
   } catch (err) {
     throw error(400, (err as Error).message);
   }
   if (body.entityId) {
     try {
-      await attachTag(locals.user.id, locals.user.region, body.scope, body.entityId, tag.id);
+      await attachTag(s, body.scope, body.entityId, tag.id);
     } catch (err) {
       throw error(400, (err as Error).message);
     }
@@ -46,6 +49,7 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 export const DELETE: RequestHandler = async ({ request, locals }) => {
   // Detach a tag from an entity. Tag itself is preserved (delete via /api/tags/[id]).
   if (!locals.user) throw error(401, 'unauthorized');
+  const s = requireScope(locals);
   let body: { scope?: string; entityId?: string; tagId?: string };
   try {
     body = await request.json();
@@ -55,7 +59,7 @@ export const DELETE: RequestHandler = async ({ request, locals }) => {
   if (!isTagScope(body.scope)) throw error(400, 'invalid_scope');
   if (!body.entityId || !body.tagId) throw error(400, 'missing_ids');
   try {
-    await detachTag(locals.user.id, locals.user.region, body.scope, body.entityId, body.tagId);
+    await detachTag(s, body.scope, body.entityId, body.tagId);
   } catch (err) {
     throw error(400, (err as Error).message);
   }

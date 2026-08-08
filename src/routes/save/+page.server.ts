@@ -1,3 +1,4 @@
+import { requireScope } from '$lib/server/scope';
 import type { PageServerLoad } from './$types';
 import { redirect } from '@sveltejs/kit';
 import { cleanUrl, assertPublicUrl, UrlError } from '$lib/server/url';
@@ -33,6 +34,7 @@ export const load: PageServerLoad = async ({ url, locals }) => {
   );
   if (!raw) return { error: 'no_url' as const };
 
+  const s = requireScope(locals);
   try {
     checkRateLimit(LIMITS.save, locals.user.id);
   } catch (err) {
@@ -58,8 +60,8 @@ export const load: PageServerLoad = async ({ url, locals }) => {
   const kind = classify(u);
   const result =
     kind === 'person'
-      ? await savePerson(locals.user.id, locals.user.region, cleaned)
-      : await saveCompany(locals.user.id, locals.user.region, cleaned);
+      ? await savePerson(s, cleaned)
+      : await saveCompany(s, cleaned);
 
   const path = kind === 'person' ? `/people/${result.id}` : `/companies/${result.id}`;
 

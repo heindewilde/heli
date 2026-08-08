@@ -2,7 +2,17 @@ import { createId } from '@paralleldrive/cuid2';
 import bcrypt from 'bcryptjs';
 import { and, eq, lt, ne } from 'drizzle-orm';
 import { db, primaryDb, defaultRegion } from './db';
-import { users, sessions, passwordResetTokens, emailRouting, oauthAccounts } from './schema';
+import {
+  users,
+  sessions,
+  passwordResetTokens,
+  emailRouting,
+  oauthAccounts,
+  workspaces,
+  workspaceMembers,
+  type WorkspaceRole
+} from './schema';
+import { createWorkspace, ensureWorkspace, getMembership, pickWorkspace } from './workspaces';
 
 // Stored as passwordHash for OAuth-only accounts that have no password set.
 // Not a valid bcrypt hash, so bcrypt.compare will always return false against it.
@@ -17,6 +27,10 @@ export type AuthUser = {
   email: string;
   username: string | null;
   region: string;
+  /** Active workspace for this session. All CRM data is filtered by it. */
+  workspaceId: string;
+  workspaceName: string;
+  role: WorkspaceRole;
 };
 
 export class AuthError extends Error {
@@ -79,10 +93,14 @@ async function lookupRegion(email: string): Promise<string> {
   return row?.region ?? defaultRegion();
 }
 
-async function createSession(userId: string, region: string): Promise<{ id: string; expiresAt: number }> {
+async function createSession(
+  userId: string,
+  region: string,
+  activeWorkspaceId: string
+): Promise<{ id: string; expiresAt: number }> {
   const id = `${region}:${createId()}`;
   const expiresAt = Date.now() + SESSION_TTL_MS;
-  await db(region).insert(sessions).values({ id, userId, expiresAt });
+  await db(region).insert(sessions).values({ id, userId, activeWorkspaceId, expiresAt });
   return { id, expiresAt };
 }
 
@@ -121,9 +139,12 @@ export async function register(input: {
   });
   await primaryDb().insert(emailRouting).values({ email, region });
 
-  const session = await createSession(id, region);
+  const workspaceName = `${username}'s workspace`;
+  const workspaceId = await createWorkspace(region, id, workspaceName);
+
+  const session = await createSession(id, region, workspaceId);
   return {
-    user: { id, email, username, region },
+    user: { id, email, username, region, workspaceId, workspaceName, role: 'owner' },
     sessionId: session.id,
     expiresAt: session.expiresAt
   };
@@ -149,9 +170,18 @@ export async function login(input: {
   const ok = await bcrypt.compare(input.password, user.passwordHash);
   if (!ok) throw new AuthError('invalid_credentials');
 
-  const session = await createSession(user.id, region);
+  const m = await ensureWorkspace(region, user.id, `${user.username ?? 'My'} workspace`);
+  const session = await createSession(user.id, region, m.workspaceId);
   return {
-    user: { id: user.id, email: user.email, username: user.username, region },
+    user: {
+      id: user.id,
+      email: user.email,
+      username: user.username,
+      region,
+      workspaceId: m.workspaceId,
+      workspaceName: m.workspaceName,
+      role: m.role
+    },
     sessionId: session.id,
     expiresAt: session.expiresAt
   };
@@ -165,22 +195,70 @@ export async function validateSession(
   const region = cookieValue.slice(0, colon);
   if (!region) return null;
 
-  const session = await db(region).select().from(sessions).where(eq(sessions.id, cookieValue)).get();
-  if (!session) return null;
-  if (session.expiresAt < Date.now()) {
+  // One query for the common case. The workspace joins are LEFT so that a
+  // session pointing at a workspace the user no longer belongs to still
+  // resolves the user — the slow path below then moves them somewhere valid.
+  // That missing membership row IS the revocation mechanism: remove someone
+  // from a workspace and their sessions stop resolving to it immediately,
+  // with no session-sweeping code.
+  const row = await db(region)
+    .select({
+      sessionId: sessions.id,
+      expiresAt: sessions.expiresAt,
+      activeWorkspaceId: sessions.activeWorkspaceId,
+      userId: users.id,
+      email: users.email,
+      username: users.username,
+      memberWorkspaceId: workspaceMembers.workspaceId,
+      role: workspaceMembers.role,
+      workspaceName: workspaces.name
+    })
+    .from(sessions)
+    .innerJoin(users, eq(users.id, sessions.userId))
+    .leftJoin(
+      workspaceMembers,
+      and(
+        eq(workspaceMembers.workspaceId, sessions.activeWorkspaceId),
+        eq(workspaceMembers.userId, sessions.userId)
+      )
+    )
+    .leftJoin(workspaces, eq(workspaces.id, workspaceMembers.workspaceId))
+    .where(eq(sessions.id, cookieValue))
+    .get();
+
+  if (!row) return null;
+  if (row.expiresAt < Date.now()) {
     await db(region).delete(sessions).where(eq(sessions.id, cookieValue));
     return null;
   }
 
-  const user = await db(region).select().from(users).where(eq(users.id, session.userId)).get();
-  if (!user) {
-    await db(region).delete(sessions).where(eq(sessions.id, cookieValue));
-    return null;
+  let workspaceId = row.memberWorkspaceId;
+  let workspaceName = row.workspaceName;
+  let role = row.role as WorkspaceRole | null;
+
+  if (!workspaceId || !workspaceName || !role) {
+    // Session has no workspace, or points at one the user was removed from.
+    const m = await ensureWorkspace(region, row.userId, `${row.username ?? 'My'} workspace`);
+    workspaceId = m.workspaceId;
+    workspaceName = m.workspaceName;
+    role = m.role;
+    await db(region)
+      .update(sessions)
+      .set({ activeWorkspaceId: workspaceId })
+      .where(eq(sessions.id, cookieValue));
   }
 
   return {
-    user: { id: user.id, email: user.email, username: user.username, region },
-    sessionId: session.id
+    user: {
+      id: row.userId,
+      email: row.email,
+      username: row.username,
+      region,
+      workspaceId,
+      workspaceName,
+      role
+    },
+    sessionId: row.sessionId
   };
 }
 
@@ -296,9 +374,12 @@ export async function registerWithGoogle(input: {
     createdAt: now
   });
 
-  const session = await createSession(id, region);
+  const workspaceName = `${username}'s workspace`;
+  const workspaceId = await createWorkspace(region, id, workspaceName);
+
+  const session = await createSession(id, region, workspaceId);
   return {
-    user: { id, email, username, region },
+    user: { id, email, username, region, workspaceId, workspaceName, role: 'owner' },
     sessionId: session.id,
     expiresAt: session.expiresAt
   };
@@ -336,9 +417,18 @@ export async function loginOrRegisterWithGoogle(input: {
       });
     }
 
-    const session = await createSession(user.id, region);
+    const m = await ensureWorkspace(region, user.id, `${user.username ?? 'My'} workspace`);
+    const session = await createSession(user.id, region, m.workspaceId);
     return {
-      user: { id: user.id, email: user.email, username: user.username, region },
+      user: {
+        id: user.id,
+        email: user.email,
+        username: user.username,
+        region,
+        workspaceId: m.workspaceId,
+        workspaceName: m.workspaceName,
+        role: m.role
+      },
       sessionId: session.id,
       expiresAt: session.expiresAt
     };
@@ -365,9 +455,12 @@ export async function loginOrRegisterWithGoogle(input: {
     createdAt: now
   });
 
-  const session = await createSession(id, region);
+  const workspaceName = `${username}'s workspace`;
+  const workspaceId = await createWorkspace(region, id, workspaceName);
+
+  const session = await createSession(id, region, workspaceId);
   return {
-    user: { id, email, username, region },
+    user: { id, email, username, region, workspaceId, workspaceName, role: 'owner' },
     sessionId: session.id,
     expiresAt: session.expiresAt
   };

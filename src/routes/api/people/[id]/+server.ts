@@ -1,3 +1,4 @@
+import { requireScope } from '$lib/server/scope';
 import { error, json, type RequestHandler } from '@sveltejs/kit';
 import { and, eq } from 'drizzle-orm';
 import { db } from '$lib/server/db';
@@ -31,12 +32,13 @@ const ALLOWED: Record<string, (v: unknown) => unknown> = {
 
 export const PATCH: RequestHandler = async ({ request, params, locals }) => {
   if (!locals.user) throw error(401, 'unauthorized');
+  const s = requireScope(locals);
   const d = db(locals.user.region);
   const id = params.id!;
   const existing = await d
     .select({ id: people.id })
     .from(people)
-    .where(and(eq(people.id, id), eq(people.userId, locals.user.id)))
+    .where(and(eq(people.id, id), eq(people.workspaceId, s.workspaceId)))
     .get();
   if (!existing) throw error(404, 'not_found');
 
@@ -58,15 +60,16 @@ export const PATCH: RequestHandler = async ({ request, params, locals }) => {
     updates.suggestedCompanyUrl = null;
   }
 
-  await d.update(people).set(updates).where(and(eq(people.id, id), eq(people.userId, locals.user.id)));
+  await d.update(people).set(updates).where(and(eq(people.id, id), eq(people.workspaceId, s.workspaceId)));
   const fresh = await d.select().from(people).where(eq(people.id, id)).get();
   return json(fresh);
 };
 
 export const DELETE: RequestHandler = async ({ params, locals }) => {
   if (!locals.user) throw error(401, 'unauthorized');
+  const s = requireScope(locals);
   const d = db(locals.user.region);
   const id = params.id!;
-  await d.delete(people).where(and(eq(people.id, id), eq(people.userId, locals.user.id)));
+  await d.delete(people).where(and(eq(people.id, id), eq(people.workspaceId, s.workspaceId)));
   return new Response(null, { status: 204 });
 };

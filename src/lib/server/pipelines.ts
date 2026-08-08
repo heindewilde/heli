@@ -21,6 +21,7 @@ import {
 import { ftsQuery } from './search';
 import { sanitizePlainText } from './sanitize';
 import { colorToKind } from '$lib/stageColors';
+import type { Scope } from './scope';
 
 export function isStageKind(v: unknown): v is StageKind {
   return typeof v === 'string' && (STAGE_KINDS as readonly string[]).includes(v);
@@ -59,11 +60,10 @@ export type PipelineListFilters = {
 };
 
 export async function listPipelines(
-  userId: string,
-  region: string,
+  s: Scope,
   filters: PipelineListFilters = {}
 ): Promise<PipelineListRow[]> {
-  const d = db(region);
+  const d = db(s.region);
   const limit = Math.min(filters.limit ?? 200, 500);
   const fts = filters.q ? ftsQuery(filters.q) : null;
   const archived = filters.archived ?? 'active';
@@ -79,7 +79,7 @@ export async function listPipelines(
     ? sql`AND p.id IN (
         SELECT pp.id FROM pipelines pp
         JOIN pipelines_fts f ON f.rowid = pp.rowid
-        WHERE pp.user_id = ${userId} AND f.pipelines_fts MATCH ${fts}
+        WHERE pp.workspace_id = ${s.workspaceId} AND f.pipelines_fts MATCH ${fts}
       )`
     : sql``;
 
@@ -108,7 +108,7 @@ export async function listPipelines(
          WHERE pi.pipeline_id = p.id AND ps.kind = 'lost') AS lostCount,
       (SELECT COUNT(*) FROM pipeline_stages WHERE pipeline_id = p.id) AS stageCount
     FROM pipelines p
-    WHERE p.user_id = ${userId}
+    WHERE p.workspace_id = ${s.workspaceId}
       ${archivedClause}
       ${ftsClause}
     ${orderClause}
@@ -156,15 +156,14 @@ export type PipelineDetail = Pipeline & {
 };
 
 export async function getPipeline(
-  userId: string,
-  region: string,
+  s: Scope,
   id: string
 ): Promise<PipelineDetail | null> {
-  const d = db(region);
+  const d = db(s.region);
   const pipeline = await d
     .select()
     .from(pipelines)
-    .where(and(eq(pipelines.id, id), eq(pipelines.userId, userId)))
+    .where(and(eq(pipelines.id, id), eq(pipelines.workspaceId, s.workspaceId)))
     .get();
   if (!pipeline) return null;
 
@@ -194,7 +193,7 @@ export async function getPipeline(
             avatarUrl: people.avatarUrl
           })
           .from(people)
-          .where(and(eq(people.userId, userId), inArray(people.id, personIds)))
+          .where(and(eq(people.workspaceId, s.workspaceId), inArray(people.id, personIds)))
       : Promise.resolve([] as { id: string; name: string; role: string | null; avatarUrl: string | null }[]),
     companyIds.length > 0
       ? d
@@ -206,7 +205,7 @@ export async function getPipeline(
             domain: companies.domain
           })
           .from(companies)
-          .where(and(eq(companies.userId, userId), inArray(companies.id, companyIds)))
+          .where(and(eq(companies.workspaceId, s.workspaceId), inArray(companies.id, companyIds)))
       : Promise.resolve([] as { id: string; name: string; logoUrl: string | null; faviconUrl: string | null; domain: string | null }[])
   ]);
 
@@ -264,11 +263,10 @@ const DEFAULT_STAGES: { name: string; color: string }[] = [
 ];
 
 export async function createPipeline(
-  userId: string,
-  region: string,
+  s: Scope,
   input: ManualPipelineInput
 ): Promise<{ id: string }> {
-  const d = db(region);
+  const d = db(s.region);
   const name = sanitizePlainText(input.name, 200);
   if (!name) throw new Error('missing_name');
   const description = input.description ? sanitizePlainText(input.description, 1000) : null;
@@ -277,7 +275,8 @@ export async function createPipeline(
   const now = Date.now();
   await d.insert(pipelines).values({
     id,
-    userId,
+    workspaceId: s.workspaceId,
+    userId: s.userId,
     name,
     description: description || null,
     defaultView,
@@ -312,12 +311,11 @@ export type UpdatePipelineInput = {
 };
 
 export async function updatePipeline(
-  userId: string,
-  region: string,
+  s: Scope,
   id: string,
   input: UpdatePipelineInput
 ): Promise<void> {
-  const d = db(region);
+  const d = db(s.region);
   const updates: Partial<typeof pipelines.$inferInsert> = { updatedAt: Date.now() };
   if (input.name != null) {
     const next = sanitizePlainText(input.name, 200);
@@ -339,18 +337,17 @@ export async function updatePipeline(
   await d
     .update(pipelines)
     .set(updates)
-    .where(and(eq(pipelines.id, id), eq(pipelines.userId, userId)));
+    .where(and(eq(pipelines.id, id), eq(pipelines.workspaceId, s.workspaceId)));
 }
 
 export async function deletePipeline(
-  userId: string,
-  region: string,
+  s: Scope,
   id: string
 ): Promise<void> {
-  const d = db(region);
+  const d = db(s.region);
   await d
     .delete(pipelines)
-    .where(and(eq(pipelines.id, id), eq(pipelines.userId, userId)));
+    .where(and(eq(pipelines.id, id), eq(pipelines.workspaceId, s.workspaceId)));
 }
 
 // ──────────────────────────────────────────────────────────────────────────────
@@ -358,13 +355,13 @@ export async function deletePipeline(
 
 async function ensurePipelineOwned(
   d: ReturnType<typeof db>,
-  userId: string,
+  workspaceId: string,
   pipelineId: string
 ): Promise<boolean> {
   const r = await d
     .select({ id: pipelines.id })
     .from(pipelines)
-    .where(and(eq(pipelines.id, pipelineId), eq(pipelines.userId, userId)))
+    .where(and(eq(pipelines.id, pipelineId), eq(pipelines.workspaceId, workspaceId)))
     .get();
   return !!r;
 }
@@ -383,13 +380,12 @@ async function ensureStageInPipeline(
 }
 
 export async function addStage(
-  userId: string,
-  region: string,
+  s: Scope,
   pipelineId: string,
   input: { name: string; color?: string | null; position?: number }
 ): Promise<{ id: string }> {
-  const d = db(region);
-  if (!(await ensurePipelineOwned(d, userId, pipelineId))) throw new Error('not_found');
+  const d = db(s.region);
+  if (!(await ensurePipelineOwned(d, s.workspaceId, pipelineId))) throw new Error('not_found');
   const name = sanitizePlainText(input.name, 100);
   if (!name) throw new Error('missing_name');
 
@@ -421,14 +417,13 @@ export async function addStage(
 }
 
 export async function updateStage(
-  userId: string,
-  region: string,
+  s: Scope,
   pipelineId: string,
   stageId: string,
   input: { name?: string; color?: string | null }
 ): Promise<void> {
-  const d = db(region);
-  if (!(await ensurePipelineOwned(d, userId, pipelineId))) throw new Error('not_found');
+  const d = db(s.region);
+  if (!(await ensurePipelineOwned(d, s.workspaceId, pipelineId))) throw new Error('not_found');
   if (!(await ensureStageInPipeline(d, pipelineId, stageId))) throw new Error('not_found');
   const updates: Partial<typeof pipelineStages.$inferInsert> = {};
   if (input.name != null) {
@@ -452,13 +447,12 @@ export async function updateStage(
 }
 
 export async function reorderStages(
-  userId: string,
-  region: string,
+  s: Scope,
   pipelineId: string,
   orderedStageIds: string[]
 ): Promise<void> {
-  const d = db(region);
-  if (!(await ensurePipelineOwned(d, userId, pipelineId))) throw new Error('not_found');
+  const d = db(s.region);
+  if (!(await ensurePipelineOwned(d, s.workspaceId, pipelineId))) throw new Error('not_found');
   const existing = await d
     .select({ id: pipelineStages.id })
     .from(pipelineStages)
@@ -479,14 +473,13 @@ export async function reorderStages(
 }
 
 export async function deleteStage(
-  userId: string,
-  region: string,
+  s: Scope,
   pipelineId: string,
   stageId: string,
   moveToStageId?: string | null
 ): Promise<void> {
-  const d = db(region);
-  if (!(await ensurePipelineOwned(d, userId, pipelineId))) throw new Error('not_found');
+  const d = db(s.region);
+  if (!(await ensurePipelineOwned(d, s.workspaceId, pipelineId))) throw new Error('not_found');
   if (!(await ensureStageInPipeline(d, pipelineId, stageId))) throw new Error('not_found');
 
   const items = await d
@@ -511,7 +504,7 @@ export async function deleteStage(
         fromStageId: stageId,
         toStageId: moveToStageId,
         at: now,
-        byUserId: userId
+        byUserId: s.userId
       });
     }
   }
@@ -530,7 +523,7 @@ export async function deleteStage(
 
 async function ensureMember(
   d: ReturnType<typeof db>,
-  userId: string,
+  workspaceId: string,
   kind: MemberKind,
   refId: string
 ): Promise<boolean> {
@@ -538,28 +531,27 @@ async function ensureMember(
     const r = await d
       .select({ id: people.id })
       .from(people)
-      .where(and(eq(people.id, refId), eq(people.userId, userId)))
+      .where(and(eq(people.id, refId), eq(people.workspaceId, workspaceId)))
       .get();
     return !!r;
   }
   const r = await d
     .select({ id: companies.id })
     .from(companies)
-    .where(and(eq(companies.id, refId), eq(companies.userId, userId)))
+    .where(and(eq(companies.id, refId), eq(companies.workspaceId, workspaceId)))
     .get();
   return !!r;
 }
 
 export async function addItemToPipeline(
-  userId: string,
-  region: string,
+  s: Scope,
   pipelineId: string,
   input: { kind: MemberKind; refId: string; stageId?: string | null }
 ): Promise<{ id: string; alreadyExisted: boolean }> {
-  const d = db(region);
-  if (!(await ensurePipelineOwned(d, userId, pipelineId))) throw new Error('not_found');
+  const d = db(s.region);
+  if (!(await ensurePipelineOwned(d, s.workspaceId, pipelineId))) throw new Error('not_found');
   if (!isMemberKind(input.kind)) throw new Error('invalid_kind');
-  if (!(await ensureMember(d, userId, input.kind, input.refId))) throw new Error('not_found');
+  if (!(await ensureMember(d, s.workspaceId, input.kind, input.refId))) throw new Error('not_found');
 
   const existing = await d
     .select({ id: pipelineItems.id })
@@ -619,7 +611,7 @@ export async function addItemToPipeline(
     fromStageId: null,
     toStageId: stageId,
     at: now,
-    byUserId: userId
+    byUserId: s.userId
   });
   await d
     .update(pipelines)
@@ -629,14 +621,13 @@ export async function addItemToPipeline(
 }
 
 export async function moveItemToStage(
-  userId: string,
-  region: string,
+  s: Scope,
   pipelineId: string,
   itemId: string,
   toStageId: string
 ): Promise<void> {
-  const d = db(region);
-  if (!(await ensurePipelineOwned(d, userId, pipelineId))) throw new Error('not_found');
+  const d = db(s.region);
+  if (!(await ensurePipelineOwned(d, s.workspaceId, pipelineId))) throw new Error('not_found');
   const item = await d
     .select()
     .from(pipelineItems)
@@ -658,7 +649,7 @@ export async function moveItemToStage(
     fromStageId: item.stageId,
     toStageId,
     at: now,
-    byUserId: userId
+    byUserId: s.userId
   });
   await d
     .update(pipelines)
@@ -673,14 +664,13 @@ export type UpdatePipelineItemInput = {
 };
 
 export async function updatePipelineItem(
-  userId: string,
-  region: string,
+  s: Scope,
   pipelineId: string,
   itemId: string,
   input: UpdatePipelineItemInput
 ): Promise<void> {
-  const d = db(region);
-  if (!(await ensurePipelineOwned(d, userId, pipelineId))) throw new Error('not_found');
+  const d = db(s.region);
+  if (!(await ensurePipelineOwned(d, s.workspaceId, pipelineId))) throw new Error('not_found');
   const item = await d
     .select({ id: pipelineItems.id })
     .from(pipelineItems)
@@ -714,13 +704,12 @@ export async function updatePipelineItem(
 }
 
 export async function getPipelineItemRef(
-  userId: string,
-  region: string,
+  s: Scope,
   pipelineId: string,
   itemId: string
 ): Promise<{ kind: MemberKind; refId: string } | null> {
-  const d = db(region);
-  if (!(await ensurePipelineOwned(d, userId, pipelineId))) return null;
+  const d = db(s.region);
+  if (!(await ensurePipelineOwned(d, s.workspaceId, pipelineId))) return null;
   const row = await d
     .select({ kind: pipelineItems.kind, refId: pipelineItems.refId })
     .from(pipelineItems)
@@ -730,14 +719,13 @@ export async function getPipelineItemRef(
 }
 
 export async function removePipelineItemByRef(
-  userId: string,
-  region: string,
+  s: Scope,
   pipelineId: string,
   kind: MemberKind,
   refId: string
 ): Promise<void> {
-  const d = db(region);
-  if (!(await ensurePipelineOwned(d, userId, pipelineId))) return;
+  const d = db(s.region);
+  if (!(await ensurePipelineOwned(d, s.workspaceId, pipelineId))) return;
   await d
     .delete(pipelineItems)
     .where(
@@ -751,13 +739,12 @@ export async function removePipelineItemByRef(
 }
 
 export async function removePipelineItem(
-  userId: string,
-  region: string,
+  s: Scope,
   pipelineId: string,
   itemId: string
 ): Promise<void> {
-  const d = db(region);
-  if (!(await ensurePipelineOwned(d, userId, pipelineId))) throw new Error('not_found');
+  const d = db(s.region);
+  if (!(await ensurePipelineOwned(d, s.workspaceId, pipelineId))) throw new Error('not_found');
   await d
     .delete(pipelineItems)
     .where(and(eq(pipelineItems.id, itemId), eq(pipelineItems.pipelineId, pipelineId)));
@@ -782,12 +769,11 @@ export type PipelineMembershipForEntity = {
 };
 
 export async function listPipelinesForEntity(
-  userId: string,
-  region: string,
+  s: Scope,
   kind: MemberKind,
   refId: string
 ): Promise<PipelineMembershipForEntity[]> {
-  const d = db(region);
+  const d = db(s.region);
   const rows = await d
     .select({
       pipelineId: pipelines.id,
@@ -804,7 +790,7 @@ export async function listPipelinesForEntity(
     .innerJoin(pipelineStages, eq(pipelineStages.id, pipelineItems.stageId))
     .where(
       and(
-        eq(pipelines.userId, userId),
+        eq(pipelines.workspaceId, s.workspaceId),
         eq(pipelineItems.kind, kind),
         eq(pipelineItems.refId, refId)
       )
@@ -818,18 +804,17 @@ export async function listPipelinesForEntity(
 }
 
 export async function searchPipelines(
-  userId: string,
-  region: string,
+  s: Scope,
   q: string,
   limit = 8
 ): Promise<{ id: string; name: string; isArchived: number }[]> {
-  const d = db(region);
+  const d = db(s.region);
   const fts = ftsQuery(q);
   if (!fts) {
     const rows = await d
       .select({ id: pipelines.id, name: pipelines.name, isArchived: pipelines.isArchived })
       .from(pipelines)
-      .where(eq(pipelines.userId, userId))
+      .where(eq(pipelines.workspaceId, s.workspaceId))
       .orderBy(desc(pipelines.updatedAt))
       .limit(limit);
     return rows.map((r) => ({ ...r, isArchived: Number(r.isArchived ?? 0) }));
@@ -838,7 +823,7 @@ export async function searchPipelines(
     SELECT p.id, p.name, p.is_archived AS isArchived
     FROM pipelines p
     JOIN pipelines_fts f ON f.rowid = p.rowid
-    WHERE p.user_id = ${userId} AND f.pipelines_fts MATCH ${fts}
+    WHERE p.workspace_id = ${s.workspaceId} AND f.pipelines_fts MATCH ${fts}
     ORDER BY rank
     LIMIT ${limit}
   `);
@@ -846,17 +831,16 @@ export async function searchPipelines(
 }
 
 export async function seedPipelineFromCollection(
-  userId: string,
-  region: string,
+  s: Scope,
   pipelineId: string,
   collectionId: string
 ): Promise<{ added: number }> {
-  const d = db(region);
+  const d = db(s.region);
 
   const coll = await d
     .select({ id: collections.id })
     .from(collections)
-    .where(and(eq(collections.id, collectionId), eq(collections.userId, userId)))
+    .where(and(eq(collections.id, collectionId), eq(collections.workspaceId, s.workspaceId)))
     .get();
   if (!coll) return { added: 0 };
 
@@ -889,10 +873,10 @@ export async function seedPipelineFromCollection(
 
   const [existingPeople, existingCompanies] = await Promise.all([
     personIds.length > 0
-      ? d.select({ id: people.id }).from(people).where(and(eq(people.userId, userId), inArray(people.id, personIds)))
+      ? d.select({ id: people.id }).from(people).where(and(eq(people.workspaceId, s.workspaceId), inArray(people.id, personIds)))
       : Promise.resolve([]),
     companyIds.length > 0
-      ? d.select({ id: companies.id }).from(companies).where(and(eq(companies.userId, userId), inArray(companies.id, companyIds)))
+      ? d.select({ id: companies.id }).from(companies).where(and(eq(companies.workspaceId, s.workspaceId), inArray(companies.id, companyIds)))
       : Promise.resolve([])
   ]);
 
@@ -926,7 +910,7 @@ export async function seedPipelineFromCollection(
       fromStageId: null,
       toStageId: firstStage.id,
       at: now,
-      byUserId: userId
+      byUserId: s.userId
     });
   }
 

@@ -13,6 +13,7 @@ import {
   type ProjectStatus
 } from './schema';
 import { ftsQuery } from './search';
+import type { Scope } from './scope';
 
 export type ProjectListRow = {
   id: string;
@@ -43,11 +44,10 @@ export type ListFilters = {
 };
 
 export async function listProjects(
-  userId: string,
-  region: string,
+  s: Scope,
   filters: ListFilters = {}
 ): Promise<ProjectListRow[]> {
-  const d = db(region);
+  const d = db(s.region);
   const limit = Math.min(filters.limit ?? 200, 500);
   const fts = filters.q ? ftsQuery(filters.q) : null;
 
@@ -64,7 +64,7 @@ export async function listProjects(
     ? sql`AND p.id IN (
         SELECT pp.id FROM projects pp
         JOIN projects_fts f ON f.rowid = pp.rowid
-        WHERE pp.user_id = ${userId} AND f.projects_fts MATCH ${fts}
+        WHERE pp.workspace_id = ${s.workspaceId} AND f.projects_fts MATCH ${fts}
       )`
     : sql``;
 
@@ -98,9 +98,9 @@ export async function listProjects(
       (SELECT MAX(i.occurred_at)
          FROM interaction_projects ip
          JOIN interactions i ON i.id = ip.interaction_id
-        WHERE ip.project_id = p.id AND i.user_id = ${userId}) AS lastInteractionAt
+        WHERE ip.project_id = p.id AND i.workspace_id = ${s.workspaceId}) AS lastInteractionAt
     FROM projects p
-    WHERE p.user_id = ${userId}
+    WHERE p.workspace_id = ${s.workspaceId}
       ${statusClause}
       ${personClause}
       ${companyClause}
@@ -134,15 +134,14 @@ export type ProjectDetail = Project & {
 };
 
 export async function getProject(
-  userId: string,
-  region: string,
+  s: Scope,
   id: string
 ): Promise<ProjectDetail | null> {
-  const d = db(region);
+  const d = db(s.region);
   const project = await d
     .select()
     .from(projects)
-    .where(and(eq(projects.id, id), eq(projects.userId, userId)))
+    .where(and(eq(projects.id, id), eq(projects.workspaceId, s.workspaceId)))
     .get();
   if (!project) return null;
 
@@ -165,7 +164,7 @@ export async function getProject(
       })
       .from(projectPeople)
       .innerJoin(people, eq(people.id, projectPeople.personId))
-      .where(and(eq(projectPeople.projectId, id), eq(people.userId, userId)))
+      .where(and(eq(projectPeople.projectId, id), eq(people.workspaceId, s.workspaceId)))
       .orderBy(asc(people.name)),
     d
       .select({
@@ -177,7 +176,7 @@ export async function getProject(
       })
       .from(projectCompanies)
       .innerJoin(companies, eq(companies.id, projectCompanies.companyId))
-      .where(and(eq(projectCompanies.projectId, id), eq(companies.userId, userId)))
+      .where(and(eq(projectCompanies.projectId, id), eq(companies.workspaceId, s.workspaceId)))
       .orderBy(asc(companies.name)),
     d
       .select({
@@ -188,7 +187,7 @@ export async function getProject(
       })
       .from(interactionProjects)
       .innerJoin(interactions, eq(interactions.id, interactionProjects.interactionId))
-      .where(and(eq(interactionProjects.projectId, id), eq(interactions.userId, userId)))
+      .where(and(eq(interactionProjects.projectId, id), eq(interactions.workspaceId, s.workspaceId)))
       .orderBy(desc(interactions.occurredAt))
   ]);
 
@@ -197,22 +196,20 @@ export async function getProject(
 
 /** Active projects where this person is a member. */
 export async function projectsForPerson(
-  userId: string,
-  region: string,
+  s: Scope,
   personId: string,
   status: ProjectStatus | 'all' = 'active'
 ): Promise<ProjectListRow[]> {
-  return listProjects(userId, region, { personId, status, sort: 'updated', limit: 50 });
+  return listProjects(s, { personId, status, sort: 'updated', limit: 50 });
 }
 
 /** Active projects where this company is a member. */
 export async function projectsForCompany(
-  userId: string,
-  region: string,
+  s: Scope,
   companyId: string,
   status: ProjectStatus | 'all' = 'active'
 ): Promise<ProjectListRow[]> {
-  return listProjects(userId, region, { companyId, status, sort: 'updated', limit: 50 });
+  return listProjects(s, { companyId, status, sort: 'updated', limit: 50 });
 }
 
 /**
@@ -220,12 +217,11 @@ export async function projectsForCompany(
  * by the "Together at {Company}" subsection on /people/[id].
  */
 export async function projectsTogether(
-  userId: string,
-  region: string,
+  s: Scope,
   personId: string,
   companyId: string
 ): Promise<ProjectListRow[]> {
-  return listProjects(userId, region, {
+  return listProjects(s, {
     personId,
     companyId,
     status: 'active',
@@ -241,13 +237,12 @@ export async function projectsTogether(
  * suggesting projects the user already pinned.
  */
 export async function suggestProjectsFor(
-  userId: string,
-  region: string,
+  s: Scope,
   args: { personIds?: string[]; companyId?: string | null; exclude?: string[] }
 ): Promise<{ id: string; name: string; status: ProjectStatus }[]> {
   const personIds = args.personIds ?? [];
   if (personIds.length === 0 && !args.companyId) return [];
-  const d = db(region);
+  const d = db(s.region);
   const exclude = args.exclude ?? [];
   const excludeClause =
     exclude.length > 0
@@ -275,7 +270,7 @@ export async function suggestProjectsFor(
   const rows = await d.all<{ id: string; name: string; status: string }>(sql`
     SELECT p.id, p.name, p.status
     FROM projects p
-    WHERE p.user_id = ${userId}
+    WHERE p.workspace_id = ${s.workspaceId}
       AND p.status = 'active'
       AND (${matchAny})
       ${excludeClause}
@@ -290,13 +285,12 @@ export async function suggestProjectsFor(
  * interaction list/detail pages without an N+1 lookup.
  */
 export async function projectsForInteractions(
-  userId: string,
-  region: string,
+  s: Scope,
   interactionIds: string[]
 ): Promise<Map<string, { id: string; name: string; status: ProjectStatus }[]>> {
   const out = new Map<string, { id: string; name: string; status: ProjectStatus }[]>();
   if (interactionIds.length === 0) return out;
-  const d = db(region);
+  const d = db(s.region);
   const rows = await d
     .select({
       interactionId: interactionProjects.interactionId,
@@ -306,7 +300,7 @@ export async function projectsForInteractions(
     })
     .from(interactionProjects)
     .innerJoin(projects, eq(projects.id, interactionProjects.projectId))
-    .where(and(eq(projects.userId, userId), inArray(interactionProjects.interactionId, interactionIds)));
+    .where(and(eq(projects.workspaceId, s.workspaceId), inArray(interactionProjects.interactionId, interactionIds)));
   for (const r of rows) {
     const list = out.get(r.interactionId) ?? [];
     list.push({ id: r.id, name: r.name, status: r.status as ProjectStatus });
@@ -319,18 +313,17 @@ export async function projectsForInteractions(
  * Lightweight typeahead for ProjectPicker. Used by /api/projects?q=&limit=.
  */
 export async function searchProjects(
-  userId: string,
-  region: string,
+  s: Scope,
   q: string,
   limit = 8
 ): Promise<{ id: string; name: string; status: ProjectStatus }[]> {
-  const d = db(region);
+  const d = db(s.region);
   const fts = ftsQuery(q);
   if (!fts) {
     const rows = await d
       .select({ id: projects.id, name: projects.name, status: projects.status })
       .from(projects)
-      .where(eq(projects.userId, userId))
+      .where(eq(projects.workspaceId, s.workspaceId))
       .orderBy(desc(projects.updatedAt))
       .limit(limit);
     return rows.map((r) => ({ ...r, status: r.status as ProjectStatus }));
@@ -339,7 +332,7 @@ export async function searchProjects(
     SELECT p.id, p.name, p.status
     FROM projects p
     JOIN projects_fts f ON f.rowid = p.rowid
-    WHERE p.user_id = ${userId}
+    WHERE p.workspace_id = ${s.workspaceId}
       AND f.projects_fts MATCH ${fts}
     ORDER BY rank
     LIMIT ${limit}
@@ -351,13 +344,12 @@ export type ProjectCompany = { id: string; name: string; domain: string | null; 
 
 /** Returns a map of projectId → companies for a batch of project ids. */
 export async function getCompaniesForProjects(
-  userId: string,
-  region: string,
+  s: Scope,
   projectIds: string[]
 ): Promise<Map<string, ProjectCompany[]>> {
   const out = new Map<string, ProjectCompany[]>();
   if (projectIds.length === 0) return out;
-  const d = db(region);
+  const d = db(s.region);
   const rows = await d
     .select({
       projectId: projectCompanies.projectId,
@@ -369,7 +361,7 @@ export async function getCompaniesForProjects(
     })
     .from(projectCompanies)
     .innerJoin(companies, eq(companies.id, projectCompanies.companyId))
-    .where(and(eq(companies.userId, userId), inArray(projectCompanies.projectId, projectIds)));
+    .where(and(eq(companies.workspaceId, s.workspaceId), inArray(projectCompanies.projectId, projectIds)));
   for (const r of rows) {
     const list = out.get(r.projectId) ?? [];
     list.push({ id: r.id, name: r.name, domain: r.domain, logoUrl: r.logoUrl, faviconUrl: r.faviconUrl });
