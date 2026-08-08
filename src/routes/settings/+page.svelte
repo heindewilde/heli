@@ -26,6 +26,89 @@
     `javascript:void(window.open('${data.origin}/save?url='+encodeURIComponent(location.href),'_blank'))`
   );
 
+  // ── Team ───────────────────────────────────────────────────────────────────
+  const teamAdmin = $derived(data.workspace.role === 'owner' || data.workspace.role === 'admin');
+  let inviteEmail = $state('');
+  let inviteRole = $state<'member' | 'admin'>('member');
+  let busy = $state<string | null>(null);
+
+  const INVITE_ERRORS: Record<string, string> = {
+    already_member: 'They are already in this workspace.',
+    already_invited: 'There is already a pending invitation for that address.',
+    invalid_email: 'That email address does not look right.',
+    seat_limit_reached: 'This workspace has no seats left.',
+    region_mismatch:
+      'That account already exists in a different data region and cannot join this workspace.'
+  };
+
+  async function sendInvite(e: SubmitEvent) {
+    e.preventDefault();
+    busy = 'invite';
+    try {
+      const res = await fetch('/api/workspace/invites', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ email: inviteEmail, role: inviteRole })
+      });
+      if (!res.ok) {
+        const code = (await res.text()).replace(/[^a-z_]/g, '');
+        toast.danger(INVITE_ERRORS[code] ?? 'Could not send that invitation.');
+        return;
+      }
+      const { emailed } = await res.json();
+      toast.success(emailed ? 'Invitation sent.' : 'Invitation created — copy the link to share it.');
+      inviteEmail = '';
+      await invalidateAll();
+    } catch {
+      toast.danger('Could not send that invitation.');
+    } finally {
+      busy = null;
+    }
+  }
+
+  async function revokeInvite(token: string) {
+    busy = token;
+    try {
+      const res = await fetch(`/api/workspace/invites/${encodeURIComponent(token)}`, {
+        method: 'DELETE'
+      });
+      if (!res.ok) throw new Error();
+      await invalidateAll();
+    } catch {
+      toast.danger('Could not revoke that invitation.');
+    } finally {
+      busy = null;
+    }
+  }
+
+  async function copyInvite(url: string) {
+    try {
+      await navigator.clipboard.writeText(url);
+      toast.success('Invite link copied.');
+    } catch {
+      toast.danger('Could not copy the link.');
+    }
+  }
+
+  async function removeMember(userId: string, label: string) {
+    if (!confirm(`Remove ${label} from this workspace? Records they created stay, reassigned to the owner.`)) {
+      return;
+    }
+    busy = userId;
+    try {
+      const res = await fetch(`/api/workspace/members/${encodeURIComponent(userId)}`, {
+        method: 'DELETE'
+      });
+      if (!res.ok) throw new Error();
+      toast.success(`${label} removed.`);
+      await invalidateAll();
+    } catch {
+      toast.danger('Could not remove that member.');
+    } finally {
+      busy = null;
+    }
+  }
+
   let importState = $state<'idle' | 'importing' | 'done'>('idle');
   let importResult = $state<{ imported: number; duplicates: number; errors: number } | null>(null);
 
@@ -191,6 +274,89 @@
       <span>Email is not configured — password reset links will only appear in server logs. Set <code class="font-mono text-xs">RESEND_API_KEY</code> in your environment to enable email delivery.</span>
     </div>
   {/if}
+
+  <section class="flex flex-col gap-4 rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)] p-5">
+    <h2 class="flex items-center gap-2 text-sm font-medium">
+      <Users size={14} strokeWidth={2} /> Team
+    </h2>
+    <p class="text-sm text-[var(--color-muted)]">
+      Everyone in <strong>{data.workspace.name}</strong> shares the same people, companies,
+      projects and pipelines. Reminders stay private to each person.
+    </p>
+
+    <ul class="flex flex-col divide-y divide-[var(--color-border)]">
+      {#each data.members as m (m.userId)}
+        <li class="flex items-center justify-between gap-3 py-2">
+          <div class="min-w-0">
+            <div class="truncate text-sm">{m.username ?? m.email}</div>
+            <div class="truncate text-xs text-[var(--color-muted)]">{m.email}</div>
+          </div>
+          <div class="flex shrink-0 items-center gap-2">
+            <span class="cap-label text-[var(--color-muted)]">{m.role}</span>
+            {#if teamAdmin && !m.isOwner && m.userId !== data.user.id}
+              <button
+                class="text-xs text-[var(--color-danger)] underline"
+                onclick={() => removeMember(m.userId, m.username ?? m.email)}
+                disabled={busy === m.userId}
+              >
+                Remove
+              </button>
+            {/if}
+          </div>
+        </li>
+      {/each}
+    </ul>
+
+    {#if teamAdmin}
+      <form class="flex flex-wrap items-center gap-2" onsubmit={sendInvite}>
+        <input
+          class="min-w-0 flex-1 rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-bg)] px-3 py-2 text-sm"
+          type="email"
+          placeholder="colleague@example.com"
+          bind:value={inviteEmail}
+          required
+        />
+        <select
+          class="rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-bg)] px-2 py-2 text-sm"
+          bind:value={inviteRole}
+        >
+          <option value="member">Member</option>
+          <option value="admin">Admin</option>
+        </select>
+        <button
+          class="rounded-[var(--radius-sm)] bg-[var(--color-accent)] px-3 py-2 text-sm text-[var(--color-accent-fg)] hover:bg-[var(--color-accent-hover)]"
+          type="submit"
+          disabled={busy === 'invite'}
+        >
+          {busy === 'invite' ? 'Inviting…' : 'Invite'}
+        </button>
+      </form>
+
+      {#if data.invites.length}
+        <div class="flex flex-col gap-2">
+          <span class="cap-label text-[var(--color-muted)]">Pending invitations</span>
+          {#each data.invites as inv (inv.token)}
+            <div class="flex items-center justify-between gap-3 text-sm">
+              <span class="truncate">{inv.email}</span>
+              <div class="flex shrink-0 items-center gap-3">
+                <!-- Always offered, whether or not email is configured: on a
+                     self-host without RESEND_API_KEY the link IS the delivery. -->
+                <button class="text-xs underline" onclick={() => copyInvite(inv.url)}>
+                  Copy link
+                </button>
+                <button
+                  class="text-xs text-[var(--color-danger)] underline"
+                  onclick={() => revokeInvite(inv.token)}
+                >
+                  Revoke
+                </button>
+              </div>
+            </div>
+          {/each}
+        </div>
+      {/if}
+    {/if}
+  </section>
 
   <section class="flex flex-col gap-3 rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)] p-5">
     <h2 class="flex items-center gap-2 text-sm font-medium"><Bookmark size={14} strokeWidth={2} /> Bookmarklet</h2>

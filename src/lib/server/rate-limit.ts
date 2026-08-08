@@ -11,7 +11,10 @@ export const LIMITS: Record<string, Limit> = {
   save: { name: 'save', max: 30, windowMs: 5 * 60 * 1000 },
   // Broad cap on authenticated API calls per user: 300 req/min.
   // Prevents bulk enumeration or resource exhaustion from a compromised session.
-  api: { name: 'api', max: 300, windowMs: 60 * 1000 }
+  api: { name: 'api', max: 300, windowMs: 60 * 1000 },
+  // Keyed by workspace, not user — invite spam is workspace-level abuse, and
+  // every invite can send an email that costs money.
+  invite: { name: 'invite', max: 20, windowMs: 60 * 60 * 1000 }
 };
 
 function gc() {

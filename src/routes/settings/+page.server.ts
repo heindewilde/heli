@@ -7,6 +7,9 @@ import { people, companies, interactions, users } from '$lib/server/schema';
 import { isEmailConfigured } from '$lib/server/email';
 import { OAUTH_SENTINEL } from '$lib/server/auth';
 import { getPendingImport, CONTACTS_IMPORT_COOKIE } from '$lib/server/google';
+import { listMembers, listMemberships } from '$lib/server/workspaces';
+import { listPendingInvites } from '$lib/server/invites';
+import { isAdmin } from '$lib/server/scope';
 import { env } from '$env/dynamic/private';
 
 export const load: PageServerLoad = async ({ locals, url, cookies }) => {
@@ -22,6 +25,13 @@ export const load: PageServerLoad = async ({ locals, url, cookies }) => {
   ]);
 
   const origin = url.origin;
+
+  const [members, memberships, invites] = await Promise.all([
+    listMembers(s.region, s.workspaceId),
+    listMemberships(s.region, s.userId),
+    // Pending invites carry a live join link, so only admins may see them.
+    isAdmin(s) ? listPendingInvites(s.region, s.workspaceId, origin) : Promise.resolve([])
+  ]);
   const googleAuthEnabled = !!(env.GOOGLE_CLIENT_ID && env.GOOGLE_CLIENT_SECRET);
 
   // Resolve any pending contacts import
@@ -49,6 +59,14 @@ export const load: PageServerLoad = async ({ locals, url, cookies }) => {
 
   return {
     user: locals.user,
+    workspace: {
+      id: s.workspaceId,
+      name: locals.user.workspaceName,
+      role: s.role
+    },
+    members,
+    memberships,
+    invites,
     counts: {
       people: Number(p?.n ?? 0),
       companies: Number(c?.n ?? 0),

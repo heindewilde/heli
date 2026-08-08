@@ -16,6 +16,7 @@ import {
   countMembers,
   createWorkspace,
   ensureWorkspace,
+  getMembership,
   getWorkspace,
   reassignAuthorship
 } from './workspaces';
@@ -84,10 +85,40 @@ export async function isFirstUser(): Promise<boolean> {
 // unless the operator opts back in with ENABLE_REGISTRATION=1. The legacy
 // DISABLE_REGISTRATION=1 remains a hard kill switch and still wins if set.
 // The first signup is always allowed so an empty install can bootstrap.
-export async function isRegistrationDisabled(): Promise<boolean> {
+export async function isRegistrationDisabled(inviteToken?: string | null): Promise<boolean> {
   if (process.env.DISABLE_REGISTRATION === '1') return true;
   if (await isFirstUser()) return false;
+  // A live invite admits its addressee even though public signup is closed.
+  // Without this, invites are dead on arrival on every self-host — the default
+  // there is closed-after-first-user, so the owner could never add a colleague.
+  // DISABLE_REGISTRATION stays a hard kill switch and is checked above.
+  if (inviteToken) {
+    const { getInvite } = await import('./invites');
+    if (await getInvite(inviteToken)) return false;
+  }
   return process.env.ENABLE_REGISTRATION !== '1';
+}
+
+/**
+ * Move a session to another workspace by minting a fresh session id.
+ *
+ * Rotating rather than updating in place is deliberate: the service worker
+ * caches GET /api/* keyed by URL with `Vary: Cookie`, and switching workspaces
+ * under the *same* cookie would let it serve the previous workspace's cached
+ * responses. A new cookie value partitions that cache naturally, and rotating
+ * on a privilege-context change is good hygiene anyway.
+ */
+export async function switchWorkspace(
+  currentSessionId: string,
+  userId: string,
+  region: string,
+  workspaceId: string
+): Promise<{ sessionId: string; expiresAt: number }> {
+  const m = await getMembership(region, workspaceId, userId);
+  if (!m) throw new AuthError('not_a_member');
+  await db(region).delete(sessions).where(eq(sessions.id, currentSessionId));
+  const session = await createSession(userId, region, workspaceId);
+  return { sessionId: session.id, expiresAt: session.expiresAt };
 }
 
 async function lookupRegion(email: string): Promise<string> {

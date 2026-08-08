@@ -8,6 +8,8 @@ declare global {
       // `workspaceName` are client-visible by design — the UI needs them to
       // render the workspace switcher and hide admin-only controls.
       user: AuthUser | null;
+      // Needed by /api/workspace/switch, which rotates the session id.
+      sessionId: string | null;
     }
   }
 }

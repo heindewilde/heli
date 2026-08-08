@@ -41,13 +41,16 @@ export const handle: Handle = async ({ event, resolve }) => {
     const session = await validateSession(cookie);
     if (session) {
       event.locals.user = session.user;
+      event.locals.sessionId = session.sessionId;
     } else {
       // Stale cookie — clear it.
       event.cookies.delete(SESSION_COOKIE, { path: '/' });
       event.locals.user = null;
+      event.locals.sessionId = null;
     }
   } else {
     event.locals.user = null;
+    event.locals.sessionId = null;
   }
 
   if (!event.locals.user) {
