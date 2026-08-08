@@ -19,6 +19,7 @@ import {
   ensureWorkspace,
   getMembership,
   getWorkspace,
+  purgeWorkspace,
   reassignAuthorship
 } from './workspaces';
 
@@ -557,26 +558,10 @@ export async function deleteAccount(userId: string, region: string): Promise<voi
   }
 
   // Sole-owner workspaces go with the account, matching the pre-workspaces
-  // behaviour. There is no cascade to lean on: workspace_id was added by ALTER
-  // (migrate.ts) as a plain `REFERENCES workspaces(id)` with no ON DELETE, so
-  // with PRAGMA foreign_keys = ON a bare `DELETE FROM workspaces` fails the
-  // moment the workspace holds a single row. Deleting the user first fails too
-  // — workspaces.owner_user_id references users(id) and deliberately doesn't
-  // cascade. So the content has to go explicitly, oldest reference last.
-  //
-  // Batched per workspace so a failure can't leave a half-emptied tenant.
+  // behaviour. purgeWorkspace explains why this can't lean on a cascade, and
+  // why deleting the user first fails too.
   for (const workspaceId of owned) {
-    const c = client(region);
-    await c.batch(
-      [
-        ...TENANT_TABLES.map((table) => ({
-          sql: `DELETE FROM ${table} WHERE workspace_id = ?`,
-          args: [workspaceId]
-        })),
-        { sql: `DELETE FROM workspaces WHERE id = ?`, args: [workspaceId] }
-      ],
-      'write'
-    );
+    await purgeWorkspace(region, workspaceId);
   }
 
   // Cascades sessions, oauth_accounts and password_reset_tokens. Note it also

@@ -5,6 +5,8 @@ import {
   MAX_OWNED_WORKSPACES,
   countOwnedWorkspaces,
   createWorkspace,
+  deleteWorkspace,
+  ensureWorkspace,
   renameWorkspace
 } from '$lib/server/workspaces';
 import { switchWorkspace } from '$lib/server/auth';
@@ -61,4 +63,32 @@ export const POST: RequestHandler = async ({ request, locals, cookies }) => {
   const rotated = await switchWorkspace(locals.sessionId, s.userId, s.region, workspaceId);
   setSessionCookie(cookies, rotated.sessionId);
   return json({ workspaceId }, { status: 201 });
+};
+
+/**
+ * Delete the active workspace and everything in it, then move this session
+ * somewhere it can still work.
+ *
+ * Owner-only and last-member-only — both enforced in deleteWorkspace. Deleting
+ * your only workspace is allowed and leaves you with a fresh empty one, which
+ * is the "start over" case; ensureWorkspace handles the id collision, since the
+ * user-id slot may have belonged to the workspace just removed.
+ */
+export const DELETE: RequestHandler = async ({ locals, cookies }) => {
+  const s = requireScope(locals);
+  requireRole(s, 'owner');
+  if (!locals.sessionId) throw error(401, 'unauthorized');
+  try {
+    await deleteWorkspace(s.region, s.workspaceId, s.userId);
+  } catch (err) {
+    throw error(400, (err as Error).message);
+  }
+  const next = await ensureWorkspace(
+    s.region,
+    s.userId,
+    `${locals.user?.username ?? 'My'}'s workspace`
+  );
+  const rotated = await switchWorkspace(locals.sessionId, s.userId, s.region, next.workspaceId);
+  setSessionCookie(cookies, rotated.sessionId);
+  return json({ workspaceId: next.workspaceId, workspaceName: next.workspaceName });
 };

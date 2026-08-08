@@ -115,12 +115,33 @@
   let workspaceName = $state(data.workspace.name);
   let newWorkspaceName = $state('');
 
+  let deleteWorkspaceConfirm = $state('');
+
   const WORKSPACE_ERRORS: Record<string, string> = {
     rate_limited: 'Too many workspaces created recently. Try again later.',
     workspace_limit_reached: 'You already own the maximum number of workspaces.',
     missing_name: 'Give the workspace a name.',
-    invalid_name: 'Give the workspace a name.'
+    invalid_name: 'Give the workspace a name.',
+    workspace_has_members: 'Remove the other members first, or hand the workspace over.',
+    not_owner: 'Only the owner can delete a workspace.'
   };
+
+  async function deleteWorkspace() {
+    busy = 'deleteWorkspace';
+    try {
+      const res = await fetch('/api/workspace', { method: 'DELETE' });
+      if (!res.ok) {
+        toast.danger(WORKSPACE_ERRORS[await readErrorCode(res)] ?? 'Could not delete this workspace.');
+        return;
+      }
+      navigator.serviceWorker?.controller?.postMessage('PURGE_API');
+      location.assign('/');
+    } catch {
+      toast.danger('Could not delete this workspace.');
+    } finally {
+      busy = null;
+    }
+  }
 
   async function renameWorkspace(e: SubmitEvent) {
     e.preventDefault();
@@ -478,6 +499,41 @@
     <p class="text-xs text-[var(--color-muted)]">
       A new workspace starts empty and you own it. Creating one switches you into it.
     </p>
+
+    {#if isOwner}
+      <!-- Typed-name confirmation rather than the usual confirm(): this removes
+           every record in the workspace, and unlike deleting a single entity
+           there is nothing left to undo it from. -->
+      <div class="flex flex-col gap-2 rounded-[var(--radius-sm)] border border-[var(--color-danger-border)] bg-[var(--color-danger-bg)] p-4">
+        <span class="text-sm font-medium text-[var(--color-danger)]">Delete this workspace</span>
+        <p class="text-sm text-[var(--color-muted)]">
+          Permanently removes {data.workspace.name} and its {data.counts.people} people,
+          {data.counts.companies} companies and {data.counts.interactions} interactions.
+          {#if data.members.length > 1}
+            Remove the other members first.
+          {:else}
+            Type the workspace name to confirm.
+          {/if}
+        </p>
+        {#if data.members.length === 1}
+          <div class="flex flex-wrap items-center gap-2">
+            <input
+              class="min-w-0 flex-1 rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-bg)] px-3 py-2 text-sm"
+              type="text"
+              placeholder={data.workspace.name}
+              bind:value={deleteWorkspaceConfirm}
+            />
+            <button
+              class="shrink-0 rounded-[var(--radius-sm)] bg-[var(--color-danger)] px-3 py-2 text-sm font-medium text-white disabled:opacity-60"
+              onclick={deleteWorkspace}
+              disabled={busy === 'deleteWorkspace' || deleteWorkspaceConfirm !== data.workspace.name}
+            >
+              {busy === 'deleteWorkspace' ? 'Deleting…' : 'Delete workspace'}
+            </button>
+          </div>
+        {/if}
+      </div>
+    {/if}
   </section>
 
   <section class="flex flex-col gap-4 rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)] p-5">

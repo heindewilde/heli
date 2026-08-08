@@ -166,6 +166,48 @@ export async function reassignAuthorship(
   }
 }
 
+/**
+ * Delete a workspace and everything in it.
+ *
+ * There is no cascade to lean on: `workspace_id` was added by ALTER as a plain
+ * `REFERENCES workspaces(id)` with no ON DELETE, so with `PRAGMA foreign_keys =
+ * ON` a bare `DELETE FROM workspaces` fails the moment the workspace holds a
+ * single row. The contents go first, in one batch, so a failure can't leave a
+ * half-emptied tenant. `workspace_members` and `workspace_invites` *do* cascade
+ * (see the DDL) and are not listed here.
+ */
+export async function purgeWorkspace(region: string, workspaceId: string): Promise<void> {
+  await client(region).batch(
+    [
+      ...TENANT_TABLES.map((table) => ({
+        sql: `DELETE FROM ${table} WHERE workspace_id = ?`,
+        args: [workspaceId]
+      })),
+      { sql: `DELETE FROM workspaces WHERE id = ?`, args: [workspaceId] }
+    ],
+    'write'
+  );
+}
+
+/**
+ * Owner-only, last-member-only workspace deletion.
+ *
+ * Requiring sole membership is what keeps this from being a way to destroy
+ * colleagues' work: hand the workspace over or remove people first, which are
+ * both deliberate acts with their own confirmations.
+ */
+export async function deleteWorkspace(
+  region: string,
+  workspaceId: string,
+  actingUserId: string
+): Promise<void> {
+  const ws = await getWorkspace(region, workspaceId);
+  if (!ws) throw new Error('workspace_not_found');
+  if (ws.ownerUserId !== actingUserId) throw new Error('not_owner');
+  if ((await countMembers(region, workspaceId)) > 1) throw new Error('workspace_has_members');
+  await purgeWorkspace(region, workspaceId);
+}
+
 export const WORKSPACE_NAME_MAX = 80;
 
 /** How many workspaces one account may own. A durable backstop to the rate limit. */

@@ -145,6 +145,12 @@ console.log(`tenancy: ${TENANT.length} tenant tables, every query scoped`);
  * The permission line drawn across the API is only as durable as the next
  * endpoint someone adds. This forces the decision to be written down: either
  * call requireRole, or say here why members are allowed.
+ *
+ * Known limitation: the check is per *file*, not per handler. A file that
+ * already calls requireRole anywhere passes, so adding an unguarded DELETE next
+ * to a guarded PATCH would not be caught. Making it per-handler needs the
+ * allowlist keyed by `path#METHOD`; worth doing if a file ever grows a mix that
+ * isn't obvious on sight. Files where the mix is deliberate say so below.
  */
 
 const API_ROOT = 'src/routes/api';
@@ -185,7 +191,7 @@ const MEMBER_ALLOWED = new Map<string, string>([
   ['user/+server.ts', 'acts on your own account, re-authenticated by password'],
   ['workspace/switch/+server.ts', 'membership is checked inside switchWorkspace'],
   ['workspace/members/+server.ts', 'GET only'],
-  ['workspace/+server.ts', 'POST creates your own workspace; PATCH calls requireRole']
+  ['workspace/+server.ts', 'POST creates your own workspace; PATCH and DELETE call requireRole']
 ]);
 
 const MUTATING = /export const (POST|PATCH|PUT|DELETE)\b/;
