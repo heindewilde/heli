@@ -70,6 +70,50 @@ Heli is a personal CRM. SvelteKit 2 (adapter-node, full SSR) + libSQL/SQLite + D
 - **CommandPalette debounce: 40ms**. Stale-response guard (`q.trim() !== v`) prevents out-of-order renders.
 - **Server-side LRU** in `src/lib/server/search.ts` wraps `searchAll()`. Cap 256, TTL 30s, keyed by `region:userId:perKind:rawQ`. Per-process so multi-region deployments get one cache per region for free. 30s TTL means a freshly-added entity can take up to 30s to appear in cached hits — acceptable; add explicit invalidation if it bites.
 
+## Tenancy — read this before touching any query
+
+Heli is multi-user. A **workspace** owns every CRM record; `user_id` on those
+tables is *created-by attribution only and must never be used as a filter*.
+
+- **Every server query helper takes a `Scope`** (`src/lib/server/scope.ts`), not
+  `(userId, region)`. Mint one with `requireScope(locals)` — that's the only
+  sanctioned way, the type is branded. `requireRole(s, 'owner', 'admin')` gates
+  admin-only actions. Filter on `s.workspaceId`; write `s.userId` only into
+  `user_id`/`by_user_id` columns.
+- **`npm run check` now runs `scripts/check-tenancy.ts`**, which fails on any
+  `user_id =` filter or `eq(x.userId, …)` outside an explicit allowlist. If you
+  add a genuinely user-scoped query (sessions, memberships, account settings),
+  add the file to `ALLOW_FILES` with a reason — don't weaken the regex.
+- **Raw SQL is the blind spot.** The `Scope` arity change makes most mistakes a
+  compile error, but template-literal SQL type-checks fine while filtering the
+  wrong column. That's what the lint is for. Four files shipped this bug once
+  already by aliasing `const userId = locals.user.id` first.
+- **Reminders are personal**, tasks are shared. Reminder reads filter on
+  `(workspace_id, user_id)`; the index is `idx_reminders_ws_user_at`. Don't
+  "simplify" that to workspace-only.
+- **A workspace is pinned to one region** — its rows live in one regional DB, so
+  every member must resolve to that region. Cross-region invites are rejected at
+  creation time; `scripts/migrate-user.mjs` is the documented escape hatch.
+- **`workspaces.id === users.id` for the owner's first workspace.** The backfill
+  depends on that bijection (it's what made re-keying five unique indexes on live
+  data collision-free) and `createWorkspace` keeps it true for new signups. Don't
+  write `WHERE workspace_id = user_id` anywhere — it's an artifact, not a rule.
+- **Never delete a user row that still owns workspace content.** `user_id` keeps
+  its `ON DELETE CASCADE`, so `removeMember`/`deleteAccount` call
+  `reassignAuthorship()` first. Repointing that FK properly would need SQLite
+  table rebuilds, and a rebuild reassigns rowids — silently invalidating all six
+  FTS5 external-content indexes in a way `rebuildFts()`'s count check cannot
+  detect.
+- **The search LRU is keyed by workspace**, with a per-workspace epoch bumped on
+  write (`bumpSearchEpoch`). Keying it by user while queries filter by workspace
+  would leak straight out of cache.
+- **Workspace switching rotates the session id** and posts `PURGE_API` to the
+  service worker. `Vary: Cookie` alone can't tell two workspaces apart behind one
+  cookie.
+- **`migrate.ts` has no version tracking and re-runs every boot.** One-shot
+  backfills must be gated on the `schema_meta` table, or they full-scan every
+  tenant table at every startup.
+
 ## Implementation gotchas to remember
 
 - **FTS5 triggers**: when adding/altering FTS5 virtual tables, mirror `ai/ad/au` triggers for every column listed in the `CREATE VIRTUAL TABLE` block. On migration, seed `INSERT INTO *_fts(rowid, …) SELECT …` so pre-existing rows are searchable.
