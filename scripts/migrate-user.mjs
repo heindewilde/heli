@@ -75,7 +75,8 @@ async function all(client, sql, args = []) {
   return r.rows;
 }
 
-// Tables in dependency order. Parent-scoped tables carry a userId column we rewrite.
+// Tables in dependency order. Parent-scoped tables carry workspace_id (the
+// tenancy key) and user_id (created-by attribution); both get rewritten.
 // Child link tables are scoped via their parent and selected with a JOIN.
 const PARENT_TABLES = [
   'company_statuses',
@@ -85,6 +86,7 @@ const PARENT_TABLES = [
   'people',
   'interactions',
   'reminders',
+  'tasks',
   'projects',
   'collections',
   'pipelines',
@@ -94,27 +96,27 @@ const PARENT_TABLES = [
 // child table → SELECT (joined to parent on src to scope by userId)
 const CHILD_QUERIES = {
   person_tags:
-    'SELECT pt.* FROM person_tags pt JOIN people p ON p.id = pt.person_id WHERE p.user_id = ?',
+    'SELECT pt.* FROM person_tags pt JOIN people p ON p.id = pt.person_id WHERE p.workspace_id = ?',
   company_tags:
-    'SELECT ct.* FROM company_tags ct JOIN companies c ON c.id = ct.company_id WHERE c.user_id = ?',
+    'SELECT ct.* FROM company_tags ct JOIN companies c ON c.id = ct.company_id WHERE c.workspace_id = ?',
   interaction_people:
-    'SELECT ip.* FROM interaction_people ip JOIN interactions i ON i.id = ip.interaction_id WHERE i.user_id = ?',
+    'SELECT ip.* FROM interaction_people ip JOIN interactions i ON i.id = ip.interaction_id WHERE i.workspace_id = ?',
   interaction_projects:
-    'SELECT ipr.* FROM interaction_projects ipr JOIN interactions i ON i.id = ipr.interaction_id WHERE i.user_id = ?',
+    'SELECT ipr.* FROM interaction_projects ipr JOIN interactions i ON i.id = ipr.interaction_id WHERE i.workspace_id = ?',
   project_links:
-    'SELECT pl.* FROM project_links pl JOIN projects p ON p.id = pl.project_id WHERE p.user_id = ?',
+    'SELECT pl.* FROM project_links pl JOIN projects p ON p.id = pl.project_id WHERE p.workspace_id = ?',
   project_people:
-    'SELECT pp.* FROM project_people pp JOIN projects p ON p.id = pp.project_id WHERE p.user_id = ?',
+    'SELECT pp.* FROM project_people pp JOIN projects p ON p.id = pp.project_id WHERE p.workspace_id = ?',
   project_companies:
-    'SELECT pc.* FROM project_companies pc JOIN projects p ON p.id = pc.project_id WHERE p.user_id = ?',
+    'SELECT pc.* FROM project_companies pc JOIN projects p ON p.id = pc.project_id WHERE p.workspace_id = ?',
   collection_items:
-    'SELECT ci.* FROM collection_items ci JOIN collections c ON c.id = ci.collection_id WHERE c.user_id = ?',
+    'SELECT ci.* FROM collection_items ci JOIN collections c ON c.id = ci.collection_id WHERE c.workspace_id = ?',
   pipeline_stages:
-    'SELECT ps.* FROM pipeline_stages ps JOIN pipelines p ON p.id = ps.pipeline_id WHERE p.user_id = ?',
+    'SELECT ps.* FROM pipeline_stages ps JOIN pipelines p ON p.id = ps.pipeline_id WHERE p.workspace_id = ?',
   pipeline_items:
-    'SELECT pi.* FROM pipeline_items pi JOIN pipelines p ON p.id = pi.pipeline_id WHERE p.user_id = ?',
+    'SELECT pi.* FROM pipeline_items pi JOIN pipelines p ON p.id = pi.pipeline_id WHERE p.workspace_id = ?',
   pipeline_item_events:
-    'SELECT pie.* FROM pipeline_item_events pie JOIN pipeline_items pi ON pi.id = pie.item_id JOIN pipelines p ON p.id = pi.pipeline_id WHERE p.user_id = ?'
+    'SELECT pie.* FROM pipeline_item_events pie JOIN pipeline_items pi ON pi.id = pie.item_id JOIN pipelines p ON p.id = pi.pipeline_id WHERE p.workspace_id = ?'
 };
 
 async function tableColumns(client, table) {
@@ -122,7 +124,8 @@ async function tableColumns(client, table) {
   return rows.map((r) => r.name);
 }
 
-async function buildInserts(table, srcUserId, dstUserId, selectSql, selectArgs) {
+async function buildInserts(table, ids, selectSql, selectArgs) {
+  const { srcUserId, dstUserId, srcWorkspaceId, dstWorkspaceId } = ids;
   const cols = await tableColumns(dst, table);
   const rows = await all(src, selectSql, selectArgs);
   if (rows.length === 0) {
@@ -134,6 +137,9 @@ async function buildInserts(table, srcUserId, dstUserId, selectSql, selectArgs) 
   const stmts = [];
   for (const row of rows) {
     if ('user_id' in row && row.user_id === srcUserId) row.user_id = dstUserId;
+    if ('workspace_id' in row && row.workspace_id === srcWorkspaceId) {
+      row.workspace_id = dstWorkspaceId;
+    }
     if (table === 'pipeline_item_events' && row.by_user_id === srcUserId) {
       row.by_user_id = dstUserId;
     }
@@ -164,6 +170,16 @@ async function main() {
 
   const srcUserId = String(srcUser.id);
   const dstUserId = String(dstUser.id);
+
+  const srcWs = await one(src, 'SELECT id FROM workspaces WHERE owner_user_id = ?', [srcUserId]);
+  const dstWs = await one(dst, 'SELECT id FROM workspaces WHERE owner_user_id = ?', [dstUserId]);
+  if (!srcWs) throw new Error(`source user ${SRC_EMAIL} owns no workspace in ${SRC}`);
+  if (!dstWs) throw new Error(`destination user ${DST_EMAIL} owns no workspace in ${DST}`);
+  const srcWorkspaceId = String(srcWs.id);
+  const dstWorkspaceId = String(dstWs.id);
+  const ids = { srcUserId, dstUserId, srcWorkspaceId, dstWorkspaceId };
+  console.log(`src workspace: ${srcWorkspaceId}`);
+  console.log(`dst workspace: ${dstWorkspaceId}`);
   console.log(`src user: ${srcUser.email} (${srcUserId})`);
   console.log(`dst user: ${dstUser.email} (${dstUserId})`);
   if (DRY) console.log('-- DRY RUN: no writes to dst --');
@@ -171,8 +187,8 @@ async function main() {
   // Sanity: dst must be empty for this user (no prior partial migration).
   const existing = await one(
     dst,
-    'SELECT COUNT(*) AS n FROM companies WHERE user_id = ?',
-    [dstUserId]
+    'SELECT COUNT(*) AS n FROM companies WHERE workspace_id = ?',
+    [dstWorkspaceId]
   );
   if (Number(existing.n) > 0) {
     throw new Error(
@@ -184,14 +200,14 @@ async function main() {
   console.log('parent tables:');
   for (const t of PARENT_TABLES) {
     stmts.push(
-      ...(await buildInserts(t, srcUserId, dstUserId, `SELECT * FROM ${t} WHERE user_id = ?`, [
-        srcUserId
+      ...(await buildInserts(t, ids, `SELECT * FROM ${t} WHERE workspace_id = ?`, [
+        srcWorkspaceId
       ]))
     );
   }
   console.log('child tables:');
   for (const [t, sql] of Object.entries(CHILD_QUERIES)) {
-    stmts.push(...(await buildInserts(t, srcUserId, dstUserId, sql, [srcUserId])));
+    stmts.push(...(await buildInserts(t, ids, sql, [srcWorkspaceId])));
   }
 
   if (DRY) {
