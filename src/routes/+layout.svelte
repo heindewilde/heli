@@ -203,11 +203,6 @@
           <span class="text-lg leading-none" aria-hidden="true">🚁</span>
           <span class="hidden text-xl font-bold tracking-[-0.04em] sm:inline">heli</span>
         </a>
-        <!-- Renders nothing unless the user belongs to more than one workspace. -->
-        <WorkspaceSwitcher
-          memberships={data.memberships ?? []}
-          activeId={data.user?.workspaceId ?? ''}
-        />
       </div>
       <!-- SaveBar: same left padding as main content (md:pl-6) -->
       <div class="min-w-0 flex-1 md:pl-6">
@@ -276,6 +271,13 @@
       class="fixed bottom-0 left-0 top-14 z-40 w-64 transform border-r border-[var(--color-border)] bg-[var(--color-bg)] p-4 transition-transform duration-200 ease-out md:w-48 md:border-r-0 md:px-4 md:py-4 md:translate-x-0 {sidebarOpen ? 'translate-x-0 shadow-[var(--shadow-lg)]' : '-translate-x-full md:translate-x-0'}"
       aria-label="Primary navigation"
     >
+      <!-- Above the nav, and styled as a control rather than a link: it changes
+           which workspace every link below points into. Renders nothing (divider
+           included) unless the user belongs to more than one workspace. -->
+      <WorkspaceSwitcher
+        memberships={data.memberships ?? []}
+        activeId={data.user?.workspaceId ?? ''}
+      />
       <nav class="flex flex-col gap-0.5" data-sveltekit-preload-code="viewport">
         {#each tabs as tab (tab.href)}
           {@const active = tab.href === '/' ? page.url.pathname === '/' : page.url.pathname === tab.href || page.url.pathname.startsWith(tab.href + '/')}
