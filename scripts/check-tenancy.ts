@@ -70,3 +70,145 @@ if (problems.length) {
 }
 
 console.log('tenancy: no stray user_id filters');
+
+/*
+ * ─────────────────────────────────────────────────────────────────────────────
+ * Rule B: a query that touches a tenant table must filter by workspace.
+ *
+ * The rule above catches filtering on the *wrong* column. It cannot catch the
+ * absence of a filter, which fails exactly as badly.
+ *
+ * This has to work on whole statements rather than lines. Of the ~130 sql``
+ * literals in src/, only about two dozen are executed query bodies; the rest
+ * are fragments — ORDER BY clauses, `AND …` predicates, empty sentinels, and
+ * the shared column lists in {people,companies}-rows.ts. A line-oriented rule
+ * would fire on every one of them. So: only literals that contain both a
+ * FROM/JOIN against a tenant table and a WHERE are candidates, which skips
+ * fragments for free.
+ *
+ * The tenant table list comes from TENANT_TABLES in migrate.ts, read as text
+ * rather than imported (importing pulls in the db client and its env). Join
+ * tables like project_people carry no workspace_id at all and are absent from
+ * that list, which is also what clears the handful of correlated EXISTS/IN
+ * subqueries that filter through their parent.
+ */
+
+const MIGRATE = 'src/lib/server/migrate.ts';
+const tenantBlock = readFileSync(MIGRATE, 'utf8').match(
+  /export const TENANT_TABLES = \[([\s\S]*?)\]/
+);
+if (!tenantBlock) {
+  console.error(`tenancy: could not read TENANT_TABLES from ${MIGRATE}`);
+  process.exit(1);
+}
+const TENANT = [...tenantBlock[1].matchAll(/'([a-z_]+)'/g)].map((m) => m[1]);
+const TENANT_RE = new RegExp(`\\b(?:FROM|JOIN)\\s+(?:${TENANT.join('|')})\\b`, 'i');
+
+/** Opt out with `// tenancy-ok: <reason>` on the line above the literal. */
+const PRAGMA = /\/\/\s*tenancy-ok:/;
+
+const unscoped: string[] = [];
+for (const file of walk(ROOT)) {
+  const rel = file.replace(/\\/g, '/');
+  if (rel === MIGRATE) continue; // DDL and backfills, by definition unscoped
+  const src = readFileSync(file, 'utf8');
+
+  // sql`…` template literals and c.execute(`…`) raw strings alike.
+  for (const m of src.matchAll(/(?:sql|execute\(|executeMultiple\()\s*`([\s\S]*?)`/g)) {
+    const body = m[1];
+    if (!TENANT_RE.test(body)) continue;
+    if (!/\bWHERE\b/i.test(body)) continue;
+    if (/workspace_id/i.test(body)) continue;
+    const before = src.slice(0, m.index ?? 0);
+    if (PRAGMA.test(before.slice(before.lastIndexOf('\n', before.lastIndexOf('\n') - 1)))) continue;
+    const line = before.split('\n').length;
+    unscoped.push(`${rel}:${line}  ${body.trim().replace(/\s+/g, ' ').slice(0, 90)}…`);
+  }
+}
+
+if (unscoped.length) {
+  console.error('tenancy: SQL against a tenant table with no workspace_id filter:\n');
+  for (const p of unscoped) console.error('  ' + p);
+  console.error(
+    `\n${unscoped.length} problem(s). Add the workspace filter, or mark the line above ` +
+      'with `// tenancy-ok: <reason>` if the scope genuinely comes from elsewhere.'
+  );
+  process.exit(1);
+}
+
+console.log(`tenancy: ${TENANT.length} tenant tables, every query scoped`);
+
+/*
+ * ─────────────────────────────────────────────────────────────────────────────
+ * Rule C: a mutating API handler must be explicit about role.
+ *
+ * The permission line drawn across the API is only as durable as the next
+ * endpoint someone adds. This forces the decision to be written down: either
+ * call requireRole, or say here why members are allowed.
+ */
+
+const API_ROOT = 'src/routes/api';
+
+// Routes any workspace member may call, with the reason. Everything else that
+// mutates must call requireRole.
+const MEMBER_ALLOWED = new Map<string, string>([
+  ['collections/+server.ts', 'creating a list is routine CRM work'],
+  ['collections/[id]/+server.ts', 'a collection is a saved view, not shared config'],
+  ['collections/[id]/items/+server.ts', 'adding a record to a list'],
+  ['collections/[id]/sync/+server.ts', 'unlinking your own collection from a pipeline'],
+  ['companies/+server.ts', 'routine CRM work'],
+  ['companies/[id]/+server.ts', 'routine CRM work'],
+  ['import/+server.ts', 'DELETE only discards the staging cookie; POST is role-guarded'],
+  ['interactions/+server.ts', 'routine CRM work'],
+  ['interactions/[id]/+server.ts', 'routine CRM work'],
+  ['interactions/[id]/people/+server.ts', 'linking a person to an interaction'],
+  ['people/+server.ts', 'routine CRM work'],
+  ['people/[id]/+server.ts', 'routine CRM work'],
+  ['pipelines/+server.ts', 'creating a pipeline is routine; deleting one is guarded'],
+  ['pipelines/[id]/+server.ts', 'PATCH is routine; DELETE calls requireRole'],
+  ['pipelines/[id]/items/+server.ts', 'moving deals through a board is the job'],
+  ['pipelines/[id]/items/[itemId]/move/+server.ts', 'moving deals through a board is the job'],
+  ['pipelines/[id]/stages/+server.ts', 'add/rename/recolour is routine; reorder and delete call requireRole'],
+  ['projects/+server.ts', 'routine CRM work'],
+  ['projects/[id]/+server.ts', 'routine CRM work'],
+  ['projects/[id]/companies/+server.ts', 'linking records'],
+  ['projects/[id]/interactions/+server.ts', 'linking records'],
+  ['projects/[id]/links/+server.ts', 'linking records'],
+  ['projects/[id]/people/+server.ts', 'linking records'],
+  ['reminders/+server.ts', 'reminders are personal'],
+  ['reminders/[id]/+server.ts', 'reminders are personal'],
+  ['save/+server.ts', 'the bookmarklet entry point; rate-limited instead'],
+  ['statuses/+server.ts', 'POST is routine; DELETE calls requireRole'],
+  ['tags/+server.ts', 'attaching and detaching a tag on one record'],
+  ['tasks/+server.ts', 'tasks are shared and routine'],
+  ['tasks/[id]/+server.ts', 'tasks are shared and routine'],
+  ['user/+server.ts', 'acts on your own account, re-authenticated by password'],
+  ['workspace/switch/+server.ts', 'membership is checked inside switchWorkspace'],
+  ['workspace/members/+server.ts', 'GET only'],
+  ['workspace/+server.ts', 'POST creates your own workspace; PATCH calls requireRole']
+]);
+
+const MUTATING = /export const (POST|PATCH|PUT|DELETE)\b/;
+
+const ungoverned: string[] = [];
+for (const file of walk(API_ROOT)) {
+  const rel = file.replace(/\\/g, '/');
+  const src = readFileSync(file, 'utf8');
+  if (!MUTATING.test(src)) continue;
+  if (/requireRole\s*\(/.test(src)) continue;
+  const key = rel.slice(API_ROOT.length + 1);
+  if (MEMBER_ALLOWED.has(key)) continue;
+  ungoverned.push(rel);
+}
+
+if (ungoverned.length) {
+  console.error('tenancy: mutating endpoints with no role decision:\n');
+  for (const p of ungoverned) console.error('  ' + p);
+  console.error(
+    `\n${ungoverned.length} problem(s). Call requireRole(s, 'owner', 'admin'), or add the ` +
+      'route to MEMBER_ALLOWED in scripts/check-tenancy.ts with the reason members may call it.'
+  );
+  process.exit(1);
+}
+
+console.log(`tenancy: ${MEMBER_ALLOWED.size} member-allowed routes, rest role-guarded`);
