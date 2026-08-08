@@ -1,5 +1,6 @@
 <script lang="ts">
   import { invalidateAll } from '$app/navigation';
+  import { readErrorCode } from '$lib/api-error';
   import { Plus, Trash2, ExternalLink, Pencil, Check, X } from 'lucide-svelte';
   import { toast } from '$lib/toasts.svelte';
 
@@ -44,11 +45,11 @@
         body: JSON.stringify({ url, label: newLabel.trim() || null })
       });
       if (!res.ok) {
-        const code = await res.text().catch(() => '');
+        const code = await readErrorCode(res);
         toast.danger(
-          code.includes('bad_scheme')
+          code === 'bad_scheme'
             ? 'Only http(s) links are allowed.'
-            : code.includes('missing_url')
+            : code === 'missing_url'
               ? 'Paste a URL first.'
               : 'Could not save link.'
         );

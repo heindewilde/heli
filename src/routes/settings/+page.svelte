@@ -2,6 +2,7 @@
   import { goto, invalidateAll } from '$app/navigation';
   import { APP_NAME } from '$lib/branding';
   import { toast } from '$lib/toasts.svelte';
+  import { readErrorCode } from '$lib/api-error';
   import { Bookmark, Building2, Download, ShieldAlert, KeyRound, Mail, User, LogOut, Copy, Check, Users } from 'lucide-svelte';
 
   let { data } = $props();
@@ -53,12 +54,7 @@
         body: JSON.stringify({ email: inviteEmail, role: inviteRole })
       });
       if (!res.ok) {
-        // Endpoint errors arrive as JSON `{message: '<code>'}` — the same shape
-        // postUser() reads below. Scrubbing res.text() instead yields
-        // 'messagealready_invited', which matched nothing and made every entry
-        // in INVITE_ERRORS unreachable.
-        const body = await res.json().catch(() => null);
-        toast.danger(INVITE_ERRORS[body?.message] ?? 'Could not send that invitation.');
+        toast.danger(INVITE_ERRORS[await readErrorCode(res)] ?? 'Could not send that invitation.');
         return;
       }
       const { emailed } = await res.json();
@@ -136,8 +132,7 @@
         body: JSON.stringify({ name: workspaceName })
       });
       if (!res.ok) {
-        const body = await res.json().catch(() => null);
-        toast.danger(WORKSPACE_ERRORS[body?.message] ?? 'Could not rename this workspace.');
+        toast.danger(WORKSPACE_ERRORS[await readErrorCode(res)] ?? 'Could not rename this workspace.');
         return;
       }
       toast.success('Workspace renamed.');
@@ -162,8 +157,7 @@
         body: JSON.stringify({ name: newWorkspaceName })
       });
       if (!res.ok) {
-        const body = await res.json().catch(() => null);
-        toast.danger(WORKSPACE_ERRORS[body?.message] ?? 'Could not create that workspace.');
+        toast.danger(WORKSPACE_ERRORS[await readErrorCode(res)] ?? 'Could not create that workspace.');
         return;
       }
       // The session moved to the new workspace, so everything cached on this

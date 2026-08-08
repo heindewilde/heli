@@ -16,6 +16,7 @@
   import { bindKeys, isTypingTarget } from '$lib/keyboard.svelte';
   import { toast } from '$lib/toasts.svelte';
   import { saveErrorMessage } from '$lib/save-errors';
+  import { readErrorCode } from '$lib/api-error';
   import { APP_NAME, APP_DOMAIN, APP_TAGLINE, APP_DESCRIPTION } from '$lib/branding';
   import { VERSION } from '$lib/version';
 
@@ -135,8 +136,7 @@
           body: JSON.stringify({ url: text })
         });
         if (!res.ok) {
-          const code = (await res.text().catch(() => '')) || '';
-          toast.danger(saveErrorMessage(code));
+          toast.danger(saveErrorMessage(await readErrorCode(res)));
           return;
         }
         const data = (await res.json()) as { id: string; kind: 'person' | 'company'; dedup: boolean };

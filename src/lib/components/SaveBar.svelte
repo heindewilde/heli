@@ -3,6 +3,7 @@
   import { invalidateAll, goto } from '$app/navigation';
   import { toast } from '$lib/toasts.svelte';
   import { saveErrorMessage } from '$lib/save-errors';
+  import { readErrorCode } from '$lib/api-error';
 
   let value = $state('');
   let busy = $state(false);
@@ -26,8 +27,7 @@
         body: JSON.stringify({ url })
       });
       if (!res.ok) {
-        const code = (await res.text().catch(() => '')) || '';
-        toast.danger(saveErrorMessage(code));
+        toast.danger(saveErrorMessage(await readErrorCode(res)));
         return;
       }
       const data = (await res.json()) as { id: string; kind: 'person' | 'company'; dedup: boolean };

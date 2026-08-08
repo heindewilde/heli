@@ -1,5 +1,6 @@
 <script lang="ts">
   import { APP_NAME } from '$lib/branding';
+  import { readErrorCode } from '$lib/api-error';
   import { goto } from '$app/navigation';
   import PersonPicker from '$lib/components/PersonPicker.svelte';
   import CompanyPicker from '$lib/components/CompanyPicker.svelte';
@@ -39,6 +40,13 @@
   let body = $state('');
   let occurredAt = $state(toLocalDatetimeInput(Date.now()));
   let saving = $state(false);
+  const INTERACTION_ERRORS: Record<string, string> = {
+    invalid_type: 'Pick a valid interaction type.',
+    missing_title: 'Give this interaction a title.',
+    invalid_json: 'Something went wrong sending the request.',
+    unauthorized: 'Please sign in again.'
+  };
+
   let error = $state<string | null>(null);
 
   // Auto-suggest projects whenever the people / company selection changes.
@@ -125,7 +133,7 @@
         })
       });
       if (!res.ok) {
-        error = (await res.text()) || 'Could not save.';
+        error = INTERACTION_ERRORS[await readErrorCode(res)] ?? 'Could not save.';
         return;
       }
       const result = (await res.json()) as { id: string };
