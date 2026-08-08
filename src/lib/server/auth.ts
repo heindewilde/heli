@@ -12,7 +12,13 @@ import {
   workspaceMembers,
   type WorkspaceRole
 } from './schema';
-import { createWorkspace, ensureWorkspace, getMembership, pickWorkspace } from './workspaces';
+import {
+  countMembers,
+  createWorkspace,
+  ensureWorkspace,
+  getWorkspace,
+  reassignAuthorship
+} from './workspaces';
 
 // Stored as passwordHash for OAuth-only accounts that have no password set.
 // Not a valid bcrypt hash, so bcrypt.compare will always return false against it.
@@ -466,11 +472,64 @@ export async function loginOrRegisterWithGoogle(input: {
   };
 }
 
+/**
+ * Delete an account.
+ *
+ * This used to be four lines that leaned entirely on ON DELETE CASCADE. With
+ * workspaces that is actively dangerous: some of the user's authored rows now
+ * live in workspaces they do NOT own, and cascading the users row would delete
+ * every person, company and interaction they ever created *in someone else's
+ * workspace*. Silent, irreversible, cross-tenant data loss from a routine
+ * self-service action.
+ *
+ * So: refuse up-front if they own a workspace that other people are still in,
+ * then reassign their authored rows everywhere else, and only then delete.
+ */
 export async function deleteAccount(userId: string, region: string): Promise<void> {
-  // ON DELETE CASCADE handles sessions, password reset tokens, people,
-  // companies, interactions, tags, reminders, all join rows.
   const user = await db(region).select().from(users).where(eq(users.id, userId)).get();
   if (!user) return;
+
+  const memberships = await db(region)
+    .select({ workspaceId: workspaceMembers.workspaceId, role: workspaceMembers.role })
+    .from(workspaceMembers)
+    .where(eq(workspaceMembers.userId, userId));
+
+  // Check every workspace before writing anything, so a refusal leaves no
+  // half-finished state behind.
+  const owned: string[] = [];
+  for (const m of memberships) {
+    const ws = await getWorkspace(region, m.workspaceId);
+    if (!ws || ws.ownerUserId !== userId) continue;
+    if ((await countMembers(region, m.workspaceId)) > 1) {
+      throw new AuthError(
+        'owner_must_transfer',
+        'Transfer ownership or remove the other members before deleting your account'
+      );
+    }
+    owned.push(m.workspaceId);
+  }
+
+  for (const m of memberships) {
+    if (owned.includes(m.workspaceId)) continue;
+    const ws = await getWorkspace(region, m.workspaceId);
+    if (!ws) continue;
+    await reassignAuthorship(region, m.workspaceId, userId, ws.ownerUserId);
+    await db(region)
+      .delete(workspaceMembers)
+      .where(
+        and(
+          eq(workspaceMembers.workspaceId, m.workspaceId),
+          eq(workspaceMembers.userId, userId)
+        )
+      );
+  }
+
+  // Sole-owner workspaces go with the account — cascade takes their content,
+  // which matches the pre-workspaces behaviour exactly.
+  for (const workspaceId of owned) {
+    await db(region).delete(workspaces).where(eq(workspaces.id, workspaceId));
+  }
+
   await db(region).delete(users).where(eq(users.id, userId));
   await primaryDb().delete(emailRouting).where(eq(emailRouting.email, user.email));
 }
