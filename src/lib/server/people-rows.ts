@@ -3,6 +3,8 @@
 // and the dedicated /api/people/list endpoint that powers Load More.
 
 import { sql, type SQL } from 'drizzle-orm';
+import { db } from './db';
+import type { Scope } from './scope';
 
 export type PersonRow = {
   id: string;
@@ -39,6 +41,27 @@ export const PERSON_ROW_COLS: SQL = sql`
   p.source, p.created_at AS createdAt, p.updated_at AS updatedAt,
   li.last_at AS lastAt
 `;
+
+/**
+ * One row, in exactly the shape the list pages render.
+ *
+ * This is what lets a create return the finished row instead of the client
+ * calling `invalidateAll()` and paying a whole SSR reload — eight more database
+ * round trips, which on the cloud's remote libSQL is the difference between
+ * instant and not. Because it goes through PERSON_ROW_COLS, the shape cannot
+ * drift from the list query.
+ */
+export async function fetchPersonRow(s: Scope, id: string): Promise<PersonRow | null> {
+  const rows = await db(s.region).all<PersonRow>(sql`
+    SELECT ${PERSON_ROW_COLS}
+    FROM people p
+    LEFT JOIN companies co ON co.id = p.company_id
+    ${personLastInteractionJoin(s.workspaceId)}
+    WHERE p.workspace_id = ${s.workspaceId} AND p.id = ${id}
+    LIMIT 1
+  `);
+  return rows[0] ?? null;
+}
 
 export function personLastInteractionJoin(workspaceId: string): SQL {
   return sql`

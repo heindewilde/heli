@@ -86,9 +86,15 @@
         body: JSON.stringify({ name })
       });
       if (!res.ok) { toast.danger('Could not create'); return; }
+      // The POST already returned the finished row in list shape, so insert it
+      // rather than calling invalidateAll(). That reload was a whole extra SSR
+      // render — eight more database round trips — to display something we
+      // are holding.
+      const created = (await res.json()) as { id: string; row: Row | null };
       addName = '';
       showAdd = false;
-      await invalidateAll();
+      if (created.row) cache.insert(created.row, 'start');
+      else await invalidateAll();
     } catch {
       toast.danger('Could not create');
     } finally {

@@ -1,4 +1,5 @@
 import { requireScope } from '$lib/server/scope';
+import { fetchPersonRow } from '$lib/server/people-rows';
 import { error, json, type RequestHandler } from '@sveltejs/kit';
 import { and, desc, eq, sql } from 'drizzle-orm';
 import { db } from '$lib/server/db';
@@ -92,5 +93,9 @@ export const POST: RequestHandler = async ({ request, locals }) => {
     location: body.location ? sanitizePlainText(String(body.location), 200) : null,
     notes: body.notes ? String(body.notes) : null
   });
-  return json(result, { status: 201 });
+  // Return the row in list shape as well as the id, so the client can insert
+  // it straight into its cache instead of calling invalidateAll() and paying a
+  // full SSR reload to render something it already has.
+  const row = await fetchPersonRow(s, result.id);
+  return json({ ...result, row }, { status: 201 });
 };

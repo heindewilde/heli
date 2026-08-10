@@ -1,4 +1,5 @@
 import { requireScope } from '$lib/server/scope';
+import { fetchCompanyRow } from '$lib/server/companies-rows';
 import { error, json, type RequestHandler } from '@sveltejs/kit';
 import { and, desc, eq, sql } from 'drizzle-orm';
 import { db } from '$lib/server/db';
@@ -90,5 +91,8 @@ export const POST: RequestHandler = async ({ request, locals }) => {
     description: body.description ? String(body.description) : null,
     notes: body.notes ? String(body.notes) : null
   });
-  return json(result, { status: 201 });
+  // See the note in /api/people: returning the list-shaped row lets the client
+  // insert optimistically instead of triggering a full SSR reload.
+  const row = await fetchCompanyRow(s, result.id);
+  return json({ ...result, row }, { status: 201 });
 };

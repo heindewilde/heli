@@ -3,6 +3,8 @@
 // that powers Load More.
 
 import { sql, type SQL } from 'drizzle-orm';
+import { db } from './db';
+import type { Scope } from './scope';
 
 export type CompanyRow = {
   id: string;
@@ -46,4 +48,20 @@ export function companyLastInteractionJoin(workspaceId: string): SQL {
       GROUP BY i.company_id
     ) li ON li.cid = c.id
   `;
+}
+
+/**
+ * One row, in exactly the shape the list page renders. See the note on
+ * fetchPersonRow — same reasoning, same guarantee that the shape cannot drift
+ * from the list query.
+ */
+export async function fetchCompanyRow(s: Scope, id: string): Promise<CompanyRow | null> {
+  const rows = await db(s.region).all<CompanyRow>(sql`
+    SELECT ${COMPANY_ROW_COLS}
+    FROM companies c
+    ${companyLastInteractionJoin(s.workspaceId)}
+    WHERE c.workspace_id = ${s.workspaceId} AND c.id = ${id}
+    LIMIT 1
+  `);
+  return rows[0] ?? null;
 }
