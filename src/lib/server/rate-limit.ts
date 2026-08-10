@@ -18,7 +18,11 @@ export const LIMITS: Record<string, Limit> = {
   // Keyed by user: creating a workspace is a per-person act, unlike invites.
   // This is only the fast bound — the buckets live in memory and reset on every
   // deploy, so MAX_OWNED_WORKSPACES is the durable cap.
-  workspace: { name: 'workspace', max: 5, windowMs: 60 * 60 * 1000 }
+  workspace: { name: 'workspace', max: 5, windowMs: 60 * 60 * 1000 },
+  // Keyed by *token id*, not user: a leaked token should be throttleable
+  // without locking its owner's browser session out of the app.
+  apiToken: { name: 'api_token', max: 120, windowMs: 60 * 1000 },
+  apiTokenWrite: { name: 'api_token_write', max: 30, windowMs: 60 * 1000 }
 };
 
 function gc() {

@@ -288,6 +288,77 @@
   }
 
   let copied = $state(false);
+  /* ── Personal access tokens ─────────────────────────────────────────── */
+
+  // svelte-ignore state_referenced_locally
+  let tokens = $state(data.apiTokens);
+  let tokenName = $state('');
+  let tokenScopes = $state<string[]>(['read']);
+  // Shown once, immediately after minting. There is no way to recover it later
+  // — only the SHA-256 hash is stored.
+  let freshSecret = $state<string | null>(null);
+  let secretCopied = $state(false);
+  let tokenBusy = $state(false);
+
+  $effect(() => {
+    tokens = data.apiTokens;
+  });
+
+  function toggleScope(scope: string) {
+    tokenScopes = tokenScopes.includes(scope)
+      ? tokenScopes.filter((x) => x !== scope)
+      : [...tokenScopes, scope];
+  }
+
+  async function createApiToken() {
+    if (tokenBusy || tokenScopes.length === 0) return;
+    tokenBusy = true;
+    try {
+      const res = await fetch('/api/v1/tokens', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ name: tokenName.trim() || 'Untitled token', scopes: tokenScopes })
+      });
+      if (!res.ok) {
+        toast.danger('Could not create token');
+        return;
+      }
+      const { data: created } = await res.json();
+      freshSecret = created.secret;
+      secretCopied = false;
+      tokenName = '';
+      tokens = [{ ...created, secret: undefined }, ...tokens];
+    } finally {
+      tokenBusy = false;
+    }
+  }
+
+  async function revokeApiToken(id: string, name: string) {
+    if (!confirm(`Revoke "${name}"? Anything using it stops working immediately.`)) return;
+    const res = await fetch(`/api/v1/tokens/${id}`, { method: 'DELETE' });
+    if (!res.ok) {
+      toast.danger('Could not revoke token');
+      return;
+    }
+    tokens = tokens.filter((t) => t.id !== id);
+    toast.success('Token revoked');
+  }
+
+  async function copySecret() {
+    if (!freshSecret) return;
+    await navigator.clipboard.writeText(freshSecret);
+    secretCopied = true;
+    setTimeout(() => (secretCopied = false), 2000);
+  }
+
+  function fmtWhen(ts: number | null): string {
+    if (!ts) return 'never';
+    const days = Math.floor((Date.now() - ts) / 86_400_000);
+    if (days === 0) return 'today';
+    if (days === 1) return 'yesterday';
+    return `${days}d ago`;
+  }
+
   async function copyBookmarklet() {
     try {
       await navigator.clipboard.writeText(bookmarkletJs);
@@ -686,6 +757,107 @@
         {#if copied}<Check size={14} strokeWidth={2} /> Copied{:else}<Copy size={14} strokeWidth={2} /> Copy snippet{/if}
       </button>
     </div>
+  </section>
+
+  <section
+    class="flex flex-col gap-3 rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)] p-5"
+  >
+    <h2 class="flex items-center gap-2 text-sm font-medium">
+      <KeyRound size={14} strokeWidth={2} /> Personal access tokens
+    </h2>
+    <p class="text-sm text-[var(--color-muted)]">
+      For the browser extension, scripts, and anything else that talks to
+      <a href="https://github.com/heindewilde/heli/blob/main/API.md" class="underline" target="_blank" rel="noopener">the API</a>. A token acts as you, in this workspace, and
+      can never do more than your role allows.
+    </p>
+
+    {#if freshSecret}
+      <div
+        class="flex flex-col gap-2 rounded-[var(--radius-sm)] border border-[var(--color-success-border)] bg-[var(--color-success-bg)] px-3 py-2"
+      >
+        <p class="text-xs font-medium text-[var(--color-success)]">
+          Copy this now — it is not shown again.
+        </p>
+        <div class="flex items-center gap-2">
+          <code
+            class="min-w-0 flex-1 truncate rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-surface)] px-2 py-1 text-xs"
+            >{freshSecret}</code
+          >
+          <button
+            type="button"
+            onclick={copySecret}
+            class="inline-flex shrink-0 items-center gap-1 rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-surface)] px-2 py-1 text-xs"
+          >
+            {#if secretCopied}<Check size={12} strokeWidth={2} /> Copied{:else}<Copy
+                size={12}
+                strokeWidth={2}
+              /> Copy{/if}
+          </button>
+        </div>
+      </div>
+    {/if}
+
+    <div class="flex flex-wrap items-end gap-2">
+      <label class="flex min-w-[200px] flex-1 flex-col gap-1">
+        <span class="cap-label">Name</span>
+        <input
+          bind:value={tokenName}
+          placeholder="Browser extension"
+          class="rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-bg)] px-2 py-1.5 text-sm"
+        />
+      </label>
+      <div class="flex flex-col gap-1">
+        <span class="cap-label">Scopes</span>
+        <div class="flex gap-1">
+          {#each ['read', 'write', 'capture'] as scope (scope)}
+            <button
+              type="button"
+              onclick={() => toggleScope(scope)}
+              aria-pressed={tokenScopes.includes(scope)}
+              class="rounded-full border px-2.5 py-1 text-xs transition-colors {tokenScopes.includes(
+                scope
+              )
+                ? 'border-[var(--color-border-strong)] bg-[var(--color-highlight-bg)] text-[var(--color-text)]'
+                : 'border-[var(--color-border)] text-[var(--color-muted)]'}"
+            >
+              {scope}
+            </button>
+          {/each}
+        </div>
+      </div>
+      <button
+        type="button"
+        onclick={createApiToken}
+        disabled={tokenBusy || tokenScopes.length === 0}
+        class="rounded-[var(--radius-sm)] bg-[var(--color-accent)] px-3 py-2 text-sm font-medium text-[var(--color-accent-fg)] disabled:opacity-50"
+      >
+        {tokenBusy ? 'Creating…' : 'Create token'}
+      </button>
+    </div>
+
+    {#if tokens.length > 0}
+      <ul class="flex flex-col divide-y divide-[var(--color-border)]">
+        {#each tokens as t (t.id)}
+          <li class="flex items-center gap-3 py-2">
+            <span class="min-w-0 flex-1">
+              <span class="block truncate text-sm font-medium">{t.name}</span>
+              <span class="block truncate text-xs text-[var(--color-muted)]">
+                <code>{t.prefix}…</code> · {t.scopes.join(', ')} · used {fmtWhen(t.lastUsedAt)}
+              </span>
+            </span>
+            <button
+              type="button"
+              onclick={() => revokeApiToken(t.id, t.name)}
+              class="shrink-0 rounded-[var(--radius-sm)] border border-[var(--color-border)] px-2 py-1 text-xs text-[var(--color-danger)] hover:border-[var(--color-danger)]"
+            >
+              Revoke
+            </button>
+          </li>
+        {/each}
+      </ul>
+    {:else}
+      <p class="text-xs text-[var(--color-subtle)]">No tokens yet.</p>
+    {/if}
   </section>
 
   {#if teamAdmin}

@@ -153,6 +153,42 @@ query *count*, and the lever is fewer round trips.
   - `use:onIntersect={loadMore}` on the Load More container auto-fires when scrolled near the bottom. Manual click works too.
 - The page's `+page.svelte` keeps a local `nextCursor` state; the hydrate `$effect` resyncs it from `data.nextCursor` on filter/sort change.
 
+## Public API (`/api/v1`)
+
+Documented in `API.md`. Everything under `/api/*` **outside** `v1` is the UI's
+private surface — no stability promise, no scope checks — and bearer tokens are
+rejected there on purpose. Letting one in would quietly make every internal
+endpoint public.
+
+- **Token format `heli_<region>_<43 base64url>`**, SHA-256 hashed. Not bcrypt:
+  32 CSPRNG bytes have nothing to slow an attacker down over, and bcrypt at
+  auth.ts's cost factor would add ~80 ms to *every* API request.
+  - Parse the region with the anchored regex in `tokens.ts`, never
+    `split('_')` — base64url's alphabet **includes** `_`, so splitting rejected
+    roughly three in four valid tokens. Tests caught it; don't reintroduce it.
+- **`api_tokens` is in `TENANT_TABLES` *and* `PERSONAL_TABLES`.** A token
+  authenticates as its owner, so `reassignAuthorship` must delete it, never hand
+  it to the workspace owner.
+- **Role is read from the membership row at validation time**, exactly as for a
+  session. A token can never outrank its owner, and a demotion takes effect
+  without touching their tokens. Scopes only ever *narrow* — `requireApiScope`
+  after `requireRole`, never instead of it. `write` implies `capture`.
+- **Tokens cannot manage tokens.** `/api/v1/tokens*` is cookie-session only, so
+  a leaked token cannot mint its own replacement.
+- **Validated tokens are cached in-process for 30 s** (LRU 512, same shape as
+  the search cache). `revokeToken` evicts its own entry immediately — without
+  that, Revoke would appear not to work for half a minute, which is exactly when
+  the user is looking at it.
+- **CORS never sends `Access-Control-Allow-Credentials`.** That is the
+  load-bearing property: even a mistake in the `EXTENSION_ORIGINS` check cannot
+  ride a session cookie. It is also why this is not a loosening of the
+  bookmarklet's same-origin rule — that path is cookie-authenticated, this one
+  cannot be.
+- **Every `/api/v1` response goes through `reshapeApiError`** in
+  `hooks.server.ts`, so a thrown `error()` still matches the documented
+  `{ error: { code, message } }` envelope. Return `apiOk`/`apiError` from
+  handlers; don't hand-roll a `json()` shape.
+
 ## Search
 
 - **CommandPalette debounce: 40ms**. Stale-response guard (`q.trim() !== v`) prevents out-of-order renders.

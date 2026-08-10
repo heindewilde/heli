@@ -26,6 +26,10 @@ const ALLOW_FILES = new Set([
   'src/lib/server/scope.ts', // the doc comment
   'src/lib/server/tasks.ts', // SELECTs user_id as an output column, not a filter
   'src/lib/server/reminders-query.ts', // reminders are personal by design
+  // API tokens are a personal credential: they authenticate as one user, so a
+  // member must only ever see and revoke their own. Filtered on
+  // (workspace_id, user_id) together — see PERSONAL_TABLES in migrate.ts.
+  'src/lib/server/tokens.ts',
   'src/routes/api/user/+server.ts' // account settings act on the user
 ]);
 
@@ -189,6 +193,16 @@ const MEMBER_ALLOWED = new Map<string, string>([
   ['tasks/+server.ts', 'tasks are shared and routine'],
   ['tasks/[id]/+server.ts', 'tasks are shared and routine'],
   ['user/+server.ts', 'acts on your own account, re-authenticated by password'],
+  // /api/v1 mirrors the internal CRM endpoints above, so it inherits their
+  // reasoning: creating and editing records is routine member work. What is
+  // *different* is that these are additionally scope-gated (requireApiScope)
+  // and rate-limited per token, neither of which applies to a cookie session.
+  ['v1/people/+server.ts', 'routine CRM work; token additionally needs the write scope'],
+  ['v1/people/[id]/+server.ts', 'routine CRM work; token additionally needs the write scope'],
+  ['v1/companies/+server.ts', 'routine CRM work; token additionally needs the write scope'],
+  ['v1/capture/+server.ts', 'the extension entry point; capture-scoped and rate-limited instead'],
+  ['v1/tokens/+server.ts', 'manages your own credentials, cookie-session only'],
+  ['v1/tokens/[id]/+server.ts', 'manages your own credentials, cookie-session only'],
   ['workspace/switch/+server.ts', 'membership is checked inside switchWorkspace'],
   ['workspace/members/+server.ts', 'GET only'],
   ['workspace/+server.ts', 'POST creates your own workspace; PATCH and DELETE call requireRole']

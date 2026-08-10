@@ -10,6 +10,7 @@ import { getPendingImport, CONTACTS_IMPORT_COOKIE } from '$lib/server/google';
 import { listMembers, listMemberships } from '$lib/server/workspaces';
 import { listPendingInvites } from '$lib/server/invites';
 import { isAdmin } from '$lib/server/scope';
+import { listTokens } from '$lib/server/tokens';
 import { env } from '$env/dynamic/private';
 
 export const load: PageServerLoad = async ({ locals, url, cookies }) => {
@@ -33,6 +34,7 @@ export const load: PageServerLoad = async ({ locals, url, cookies }) => {
     isAdmin(s) ? listPendingInvites(s.region, s.workspaceId, origin) : Promise.resolve([])
   ]);
   const googleAuthEnabled = !!(env.GOOGLE_CLIENT_ID && env.GOOGLE_CLIENT_SECRET);
+  const apiTokens = await listTokens(s);
 
   // Resolve any pending contacts import
   let pendingImport: {
@@ -58,6 +60,7 @@ export const load: PageServerLoad = async ({ locals, url, cookies }) => {
   }
 
   return {
+    apiTokens,
     user: locals.user,
     workspace: {
       id: s.workspaceId,

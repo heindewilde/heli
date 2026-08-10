@@ -4,6 +4,8 @@ import { initDb } from '$lib/server/db';
 import { migrate } from '$lib/server/migrate';
 import { validateSession, SESSION_COOKIE } from '$lib/server/auth';
 import { checkRateLimit, LIMITS, RateLimitError } from '$lib/server/rate-limit';
+import { validateToken } from '$lib/server/tokens';
+import { apiError, preflight, withCors } from '$lib/server/api-v1';
 import { setPrivate, setPrivateRevalidate, maybeCompress } from '$lib/server/cache';
 import { withTiming, current as currentTiming } from '$lib/server/timing';
 
@@ -31,20 +33,100 @@ const PROTECTED_PATTERNS = [
   /^\/settings(\/|$)/
 ];
 
-// The whole request runs inside one AsyncLocalStorage scope, so every query the
-// db client issues lands in this request's timing bucket rather than a shared
-// counter that would mix concurrent requests together.
 // CRM pages whose SSR HTML the service worker may keep for back-navigation and
 // offline reads. Deliberately excludes /settings and /admin: nothing there is
 // worth an offline copy, and both render account-level detail.
 const NAV_CACHEABLE = /^\/(?:people|companies|projects|interactions|collections|pipelines)(?:\/|$)/;
 
-export const handle: Handle = (input) =>
-  withTiming(async () => handleRequest(input));
+// The whole request runs inside one AsyncLocalStorage scope, so every query the
+// db client issues lands in this request's timing bucket rather than a shared
+// counter that would mix concurrent requests together.
+export const handle: Handle = (input) => withTiming(async () => handleRequest(input));
+
+/** Rewrap a SvelteKit error body as `{ error: { code, message } }`. */
+async function reshapeApiError(res: Response): Promise<Response> {
+  if (res.status < 400) return res;
+  if (!(res.headers.get('Content-Type') ?? '').includes('json')) return res;
+  let body: Record<string, unknown>;
+  try {
+    body = await res.clone().json();
+  } catch {
+    return res;
+  }
+  if (body && typeof body === 'object' && 'error' in body) return res; // already shaped
+  const code =
+    typeof body.code === 'string'
+      ? body.code
+      : res.status === 401
+        ? 'unauthorized'
+        : res.status === 403
+          ? 'forbidden'
+          : res.status === 404
+            ? 'not_found'
+            : res.status === 429
+              ? 'rate_limited'
+              : res.status < 500
+                ? 'invalid_request'
+                : 'server_error';
+  const message = typeof body.message === 'string' ? body.message : 'Request failed.';
+  const out = new Response(JSON.stringify({ error: { code, message } }), {
+    status: res.status,
+    headers: res.headers
+  });
+  out.headers.set('Content-Type', 'application/json');
+  out.headers.delete('Content-Length');
+  return out;
+}
 
 const handleRequest: Handle = async ({ event, resolve }) => {
   await ready;
   const startedAt = performance.now();
+
+  // Bearer tokens are honoured on /api/v1 and nowhere else. The rest of /api/*
+  // is the UI's private surface — no stability promise, no scope checks — and
+  // letting a token in there would quietly make every internal endpoint public.
+  const isPublicApi = event.url.pathname.startsWith('/api/v1/');
+  const origin = event.request.headers.get('origin');
+
+  if (isPublicApi && event.request.method === 'OPTIONS') {
+    return preflight(origin);
+  }
+
+  const auth = isPublicApi ? event.request.headers.get('authorization') : null;
+  if (auth?.startsWith('Bearer heli_')) {
+    const validated = await validateToken(auth.slice('Bearer '.length).trim());
+    if (!validated) {
+      return withCors(apiError('unauthorized', 'Invalid or expired token.', 401), origin);
+    }
+    // Identical AuthUser shape to a session, so requireScope and every query
+    // helper below it work unchanged.
+    event.locals.user = validated.user;
+    event.locals.sessionId = null;
+    event.locals.token = { id: validated.tokenId, scopes: validated.scopes };
+
+    try {
+      const write = event.request.method !== 'GET';
+      checkRateLimit(write ? LIMITS.apiTokenWrite : LIMITS.apiToken, validated.tokenId);
+    } catch (err) {
+      if (err instanceof RateLimitError) {
+        const res = apiError('rate_limited', 'Too many requests.', 429);
+        res.headers.set('Retry-After', '60');
+        return withCors(res, origin);
+      }
+      throw err;
+    }
+
+    const response = await resolve(event);
+    setPrivate(response);
+    // A thrown `error()` — from requireScope, requireRole, a 404 on an unknown
+    // route — serialises as SvelteKit's own `{ message }`. Reshape it, so the
+    // envelope documented in API.md is true for *every* response and not only
+    // the ones a handler returns explicitly.
+    const shaped = await reshapeApiError(response);
+    return withCors(maybeCompress(shaped, event.request.headers.get('accept-encoding')), origin);
+  }
+
+  event.locals.token = null;
   const cookie = event.cookies.get(SESSION_COOKIE);
   if (cookie) {
     const session = await validateSession(cookie);
@@ -152,5 +234,9 @@ const handleRequest: Handle = async ({ event, resolve }) => {
     );
     response.headers.append('Vary', 'Cookie');
   }
-  return maybeCompress(response, event.request.headers.get('accept-encoding'));
+  // Errors thrown on /api/v1 that did *not* arrive with a bearer token — a
+  // malformed Authorization header falls through to the cookie branch above —
+  // still have to match the documented envelope.
+  const shaped = isPublicApi ? await reshapeApiError(response) : response;
+  return maybeCompress(shaped, event.request.headers.get('accept-encoding'));
 };

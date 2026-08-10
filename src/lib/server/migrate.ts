@@ -60,6 +60,28 @@ CREATE UNIQUE INDEX IF NOT EXISTS uq_workspace_invites_pending
   ON workspace_invites(workspace_id, email)
   WHERE accepted_at IS NULL AND revoked_at IS NULL;
 
+-- Personal access tokens for the public API.
+--
+-- The unique index lives here rather than in WORKSPACE_UNIQUES because it
+-- cannot fail on duplicate data: the table is new and the column is a hash of
+-- 32 CSPRNG bytes. It does not need applyTolerant's retry semantics.
+CREATE TABLE IF NOT EXISTS api_tokens (
+  id TEXT PRIMARY KEY,
+  workspace_id TEXT NOT NULL REFERENCES workspaces(id),
+  user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  name TEXT NOT NULL,
+  prefix TEXT NOT NULL,
+  token_hash TEXT NOT NULL,
+  scopes TEXT NOT NULL,
+  last_used_at INTEGER,
+  expires_at INTEGER,
+  revoked_at INTEGER,
+  created_at INTEGER NOT NULL
+);
+CREATE UNIQUE INDEX IF NOT EXISTS uq_api_tokens_hash ON api_tokens(token_hash);
+CREATE INDEX IF NOT EXISTS idx_api_tokens_ws ON api_tokens(workspace_id, created_at);
+CREATE INDEX IF NOT EXISTS idx_api_tokens_user ON api_tokens(user_id);
+
 -- The version tracking this migrator otherwise lacks. Gates one-shot backfills
 -- so they don't re-scan every table on every boot.
 CREATE TABLE IF NOT EXISTS schema_meta (
@@ -543,7 +565,8 @@ export const TENANT_TABLES = [
   'projects',
   'collections',
   'pipelines',
-  'collection_pipeline_syncs'
+  'collection_pipeline_syncs',
+  'api_tokens'
 ] as const;
 
 /**
@@ -552,10 +575,11 @@ export const TENANT_TABLES = [
  * These still carry workspace_id — they live in a workspace — but user_id is a
  * real owner rather than created-by attribution, and reads filter on both. So
  * they must not be handed to the workspace owner when someone leaves: that
- * would drop a departing member's private reminders into the owner's sidebar.
+ * would drop a departing member's private reminders into the owner's sidebar,
+ * or — worse — hand over a live API credential that authenticates as them.
  * `reassignAuthorship` deletes them instead.
  */
-export const PERSONAL_TABLES: readonly string[] = ['reminders'];
+export const PERSONAL_TABLES: readonly string[] = ['reminders', 'api_tokens'];
 
 // Applied after the backfill so they are built against real data.
 const WORKSPACE_INDEXES = `

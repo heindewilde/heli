@@ -60,6 +60,44 @@ export const workspaces = sqliteTable(
   (t) => [index('idx_workspaces_owner').on(t.ownerUserId)]
 );
 
+/**
+ * Personal access tokens for /api/v1.
+ *
+ * Hashed with SHA-256, not bcrypt: the secret is 32 bytes of CSPRNG output, so
+ * there is no low-entropy password to slow an attacker down — and bcrypt at the
+ * cost factor auth.ts uses would add ~80 ms to every single API request.
+ *
+ * In PERSONAL_TABLES: a token authenticates as its owner, so removing a member
+ * must delete it, never reassign it.
+ */
+export const apiTokens = sqliteTable(
+  'api_tokens',
+  {
+    id: text('id').primaryKey(),
+    workspaceId: text('workspace_id')
+      .notNull()
+      .references(() => workspaces.id),
+    userId: text('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    name: text('name').notNull(),
+    /** Display-only leading segment, e.g. `heli_eu_a1b2c3`. Never the secret. */
+    prefix: text('prefix').notNull(),
+    tokenHash: text('token_hash').notNull(),
+    /** Comma-separated TokenScope list. */
+    scopes: text('scopes').notNull(),
+    lastUsedAt: integer('last_used_at'),
+    expiresAt: integer('expires_at'),
+    revokedAt: integer('revoked_at'),
+    createdAt: integer('created_at').notNull()
+  },
+  (t) => [
+    uniqueIndex('uq_api_tokens_hash').on(t.tokenHash),
+    index('idx_api_tokens_ws').on(t.workspaceId, t.createdAt),
+    index('idx_api_tokens_user').on(t.userId)
+  ]
+);
+
 export const workspaceMembers = sqliteTable(
   'workspace_members',
   {
