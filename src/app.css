@@ -95,6 +95,14 @@
   --stage-pink-border: hsl(330 30% 75%);
   --stage-pink-bg: hsl(330 35% 97%);
 
+  /* Stacking order, named once. Ad-hoc `z-50` on a panel and `z-30` on a
+     scrim is how overlay bugs start; scripts/check-overlays.ts fails the
+     build on a numeric z-index outside src/lib/ui. */
+  --z-sticky: 40;
+  --z-popover: 50;
+  --z-dialog: 60;
+  --z-toast: 70;
+
   --radius-sm: 0.375rem;
   --radius-md: 0.5rem;
   --radius-lg: 0.75rem;
