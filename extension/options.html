@@ -1,0 +1,20 @@
+<div class="wrap">
+  <h1>Connect to Heli</h1>
+  <label>
+    <span>Your Heli address</span>
+    <input id="origin" type="url" placeholder="https://app.heli.so" />
+  </label>
+  <label>
+    <span>Personal access token</span>
+    <input id="token" type="password" placeholder="heli_eu_…" />
+  </label>
+  <p class="muted">
+    Create one in Heli under <strong>Settings → Personal access tokens</strong>, with the
+    <code>capture</code> scope. It is shown once.
+  </p>
+  <div class="row">
+    <button id="save" class="primary">Save</button>
+    <span id="status" class="muted"></span>
+  </div>
+</div>
+<script type="module" src="options.js"></script>

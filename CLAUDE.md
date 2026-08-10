@@ -305,6 +305,41 @@ tables is *created-by attribution only and must never be used as a filter*.
 - **`PRIMARY_REGION`** defaults to `'local'` on single-host setups and only falls back to `'EU'` when a `DATABASE_URL_EU/US/APAC` is configured. Don't reintroduce a hardcoded `'EU'` default.
 - **CSP heads-up**: `hooks.server.ts` sets `script-src 'self' 'unsafe-inline'` which does **not** explicitly allow `scripts.simpleanalyticscdn.com`. Either SvelteKit's `kit.csp.directives` merges the host in via the auto-mode, or analytics is silently blocked. Worth confirming in browser devtools next time the analytics script is in scope.
 
+## Browser extension (`extension/`)
+
+A separate build artifact: its own `package.json`, its own `node_modules`,
+esbuild rather than Vite, and **not** an npm workspace. A workspace would make
+the app's `npm ci` install its dependencies and carry them into the Docker
+builder layer.
+
+Three guards keep it out of the app, and all three matter:
+- `extension` is in `.dockerignore` — the Dockerfile does `COPY . .`.
+- `exclude: ["extension"]` in the root `tsconfig.json`.
+- `svelte-check` runs off `.svelte-kit/tsconfig.json`, which only includes
+  `src/` and `tests/`, so it never sees it anyway.
+
+- **Tokens, not cookies.** The session cookie is `SameSite=Lax`, so a fetch from
+  `chrome-extension://…` will never carry it. That is a browser guarantee, not
+  an obstacle — the extension pastes a `capture`-scoped personal access token
+  once, and the options page verifies it against `/api/v1/me` before storing.
+- **`activeTab` + `scripting`, never `<all_urls>`.** The content script is
+  injected when the popup opens. Chrome then describes the extension as running
+  on click, which is the truth and is worth keeping.
+- **Adapters degrade, they don't break.** Every field resolves through an
+  ordered strategy list (JSON-LD → Open Graph → CSS selector); first non-empty
+  wins, and every parsed field is editable in the popup before save. Site markup
+  rots; an empty editable field is a fine outcome, a thrown parser is not.
+  `localStorage.__heli_debug = 1` logs which strategy fired.
+- **`cleanUrl` is imported from `src/lib/cleanUrl.ts`, never copied.** Those
+  rules decide whether two spellings of a LinkedIn URL are the same record, so
+  the extension and the server must agree exactly — `tests/extension-adapters.test.ts`
+  asserts they do. The server-only half (`assertPublicUrl`, which needs
+  `node:dns`) stays in `src/lib/server/url.ts`.
+- **The popup's palette is generated from `src/app.css`** by
+  `extension/scripts/tokens.mjs` at build time, so it cannot drift from the app.
+  Don't hand-copy colours into `popup.css` — that file is layout only.
+- **`extension/dist/` is what you load unpacked**, and it is gitignored.
+
 ## Versioning
 
 Every push to `main` triggers two workflows:

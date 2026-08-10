@@ -3,6 +3,10 @@ build
 .svelte-kit
 data
 graphify-out
+# The browser extension is a separate build artifact with its own package.json
+# and node_modules. The Dockerfile does `COPY . .`, so without this its source
+# and dependencies would ride into the builder layer for nothing.
+extension
 *.db
 *.db-wal
 *.db-shm

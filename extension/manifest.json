@@ -1,0 +1,16 @@
+{
+  "manifest_version": 3,
+  "name": "Heli — save to your CRM",
+  "version": "0.1.0",
+  "description": "Save the person or company on this page to Heli, with tags and a note.",
+  "permissions": ["activeTab", "scripting", "storage"],
+  "action": { "default_popup": "popup.html", "default_title": "Save to Heli" },
+  "options_page": "options.html",
+  "commands": {
+    "_execute_action": {
+      "suggested_key": { "default": "Ctrl+Shift+K", "mac": "Command+Shift+K" },
+      "description": "Save this page to Heli"
+    }
+  },
+  "icons": { "128": "icons/icon128.png" }
+}
