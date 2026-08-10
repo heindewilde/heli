@@ -11,6 +11,7 @@ import { listMembers, listMemberships } from '$lib/server/workspaces';
 import { listPendingInvites } from '$lib/server/invites';
 import { isAdmin } from '$lib/server/scope';
 import { listTokens } from '$lib/server/tokens';
+import { listFeeds, redactFeed } from '$lib/server/calendar';
 import { env } from '$env/dynamic/private';
 
 export const load: PageServerLoad = async ({ locals, url, cookies }) => {
@@ -35,6 +36,8 @@ export const load: PageServerLoad = async ({ locals, url, cookies }) => {
   ]);
   const googleAuthEnabled = !!(env.GOOGLE_CLIENT_ID && env.GOOGLE_CLIENT_SECRET);
   const apiTokens = await listTokens(s);
+  // Redacted: the feed URL is the credential and must never reach a client.
+  const calendars = (await listFeeds(s)).map(redactFeed);
 
   // Resolve any pending contacts import
   let pendingImport: {
@@ -60,6 +63,7 @@ export const load: PageServerLoad = async ({ locals, url, cookies }) => {
   }
 
   return {
+    calendars,
     apiTokens,
     user: locals.user,
     workspace: {

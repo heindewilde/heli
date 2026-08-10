@@ -30,6 +30,13 @@ const ALLOW_FILES = new Set([
   // member must only ever see and revoke their own. Filtered on
   // (workspace_id, user_id) together — see PERSONAL_TABLES in migrate.ts.
   'src/lib/server/tokens.ts',
+  // A calendar feed's URL is a bearer credential for someone's personal
+  // calendar, so feeds are listed per (workspace_id, user_id) — see
+  // PERSONAL_TABLES in migrate.ts.
+  'src/lib/server/calendar.ts',
+  // A calendar feed's URL is a bearer credential for one person's calendar, so
+  // ownership is (workspace_id, user_id) — see PERSONAL_TABLES in migrate.ts.
+  'src/routes/api/calendar/[id]/+server.ts',
   'src/routes/api/user/+server.ts' // account settings act on the user
 ]);
 
@@ -193,6 +200,8 @@ const MEMBER_ALLOWED = new Map<string, string>([
   ['tasks/+server.ts', 'tasks are shared and routine'],
   ['tasks/[id]/+server.ts', 'tasks are shared and routine'],
   ['user/+server.ts', 'acts on your own account, re-authenticated by password'],
+  ['calendar/+server.ts', 'subscribing your own calendar; feeds are personal'],
+  ['calendar/[id]/+server.ts', 'your own feed — every query filters on user_id too'],
   // /api/v1 mirrors the internal CRM endpoints above, so it inherits their
   // reasoning: creating and editing records is routine member work. What is
   // *different* is that these are additionally scope-gated (requireApiScope)

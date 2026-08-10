@@ -2,6 +2,7 @@ import { redirect, error, type Handle } from '@sveltejs/kit';
 import { dev } from '$app/environment';
 import { initDb } from '$lib/server/db';
 import { migrate } from '$lib/server/migrate';
+import { startScheduler } from '$lib/server/scheduler';
 import { validateSession, SESSION_COOKIE } from '$lib/server/auth';
 import { checkRateLimit, LIMITS, RateLimitError } from '$lib/server/rate-limit';
 import { validateToken } from '$lib/server/tokens';
@@ -12,6 +13,8 @@ import { withTiming, current as currentTiming } from '$lib/server/timing';
 const ready = (async () => {
   await initDb();
   await migrate();
+  // After migrate, so the calendar_feeds table exists before the first tick.
+  startScheduler();
 })();
 
 // Page routes that require a signed-in user. A logged-out request to any of

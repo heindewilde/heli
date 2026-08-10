@@ -60,6 +60,37 @@ CREATE UNIQUE INDEX IF NOT EXISTS uq_workspace_invites_pending
   ON workspace_invites(workspace_id, email)
   WHERE accepted_at IS NULL AND revoked_at IS NULL;
 
+-- Subscribed .ics calendars.
+--
+-- The url column is a bearer credential — Google's "secret address in iCal
+-- format" is the whole authentication — so this is a PERSONAL table: it must
+-- never be reassigned to the workspace owner when a member leaves.
+CREATE TABLE IF NOT EXISTS calendar_feeds (
+  id TEXT PRIMARY KEY,
+  workspace_id TEXT NOT NULL REFERENCES workspaces(id),
+  user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  url TEXT NOT NULL,
+  label TEXT,
+  enabled INTEGER NOT NULL DEFAULT 1,
+  -- JSON array of the subscriber's own addresses, excluded from matching.
+  self_emails TEXT,
+  -- 'known' links only attendees who already exist; 'all' creates them.
+  match_mode TEXT NOT NULL DEFAULT 'known',
+  window_past_days INTEGER NOT NULL DEFAULT 90,
+  window_future_days INTEGER NOT NULL DEFAULT 0,
+  etag TEXT,
+  last_modified TEXT,
+  last_fetched_at INTEGER,
+  last_status TEXT,
+  last_error TEXT,
+  last_event_count INTEGER,
+  last_skipped_recurring INTEGER,
+  created_at INTEGER NOT NULL,
+  updated_at INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_calendar_feeds_ws ON calendar_feeds(workspace_id, enabled);
+CREATE INDEX IF NOT EXISTS idx_calendar_feeds_due ON calendar_feeds(enabled, last_fetched_at);
+
 -- Personal access tokens for the public API.
 --
 -- The unique index lives here rather than in WORKSPACE_UNIQUES because it
@@ -548,11 +579,19 @@ const ALTERS: string[] = [
   `ALTER TABLE pipelines ADD COLUMN workspace_id TEXT REFERENCES workspaces(id)`,
   `ALTER TABLE collection_pipeline_syncs ADD COLUMN workspace_id TEXT REFERENCES workspaces(id)`,
   `ALTER TABLE sessions ADD COLUMN active_workspace_id TEXT`,
-  `ALTER TABLE workspace_invites ADD COLUMN revoked_at INTEGER`
+  `ALTER TABLE workspace_invites ADD COLUMN revoked_at INTEGER`,
+  // Idempotency key for externally-sourced interactions (.ics today). NULL for
+  // anything a human created, and SQLite treats NULLs as distinct in a unique
+  // index, so existing rows never collide.
+  `ALTER TABLE interactions ADD COLUMN external_source TEXT`,
+  `ALTER TABLE interactions ADD COLUMN external_id TEXT`
 ];
 
 // Tables carrying workspace_id, in the order the backfill fills them. Also the
 // canonical list for the attribution reassignment done on member removal.
+// Appending here moves the sha1 that gates the one-shot block, so it re-runs
+// exactly once on the next boot. Do NOT swap that for a version constant —
+// forgetting to bump it is the failure mode the fingerprint exists to prevent.
 export const TENANT_TABLES = [
   'companies',
   'company_statuses',
@@ -566,7 +605,8 @@ export const TENANT_TABLES = [
   'collections',
   'pipelines',
   'collection_pipeline_syncs',
-  'api_tokens'
+  'api_tokens',
+  'calendar_feeds'
 ] as const;
 
 /**
@@ -579,10 +619,15 @@ export const TENANT_TABLES = [
  * or — worse — hand over a live API credential that authenticates as them.
  * `reassignAuthorship` deletes them instead.
  */
-export const PERSONAL_TABLES: readonly string[] = ['reminders', 'api_tokens'];
+export const PERSONAL_TABLES: readonly string[] = ['reminders', 'api_tokens', 'calendar_feeds'];
 
 // Applied after the backfill so they are built against real data.
 const WORKSPACE_INDEXES = `
+-- Attendee matching filters on workspace_id plus a lowercased email, and there
+-- was no index on people.email at all. Emails are normalised to lowercase on
+-- write, so this is usable without a function index.
+CREATE INDEX IF NOT EXISTS idx_people_ws_email ON people(workspace_id, email);
+
 CREATE INDEX IF NOT EXISTS idx_companies_ws_arch ON companies(workspace_id, is_archived);
 CREATE INDEX IF NOT EXISTS idx_companies_ws_fav ON companies(workspace_id, is_favorite);
 CREATE INDEX IF NOT EXISTS idx_companies_ws_domain ON companies(workspace_id, domain);
@@ -631,7 +676,13 @@ const WORKSPACE_UNIQUES: string[] = [
   `CREATE UNIQUE INDEX IF NOT EXISTS uq_people_ws_url ON people(workspace_id, url)`,
   `CREATE UNIQUE INDEX IF NOT EXISTS uq_tags_ws_slug_scope ON tags(workspace_id, slug, scope)`,
   `CREATE UNIQUE INDEX IF NOT EXISTS uq_people_statuses_ws_name ON people_statuses(workspace_id, name)`,
-  `CREATE UNIQUE INDEX IF NOT EXISTS uq_company_statuses_ws_name ON company_statuses(workspace_id, name)`
+  `CREATE UNIQUE INDEX IF NOT EXISTS uq_company_statuses_ws_name ON company_statuses(workspace_id, name)`,
+  // Non-partial on purpose. SQLite treats NULLs as distinct in a unique index,
+  // so manually-created interactions (external_source IS NULL) never collide —
+  // and a non-partial index keeps the Drizzle ON CONFLICT target simple. A
+  // partial one would need a matching `targetWhere` at every call site, which
+  // is a trap for whoever writes the second one.
+  `CREATE UNIQUE INDEX IF NOT EXISTS uq_interactions_ws_external ON interactions(workspace_id, external_source, external_id)`
 ];
 
 // The old per-user uniques MUST go before invites ship. Once a member can be

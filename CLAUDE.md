@@ -305,6 +305,59 @@ tables is *created-by attribution only and must never be used as a filter*.
 - **`PRIMARY_REGION`** defaults to `'local'` on single-host setups and only falls back to `'EU'` when a `DATABASE_URL_EU/US/APAC` is configured. Don't reintroduce a hardcoded `'EU'` default.
 - **CSP heads-up**: `hooks.server.ts` sets `script-src 'self' 'unsafe-inline'` which does **not** explicitly allow `scripts.simpleanalyticscdn.com`. Either SvelteKit's `kit.csp.directives` merges the host in via the auto-mode, or analytics is silently blocked. Worth confirming in browser devtools next time the analytics script is in scope.
 
+## Calendars and the scheduler
+
+`.ics` subscription, not OAuth. Every calendar app already exposes a secret feed
+URL, which avoids a Google Cloud project per self-hoster plus a verification
+review, and works with providers Google has never heard of. The cost is that the
+**URL is the credential**.
+
+- **`calendar_feeds` is in `TENANT_TABLES` *and* `PERSONAL_TABLES`.** Handing a
+  departing member's feed URL to the workspace owner would hand over read access
+  to their calendar.
+- **Never return the raw URL.** `redactFeed` strips `url` and `self_emails` and
+  returns host plus a 6-char hash. Do *not* "helpfully" show a path slice —
+  harmless for Google (whose last segment is literally `basic.ics`), a leak for
+  any provider that puts the token last.
+- **Identity is `sha1(UID + NUL + RECURRENCE-ID)`**, stored in
+  `interactions.external_id` with `external_source = 'ics'`. It deliberately
+  excludes the feed id, so two colleagues subscribed to the same shared calendar
+  produce one interaction rather than two.
+  - `uq_interactions_ws_external` is **non-partial**. SQLite treats NULLs as
+    distinct, so manually-created interactions never collide, and a partial
+    index would force a matching `targetWhere` at every call site.
+- **`updated_at === created_at` means "no human has touched this".** It gates
+  both the update and the delete paths: a re-sync never overwrites someone's
+  edit, and a cancelled meeting someone has annotated is retitled rather than
+  deleted.
+- **RRULE is not expanded.** Recurring events are skipped and *counted*, and the
+  count is shown in Settings. Correct expansion (EXDATE, BYSETPOS, UNTIL, COUNT)
+  is 500+ lines, and a weekly 1:1 producing 52 interactions a year is noise. If
+  the counter says otherwise, add a bounded expander then.
+- **No tz database.** `TZID` offsets come from `Intl.DateTimeFormat`, computed
+  per instant (the same zone has different offsets in January and July). An
+  unknown zone falls back to UTC and is reported on the feed.
+- **Unfold before anything else.** Google folds at 75 octets, mid-token; a
+  parser that reads folded lines produces truncated UIDs — broken identity keys
+  rather than visible errors.
+- **Sniff the body for `BEGIN:VCALENDAR`.** A login page served as
+  `text/calendar` would otherwise parse to zero events and look like an empty
+  calendar.
+
+**The scheduler** (`src/lib/server/scheduler.ts`) is one 60s interval started
+from the `ready` IIFE in `hooks.server.ts`, jittered on first run so a rolling
+deploy doesn't thunder.
+
+- **The lease lives in `schema_meta`**, as `<processId>:<expiry>`, taken with a
+  single conditional UPDATE and confirmed by `rowsAffected === 1`. No new table
+  for one row.
+- **One lease per regional database.** Each region's feeds live in that region's
+  database, so each needs its own winner; every process attempts every region's
+  lease. Correct at one machine in `ams`, and still correct at N.
+- Escape hatch: `SCHEDULER_DISABLED=1`.
+- `snapshotIfStale` and token/session expiry sweeps could ride on this later.
+  The seam is free; don't take it in the same change as something else.
+
 ## Browser extension (`extension/`)
 
 A separate build artifact: its own `package.json`, its own `node_modules`,

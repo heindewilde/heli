@@ -61,6 +61,48 @@ export const workspaces = sqliteTable(
 );
 
 /**
+ * A subscribed .ics calendar.
+ *
+ * In PERSONAL_TABLES: `url` is a bearer credential (Google's "secret address in
+ * iCal format" *is* the authentication), so handing it to the workspace owner
+ * when a member leaves would hand over read access to their calendar.
+ */
+export const calendarFeeds = sqliteTable(
+  'calendar_feeds',
+  {
+    id: text('id').primaryKey(),
+    workspaceId: text('workspace_id')
+      .notNull()
+      .references(() => workspaces.id),
+    userId: text('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    url: text('url').notNull(),
+    label: text('label'),
+    enabled: integer('enabled').notNull().default(1),
+    /** JSON array of the subscriber's own addresses; excluded from matching. */
+    selfEmails: text('self_emails'),
+    /** 'known' links only existing people; 'all' creates them. */
+    matchMode: text('match_mode').notNull().default('known'),
+    windowPastDays: integer('window_past_days').notNull().default(90),
+    windowFutureDays: integer('window_future_days').notNull().default(0),
+    etag: text('etag'),
+    lastModified: text('last_modified'),
+    lastFetchedAt: integer('last_fetched_at'),
+    lastStatus: text('last_status'),
+    lastError: text('last_error'),
+    lastEventCount: integer('last_event_count'),
+    lastSkippedRecurring: integer('last_skipped_recurring'),
+    createdAt: integer('created_at').notNull(),
+    updatedAt: integer('updated_at').notNull()
+  },
+  (t) => [
+    index('idx_calendar_feeds_ws').on(t.workspaceId, t.enabled),
+    index('idx_calendar_feeds_due').on(t.enabled, t.lastFetchedAt)
+  ]
+);
+
+/**
  * Personal access tokens for /api/v1.
  *
  * Hashed with SHA-256, not bcrypt: the secret is 32 bytes of CSPRNG output, so
@@ -293,6 +335,15 @@ export const interactions = sqliteTable(
     title: text('title').notNull(),
     body: text('body'),
     companyId: text('company_id').references(() => companies.id, { onDelete: 'set null' }),
+    /**
+     * Where this interaction came from, when a human did not type it. `'ics'`
+     * today. NULL for anything created in the app — and SQLite treats NULLs as
+     * distinct in a unique index, which is what lets uq_interactions_ws_external
+     * be non-partial.
+     */
+    externalSource: text('external_source'),
+    /** sha1(UID + NUL + RECURRENCE-ID) for .ics. Stable across re-syncs. */
+    externalId: text('external_id'),
     createdAt: integer('created_at').notNull(),
     updatedAt: integer('updated_at').notNull()
   },

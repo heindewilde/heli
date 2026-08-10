@@ -500,7 +500,7 @@ Not promises — a rough direction. Open an issue to vote or propose changes.
 - **Server-side reminder delivery** (email + push).
 - **Inbound email** — BCC or forward a thread to your Heli address and have it logged as an interaction. Nothing is built yet.
 - **More importers** — HubSpot CSV, Notion DB exports, vCard, Google Contacts.
-- **Two-way calendar & email integrations** — pull meetings and messages into the interaction log automatically.
+- **Two-way calendar** — writing back to the calendar. Reading *from* it now works: subscribe an `.ics` URL in Settings and meetings become interactions, linked to attendees you already have. No account connection required.
 - **Native mobile shell** — wrapping the PWA for App Store / Play Store distribution.
 
 ---

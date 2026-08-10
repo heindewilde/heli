@@ -3,7 +3,7 @@
   import { APP_NAME } from '$lib/branding';
   import { toast } from '$lib/toasts.svelte';
   import { readErrorCode } from '$lib/api-error';
-  import { Bookmark, Building2, Download, ShieldAlert, KeyRound, Mail, User, LogOut, Copy, Check, Users } from 'lucide-svelte';
+  import { Bookmark, Building2, CalendarDays, Download, ShieldAlert, KeyRound, Mail, User, LogOut, Copy, Check, Users } from 'lucide-svelte';
 
   let { data } = $props();
   const user = $derived(data.user);
@@ -288,6 +288,111 @@
   }
 
   let copied = $state(false);
+  /* ── Calendar feeds ──────────────────────────────────────────────────── */
+
+  // svelte-ignore state_referenced_locally
+  let calendars = $state(data.calendars);
+  let calUrl = $state('');
+  let calLabel = $state('');
+  let calSelf = $state('');
+  let calBusy = $state(false);
+  let calSyncing = $state<string | null>(null);
+  let calPreview = $state<Record<string, string>>({});
+
+  $effect(() => {
+    calendars = data.calendars;
+  });
+
+  async function addCalendar() {
+    if (calBusy || !calUrl.trim()) return;
+    calBusy = true;
+    try {
+      const res = await fetch('/api/calendar', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          url: calUrl.trim(),
+          label: calLabel.trim() || null,
+          selfEmails: calSelf
+            .split(',')
+            .map((e) => e.trim())
+            .filter(Boolean)
+        })
+      });
+      if (!res.ok) {
+        toast.danger(
+          (await readErrorCode(res)) === 'private_address'
+            ? 'That address is not reachable from the server.'
+            : 'Could not add that calendar.'
+        );
+        return;
+      }
+      calendars = [...calendars, await res.json()];
+      calUrl = '';
+      calLabel = '';
+      await syncCalendar(calendars[calendars.length - 1].id);
+    } finally {
+      calBusy = false;
+    }
+  }
+
+  async function syncCalendar(id: string) {
+    calSyncing = id;
+    try {
+      const res = await fetch(`/api/calendar/${id}`, { method: 'POST' });
+      const result = await res.json();
+      if (result.status === 'error') {
+        toast.danger(result.error ?? 'Sync failed');
+      } else {
+        toast.success(
+          result.status === 'unchanged'
+            ? 'No changes since last sync.'
+            : `${result.created} added, ${result.updated} updated.`
+        );
+      }
+      await invalidateAll();
+    } finally {
+      calSyncing = null;
+    }
+  }
+
+  async function previewCalendar(id: string) {
+    calPreview = { ...calPreview, [id]: 'Checking…' };
+    const res = await fetch(`/api/calendar/${id}?action=preview`, { method: 'POST' });
+    if (!res.ok) {
+      calPreview = { ...calPreview, [id]: 'Could not check.' };
+      return;
+    }
+    const p = await res.json();
+    calPreview = {
+      ...calPreview,
+      [id]: `${p.events} events · ${p.matched} attendees already in Heli · would create ${p.wouldCreate.length} new people`
+    };
+  }
+
+  async function setMatchMode(id: string, matchMode: string) {
+    const res = await fetch(`/api/calendar/${id}`, {
+      method: 'PATCH',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ matchMode })
+    });
+    if (!res.ok) {
+      toast.danger('Could not update.');
+      return;
+    }
+    calendars = calendars.map((c) => (c.id === id ? { ...c, matchMode } : c));
+  }
+
+  async function removeCalendar(id: string, label: string | null) {
+    if (!confirm(`Remove ${label || 'this calendar'}? Imported meetings stay.`)) return;
+    const res = await fetch(`/api/calendar/${id}`, { method: 'DELETE' });
+    if (!res.ok) {
+      toast.danger('Could not remove.');
+      return;
+    }
+    calendars = calendars.filter((c) => c.id !== id);
+  }
+
   /* ── Personal access tokens ─────────────────────────────────────────── */
 
   // svelte-ignore state_referenced_locally
@@ -757,6 +862,145 @@
         {#if copied}<Check size={14} strokeWidth={2} /> Copied{:else}<Copy size={14} strokeWidth={2} /> Copy snippet{/if}
       </button>
     </div>
+  </section>
+
+  <section
+    class="flex flex-col gap-3 rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)] p-5"
+  >
+    <h2 class="flex items-center gap-2 text-sm font-medium">
+      <CalendarDays size={14} strokeWidth={2} /> Calendars
+    </h2>
+    <p class="text-sm text-[var(--color-muted)]">
+      Subscribe to a calendar and meetings become interactions automatically, linked to the
+      attendees you already have. No account connection — every calendar app can hand you a
+      private feed URL.
+    </p>
+    <details class="text-xs text-[var(--color-muted)]">
+      <summary class="cursor-pointer">Where do I find the URL?</summary>
+      <ul class="mt-2 flex list-disc flex-col gap-1 pl-4">
+        <li><strong>Google</strong> — Settings → click the calendar → “Secret address in iCal format”.</li>
+        <li><strong>Apple</strong> — right-click the calendar → Share Calendar → Public Calendar.</li>
+        <li><strong>Fastmail</strong> — Calendar → ⋯ → Export / Subscribe.</li>
+        <li><strong>Outlook</strong> — Settings → Shared calendars → Publish, then copy the ICS link.</li>
+      </ul>
+    </details>
+    <p
+      class="rounded-[var(--radius-sm)] border border-[var(--color-warning-border)] bg-[var(--color-warning-bg)] px-3 py-2 text-xs text-[var(--color-warning)]"
+    >
+      That URL is a password. Anyone holding it can read your calendar. Heli stores it, never
+      shows it again, and leaves it out of exports.
+    </p>
+
+    <div class="flex flex-wrap items-end gap-2">
+      <label class="flex min-w-[220px] flex-[2] flex-col gap-1">
+        <span class="cap-label">Feed URL</span>
+        <input
+          bind:value={calUrl}
+          type="url"
+          placeholder="https://calendar.google.com/calendar/ical/…/basic.ics"
+          class="rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-bg)] px-2 py-1.5 text-sm"
+        />
+      </label>
+      <label class="flex min-w-[120px] flex-1 flex-col gap-1">
+        <span class="cap-label">Label</span>
+        <input
+          bind:value={calLabel}
+          placeholder="Work"
+          class="rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-bg)] px-2 py-1.5 text-sm"
+        />
+      </label>
+      <label class="flex min-w-[160px] flex-1 flex-col gap-1">
+        <span class="cap-label">Your own addresses</span>
+        <input
+          bind:value={calSelf}
+          placeholder="you@work.com, you@home.com"
+          class="rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-bg)] px-2 py-1.5 text-sm"
+        />
+      </label>
+      <button
+        type="button"
+        onclick={addCalendar}
+        disabled={calBusy}
+        class="rounded-[var(--radius-sm)] bg-[var(--color-accent)] px-3 py-2 text-sm font-medium text-[var(--color-accent-fg)] disabled:opacity-50"
+      >
+        {calBusy ? 'Adding…' : 'Add calendar'}
+      </button>
+    </div>
+
+    {#if calendars.length > 0}
+      <ul class="flex flex-col divide-y divide-[var(--color-border)]">
+        {#each calendars as c (c.id)}
+          <li class="flex flex-col gap-1.5 py-2.5">
+            <div class="flex items-center gap-3">
+              <span class="min-w-0 flex-1">
+                <span class="block truncate text-sm font-medium">{c.label ?? 'Calendar'}</span>
+                <span class="block truncate text-xs text-[var(--color-muted)]">
+                  <code>{c.urlHint}</code>
+                  {#if c.lastFetchedAt}
+                    · synced {fmtWhen(c.lastFetchedAt)}
+                  {:else}
+                    · never synced
+                  {/if}
+                  {#if c.lastEventCount != null}
+                    · {c.lastEventCount} events
+                  {/if}
+                  {#if c.lastSkippedRecurring}
+                    · {c.lastSkippedRecurring} recurring skipped
+                  {/if}
+                </span>
+              </span>
+              <button
+                type="button"
+                onclick={() => syncCalendar(c.id)}
+                disabled={calSyncing === c.id}
+                class="shrink-0 rounded-[var(--radius-sm)] border border-[var(--color-border)] px-2 py-1 text-xs hover:bg-[var(--color-bg)]"
+              >
+                {calSyncing === c.id ? 'Syncing…' : 'Sync now'}
+              </button>
+              <button
+                type="button"
+                onclick={() => removeCalendar(c.id, c.label)}
+                class="shrink-0 rounded-[var(--radius-sm)] border border-[var(--color-border)] px-2 py-1 text-xs text-[var(--color-danger)] hover:border-[var(--color-danger)]"
+              >
+                Remove
+              </button>
+            </div>
+
+            {#if c.lastError}
+              <p class="text-xs text-[var(--color-danger)]">{c.lastError}</p>
+            {/if}
+
+            <div class="flex flex-wrap items-center gap-2 text-xs text-[var(--color-muted)]">
+              <span>Attendees:</span>
+              <button
+                type="button"
+                onclick={() => setMatchMode(c.id, 'known')}
+                class="rounded-full border px-2 py-0.5 {c.matchMode === 'known'
+                  ? 'border-[var(--color-border-strong)] bg-[var(--color-highlight-bg)] text-[var(--color-text)]'
+                  : 'border-[var(--color-border)]'}">link people I already have</button
+              >
+              <button
+                type="button"
+                onclick={() => setMatchMode(c.id, 'all')}
+                class="rounded-full border px-2 py-0.5 {c.matchMode === 'all'
+                  ? 'border-[var(--color-border-strong)] bg-[var(--color-highlight-bg)] text-[var(--color-text)]'
+                  : 'border-[var(--color-border)]'}">create everyone</button
+              >
+              <button
+                type="button"
+                onclick={() => previewCalendar(c.id)}
+                class="underline">what would that do?</button
+              >
+            </div>
+            {#if calPreview[c.id]}
+              <p class="text-xs text-[var(--color-subtle)]">{calPreview[c.id]}</p>
+            {/if}
+          </li>
+        {/each}
+      </ul>
+    {:else}
+      <p class="text-xs text-[var(--color-subtle)]">No calendars yet.</p>
+    {/if}
   </section>
 
   <section

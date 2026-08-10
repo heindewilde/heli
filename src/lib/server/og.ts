@@ -1,9 +1,8 @@
 import { parse, type HTMLElement } from 'node-html-parser';
-import { assertPublicUrl, UrlError } from './url';
+import { assertPublicUrl } from './url';
+import { fetchGuarded, readCapped } from './fetchGuard';
 
 const TIMEOUT_MS = 10_000;
-const MAX_BYTES = 2 * 1024 * 1024;
-const MAX_REDIRECTS = 7;
 
 export const BROWSER_UA =
   'Mozilla/5.0 (Macintosh; Intel Mac OS X 14_5) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36';
@@ -34,57 +33,14 @@ export type OgData = {
   phone?: string;
 };
 
-async function fetchOnce(start: URL, signal: AbortSignal, ua: string): Promise<Response> {
-  let url = start;
-  let lastResponse: Response | null = null;
-  for (let i = 0; i <= MAX_REDIRECTS; i++) {
-    await assertPublicUrl(url);
-    const res = await fetch(url, {
-      method: 'GET',
-      redirect: 'manual',
-      signal,
-      headers: { 'User-Agent': ua, ...COMMON_HEADERS }
-    });
-    if (res.status >= 300 && res.status < 400) {
-      const loc = res.headers.get('location');
-      if (!loc) {
-        lastResponse = res;
-        break;
-      }
-      const next = new URL(loc, url);
-      if (next.protocol !== 'http:' && next.protocol !== 'https:') {
-        throw new UrlError('bad_scheme', 'Redirect to non-http scheme');
-      }
-      try { await res.body?.cancel(); } catch { /* noop */ }
-      url = next;
-      continue;
-    }
-    lastResponse = res;
-    break;
-  }
-  if (!lastResponse) throw new UrlError('too_many_redirects', 'Too many redirects');
-  return lastResponse;
+// Thin wrapper over the shared guard — see src/lib/server/fetchGuard.ts. The
+// redirect-revalidation loop that used to live here is now shared with calendar
+// ingestion, which is the second thing in the app that fetches a user-supplied
+// URL.
+function fetchOnce(start: URL, signal: AbortSignal, ua: string): Promise<Response> {
+  return fetchGuarded(start, { signal, headers: { 'User-Agent': ua, ...COMMON_HEADERS } });
 }
 
-async function readCappedText(res: Response): Promise<string> {
-  const reader = res.body?.getReader();
-  if (!reader) return '';
-  const decoder = new TextDecoder('utf-8');
-  let received = 0;
-  let out = '';
-  while (true) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    received += value.byteLength;
-    out += decoder.decode(value, { stream: true });
-    if (received >= MAX_BYTES) {
-      try { await reader.cancel(); } catch { /* noop */ }
-      break;
-    }
-  }
-  out += decoder.decode();
-  return out;
-}
 
 const AUTHWALL_PATTERNS = [
   /authwall/i,
@@ -287,7 +243,7 @@ export async function fetchOg(url: URL | string): Promise<OgData> {
       };
     }
 
-    let html = await readCappedText(res);
+    let html = await readCapped(res);
 
     // Pass 2: retry with the other UA if pass 1 is auth-walled OR (for
     // LinkedIn) is missing the og:image — a common pattern there.
@@ -297,7 +253,7 @@ export async function fetchOg(url: URL | string): Promise<OgData> {
         const res2 = await fetchOnce(target, ctrl.signal, secondUa);
         const ct2 = res2.headers.get('content-type') || '';
         if (ct2.includes('html') || ct2.includes('xml')) {
-          const html2 = await readCappedText(res2);
+          const html2 = await readCapped(res2);
           const retryGotImage = !isImagePoor(html2);
           const retryIsBetter =
             !looksThin(res2.status, html2) ||
