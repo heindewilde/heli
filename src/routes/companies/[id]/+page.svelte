@@ -16,13 +16,41 @@
   import SaveBanner from '$lib/components/SaveBanner.svelte';
   import CompanyLogo from '$lib/components/CompanyLogo.svelte';
   import SocialLinks from '$lib/components/SocialLinks.svelte';
-  import { Plus } from 'lucide-svelte';
+  import { Plus, MessageSquarePlus } from 'lucide-svelte';
   import { toast } from '$lib/toasts.svelte';
+  import { registerCommands } from '$lib/commands/registry.svelte';
   import { onMount } from 'svelte';
   import { pollWhile } from '$lib/polling';
 
   let { data } = $props();
   const company = $derived(data.company);
+
+  onMount(() =>
+    registerCommands([
+      {
+        id: 'ctx:log-interaction',
+        title: `Log an interaction with ${company.name}`,
+        section: 'This page',
+        icon: MessageSquarePlus,
+        keywords: ['call', 'meeting', 'note', 'email'],
+        run: () => goto(`/interactions/new?company=${company.id}`)
+      },
+      {
+        id: 'ctx:favorite',
+        title: company.isFavorite ? `Unfavourite ${company.name}` : `Favourite ${company.name}`,
+        section: 'This page',
+        icon: Star,
+        run: () => patch({ isFavorite: !company.isFavorite })
+      },
+      {
+        id: 'ctx:archive',
+        title: company.isArchived ? `Unarchive ${company.name}` : `Archive ${company.name}`,
+        section: 'This page',
+        icon: Archive,
+        run: () => patch({ isArchived: !company.isArchived })
+      }
+    ])
+  );
   const linkedPeople = $derived(data.linkedPeople);
   // interactions / tags / projects / collections / pipelines / tasks are
   // promises — the shell paints before they resolve.

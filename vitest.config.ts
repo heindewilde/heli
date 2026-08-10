@@ -1,4 +1,5 @@
 import { fileURLToPath } from 'node:url';
+import { svelte } from '@sveltejs/vite-plugin-svelte';
 import { defineConfig } from 'vitest/config';
 
 /**
@@ -6,10 +7,14 @@ import { defineConfig } from 'vitest/config';
  * `vite build` never reads this one, so the app build and the Docker image are
  * untouched by anything here.
  *
- * No `sveltekit()` plugin either — nothing under test renders a component, and
- * the plugin's dev-server lifecycle is a source of hangs in a plain node suite.
+ * The Svelte plugin is here for one reason: `.svelte.ts` modules (the command
+ * registry, the list cache) use runes, and `$state` is a compiler construct —
+ * without it they throw "$state is not defined" on import. It is *not* the
+ * `sveltekit()` plugin, which brings a dev-server lifecycle this suite has no
+ * use for.
  */
 export default defineConfig({
+  plugins: [svelte({ compilerOptions: { runes: true } })],
   resolve: {
     // Server modules import each other through `$lib/...` (e.g.
     // saveInteraction.ts -> $lib/interactions), which only SvelteKit resolves.

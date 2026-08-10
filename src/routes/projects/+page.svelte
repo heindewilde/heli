@@ -5,7 +5,7 @@
   import { onMount } from 'svelte';
   import { Search, Plus, ArrowDownUp } from 'lucide-svelte';
   import ProjectCard from '$lib/components/ProjectCard.svelte';
-  import { bindKeys } from '$lib/keyboard.svelte';
+  import { registerCommands } from '$lib/commands/registry.svelte';
   import type { ProjectStatus } from '$lib/server/schema';
 
   let { data } = $props();
@@ -37,26 +37,25 @@
     }, 200);
   }
 
-  onMount(() =>
-    bindKeys((e) => {
-      if (rows.length === 0) return;
-      if (e.key === 'j' || e.key === 'ArrowDown') {
-        selected = Math.min(rows.length - 1, selected + 1);
-        scrollSelectedIntoView();
-        return true;
-      }
-      if (e.key === 'k' || e.key === 'ArrowUp') {
-        selected = Math.max(0, selected - 1);
-        scrollSelectedIntoView();
-        return true;
-      }
-      if (e.key === 'Enter' || e.key === 'e') {
-        const r = rows[selected];
-        if (r) goto(`/projects/${r.id}`);
-        return true;
-      }
-    })
-  );
+  onMount(() => {
+    const hasRows = () => rows.length > 0;
+    const open = () => {
+      const r = rows[selected];
+      if (r) goto(`/projects/${r.id}`);
+    };
+    const move = (delta: number) => () => {
+      selected = Math.min(rows.length - 1, Math.max(0, selected + delta));
+      scrollSelectedIntoView();
+    };
+    return registerCommands([
+      { id: 'list:next', title: 'Next row', section: 'This page', shortcut: 'j', hidden: true, when: hasRows, run: move(1) },
+      { id: 'list:next-arrow', title: 'Next row', section: 'This page', shortcut: 'ArrowDown', hidden: true, when: hasRows, run: move(1) },
+      { id: 'list:prev', title: 'Previous row', section: 'This page', shortcut: 'k', hidden: true, when: hasRows, run: move(-1) },
+      { id: 'list:prev-arrow', title: 'Previous row', section: 'This page', shortcut: 'ArrowUp', hidden: true, when: hasRows, run: move(-1) },
+      { id: 'list:open', title: 'Open the selected row', section: 'This page', shortcut: 'Enter', when: hasRows, run: open },
+      { id: 'list:open-e', title: 'Open the selected row', section: 'This page', shortcut: 'e', hidden: true, when: hasRows, run: open }
+    ]);
+  });
 
   function scrollSelectedIntoView() {
     setTimeout(() => {

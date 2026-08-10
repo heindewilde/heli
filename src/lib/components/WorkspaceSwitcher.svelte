@@ -2,6 +2,7 @@
   import { Building2, ChevronsUpDown, Check } from 'lucide-svelte';
   import { toast } from '$lib/toasts.svelte';
   import Popover from '$lib/ui/Popover.svelte';
+  import { clearRecents } from '$lib/commands/registry.svelte';
 
   type Membership = { workspaceId: string; workspaceName: string; role: string };
 
@@ -32,6 +33,10 @@
       // the workspace we're leaving. Drop them before navigating, or the first
       // paint of the new workspace shows the old one's rows.
       navigator.serviceWorker?.controller?.postMessage('PURGE_API');
+
+      // Palette recents are hrefs into the workspace we are leaving; they would
+      // 404 (or worse, look like this workspace's records) after the switch.
+      clearRecents();
 
       // Hard navigation rather than goto(): every cached load function, list
       // cache and $state island in the page belongs to the previous workspace.

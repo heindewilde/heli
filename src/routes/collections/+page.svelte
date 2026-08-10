@@ -5,7 +5,7 @@
   import { onMount } from 'svelte';
   import { Search, Plus, ArrowDownUp } from 'lucide-svelte';
   import CollectionCard from '$lib/components/CollectionCard.svelte';
-  import { bindKeys } from '$lib/keyboard.svelte';
+  import { registerCommands } from '$lib/commands/registry.svelte';
   import { toast } from '$lib/toasts.svelte';
 
   let { data } = $props();
@@ -62,21 +62,21 @@
     await invalidateAll();
   }
 
-  onMount(() =>
-    bindKeys((e) => {
-      if (rows.length === 0) return;
-      if (e.key === 'Enter' || e.key === 'e') {
-        const r = rows[selected];
-        if (r) goto(`/collections/${r.id}`);
-        return true;
-      }
-      if (e.key === '#') {
-        const r = rows[selected];
-        if (r) archive(r.id, r.name, r.isArchived);
-        return true;
-      }
-    })
-  );
+  onMount(() => {
+    const hasRows = () => rows.length > 0;
+    const open = () => {
+      const r = rows[selected];
+      if (r) goto(`/collections/${r.id}`);
+    };
+    return registerCommands([
+      { id: 'list:open', title: 'Open the selected row', section: 'This page', shortcut: 'Enter', when: hasRows, run: open },
+      { id: 'list:open-e', title: 'Open the selected row', section: 'This page', shortcut: 'e', hidden: true, when: hasRows, run: open },
+      { id: 'list:archive', title: 'Toggle archived', section: 'This page', shortcut: '#', when: hasRows, run: () => {
+          const r = rows[selected];
+          if (r) archive(r.id, r.name, r.isArchived);
+        } }
+    ]);
+  });
 
   const ARCHIVED_FILTERS = [
     { value: 'active', label: 'Active' },

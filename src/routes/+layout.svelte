@@ -13,7 +13,14 @@
   import { page } from '$app/state';
   import { onMount } from 'svelte';
   import { invalidateAll, goto } from '$app/navigation';
-  import { bindKeys, isTypingTarget } from '$lib/keyboard.svelte';
+  import { isTypingTarget } from '$lib/keyboard.svelte';
+  import {
+    registerCommands,
+    startShortcuts,
+    clearRecents,
+    type Command
+  } from '$lib/commands/registry.svelte';
+  import { Plus, MessageSquarePlus } from 'lucide-svelte';
   import { toast } from '$lib/toasts.svelte';
   import { saveErrorMessage } from '$lib/save-errors';
   import { readErrorCode } from '$lib/api-error';
@@ -29,6 +36,18 @@
   let paletteOpen = $state(false);
   let helpOpen = $state(false);
   let sidebarOpen = $state(false);
+
+  // `g <letter>` targets. Letters are the first distinctive character of each
+  // destination — `g i` for interactions, not `g n`.
+  const GO_KEYS: Record<string, string> = {
+    '/': 'd',
+    '/people': 'p',
+    '/companies': 'c',
+    '/interactions': 'i',
+    '/collections': 'o',
+    '/pipelines': 'l',
+    '/projects': 'r'
+  };
 
   const tabs = [
     { href: '/', label: 'Dashboard', icon: LayoutDashboard },
@@ -61,51 +80,136 @@
 
     const cleanups: Array<() => void> = [];
 
-    // cmd/ctrl + K is meta-modified, so it doesn't go through bindKeys' filter.
-    const onMetaKey = (e: KeyboardEvent) => {
-      if ((e.metaKey || e.ctrlKey) && !e.shiftKey && !e.altKey && (e.key === 'k' || e.key === 'K')) {
-        e.preventDefault();
-        helpOpen = false;
-        paletteOpen = !paletteOpen;
-      }
-    };
-    window.addEventListener('keydown', onMetaKey);
-    cleanups.push(() => window.removeEventListener('keydown', onMetaKey));
+    // One dispatcher for every shortcut in the app, replacing `bindKeys` in
+    // this file, `bindKeys` again on each list page, and two ad-hoc keydown
+    // listeners for the cases bindKeys could not express — it bailed on any
+    // modifier, which is why ⌘K needed its own.
+    cleanups.push(startShortcuts());
 
-    // `?` (shift+/) for help — fire even from inside no-input contexts; we still
-    // ignore inputs to avoid hijacking text entry. Esc closes the mobile drawer.
-    const onPlainKey = (e: KeyboardEvent) => {
-      if (e.metaKey || e.ctrlKey || e.altKey) return;
-      if (isTypingTarget(e.target)) return;
-      if (e.key === '?') {
-        e.preventDefault();
-        paletteOpen = false;
-        helpOpen = !helpOpen;
-      } else if (e.key === 'Escape' && sidebarOpen) {
-        sidebarOpen = false;
-      }
-    };
-    window.addEventListener('keydown', onPlainKey);
-    cleanups.push(() => window.removeEventListener('keydown', onPlainKey));
+    const signedIn = () => !!user;
 
     cleanups.push(
-      bindKeys((e) => {
-        if (!user) return;
-        if (e.key === '/') {
-          const search = document.querySelector<HTMLInputElement>('[data-search-input]');
-          if (search) {
-            search.focus();
-            search.select?.();
-            return true;
+      registerCommands([
+        {
+          id: 'palette',
+          title: 'Search everything',
+          section: 'Navigate',
+          icon: Search,
+          shortcut: 'mod+k',
+          run: () => {
+            helpOpen = false;
+            paletteOpen = !paletteOpen;
           }
-        }
-        const idx = Number(e.key) - 1;
-        if (idx >= 0 && idx < tabs.length) {
-          goto(tabs[idx].href);
-          return true;
-        }
-      })
+        },
+        {
+          id: 'help',
+          title: 'Show keyboard shortcuts',
+          section: 'Workspace',
+          icon: HelpCircle,
+          shortcut: '?',
+          run: () => {
+            paletteOpen = false;
+            helpOpen = !helpOpen;
+          }
+        },
+        {
+          id: 'focus-search',
+          title: "Focus the page's search box",
+          section: 'Navigate',
+          shortcut: '/',
+          hidden: true,
+          when: () => signedIn() && !!document.querySelector('[data-search-input]'),
+          run: () => {
+            const el = document.querySelector<HTMLInputElement>('[data-search-input]');
+            el?.focus();
+            el?.select?.();
+          }
+        },
+        {
+          id: 'settings',
+          title: 'Open settings',
+          section: 'Workspace',
+          icon: Settings,
+          keywords: ['account', 'workspace', 'team', 'export'],
+          when: signedIn,
+          run: () => goto('/settings')
+        },
+        {
+          id: 'new-interaction',
+          title: 'Log an interaction',
+          section: 'Create',
+          icon: MessageSquarePlus,
+          keywords: ['call', 'meeting', 'note', 'email'],
+          shortcut: 'n i',
+          when: signedIn,
+          run: () => goto('/interactions/new')
+        },
+        {
+          id: 'new-project',
+          title: 'New project',
+          section: 'Create',
+          icon: Plus,
+          shortcut: 'n p',
+          when: signedIn,
+          run: () => goto('/projects/new')
+        },
+        {
+          id: 'new-collection',
+          title: 'New collection',
+          section: 'Create',
+          icon: Plus,
+          shortcut: 'n c',
+          when: signedIn,
+          run: () => goto('/collections/new')
+        },
+        {
+          id: 'new-pipeline',
+          title: 'New pipeline',
+          section: 'Create',
+          icon: Plus,
+          when: signedIn,
+          run: () => goto('/pipelines/new')
+        },
+        // Both spellings for every tab: the number keys people already know,
+        // and a `g <letter>` sequence that scales past nine destinations and
+        // does not collide with typing a number into a field.
+        ...tabs.flatMap((t, i): Command[] => {
+          const letter = GO_KEYS[t.href];
+          const entries: Command[] = [
+            {
+              id: `go:${t.href}`,
+              title: `Go to ${t.label}`,
+              section: 'Navigate',
+              icon: t.icon,
+              shortcut: letter ? `g ${letter}` : undefined,
+              when: signedIn,
+              run: () => goto(t.href)
+            }
+          ];
+          if (i < 9) {
+            entries.push({
+              id: `go-num:${t.href}`,
+              title: `Go to ${t.label}`,
+              section: 'Navigate' as const,
+              icon: t.icon,
+              shortcut: String(i + 1),
+              hidden: true,
+              when: signedIn,
+              run: () => goto(t.href)
+            });
+          }
+          return entries;
+        })
+      ])
     );
+
+    // Esc closes the mobile drawer. Not a registered command: the drawer is
+    // layout state, and layerStack only knows about Popover/Dialog layers.
+    const onEscape = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && sidebarOpen) sidebarOpen = false;
+    };
+    window.addEventListener('keydown', onEscape);
+    cleanups.push(() => window.removeEventListener('keydown', onEscape));
 
     // Paste-anywhere → save URL. A plain cmd/ctrl+V outside any text-entry
     // surface is treated as "save this link". When the user pastes inside an
@@ -241,7 +345,12 @@
           method="POST"
           action="/auth/logout"
           class="contents"
-          onsubmit={() => navigator.serviceWorker?.controller?.postMessage('PURGE_API')}
+          onsubmit={() => {
+            navigator.serviceWorker?.controller?.postMessage('PURGE_API');
+            // Recents name this workspace's records; they must not outlive the
+            // session on a shared machine.
+            clearRecents();
+          }}
         >
           <button
             type="submit"

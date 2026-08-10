@@ -14,7 +14,7 @@
   import SortHeader from '$lib/components/SortHeader.svelte';
   import type { StatusRow } from '$lib/statuses';
   import type { Priority } from '$lib/priority';
-  import { bindKeys } from '$lib/keyboard.svelte';
+  import { registerCommands } from '$lib/commands/registry.svelte';
   import { toast } from '$lib/toasts.svelte';
   import { buildUrl as buildUrlBase } from '$lib/url';
   import { formatLastSeen } from '$lib/interactions';
@@ -130,36 +130,115 @@
     }
   }
 
-  onMount(() =>
-    bindKeys((e) => {
-      if (rows.length === 0) return;
-      if (e.key === 'j' || e.key === 'ArrowDown') {
-        selected = Math.min(rows.length - 1, selected + 1);
-        scrollSelectedIntoView();
-        return true;
+  // Registered as commands rather than a second `bindKeys` listener, so there
+  // is one dispatcher in the app and the shortcut sheet stays truthful. The
+  // `when` guard is what keeps them off other pages.
+  onMount(() => {
+    const hasRows = () => rows.length > 0;
+    const current = () => rows[selected];
+    return registerCommands([
+      {
+        id: 'list:next',
+        title: 'Next row',
+        section: 'This page',
+        shortcut: 'j',
+        hidden: true,
+        when: hasRows,
+        run: () => {
+          selected = Math.min(rows.length - 1, selected + 1);
+          scrollSelectedIntoView();
+        }
+      },
+      {
+        id: 'list:next-arrow',
+        title: 'Next row',
+        section: 'This page',
+        shortcut: 'ArrowDown',
+        hidden: true,
+        when: hasRows,
+        run: () => {
+          selected = Math.min(rows.length - 1, selected + 1);
+          scrollSelectedIntoView();
+        }
+      },
+      {
+        id: 'list:prev',
+        title: 'Previous row',
+        section: 'This page',
+        shortcut: 'k',
+        hidden: true,
+        when: hasRows,
+        run: () => {
+          selected = Math.max(0, selected - 1);
+          scrollSelectedIntoView();
+        }
+      },
+      {
+        id: 'list:prev-arrow',
+        title: 'Previous row',
+        section: 'This page',
+        shortcut: 'ArrowUp',
+        hidden: true,
+        when: hasRows,
+        run: () => {
+          selected = Math.max(0, selected - 1);
+          scrollSelectedIntoView();
+        }
+      },
+      {
+        id: 'list:open',
+        title: 'Open the selected row',
+        section: 'This page',
+        shortcut: 'Enter',
+        when: hasRows,
+        run: () => {
+          const r = current();
+          if (r) goto(`/companies/${r.id}`);
+        }
+      },
+      {
+        id: 'list:open-e',
+        title: 'Open the selected row',
+        section: 'This page',
+        shortcut: 'e',
+        hidden: true,
+        when: hasRows,
+        run: () => {
+          const r = current();
+          if (r) goto(`/companies/${r.id}`);
+        }
+      },
+      {
+        id: 'list:favorite',
+        title: 'Toggle favourite',
+        section: 'This page',
+        shortcut: '*',
+        when: hasRows,
+        run: () => {
+          const r = current();
+          if (r) patch(r.id, { isFavorite: !r.isFavorite });
+        }
+      },
+      {
+        id: 'list:archive',
+        title: 'Toggle archived',
+        section: 'This page',
+        shortcut: '#',
+        when: hasRows,
+        run: () => {
+          const r = current();
+          if (r) patch(r.id, { isArchived: !r.isArchived });
+        }
+      },
+      {
+        id: 'list:new',
+        title: 'New company',
+        section: 'Create',
+        when: () => true,
+        run: openAdd
       }
-      if (e.key === 'k' || e.key === 'ArrowUp') {
-        selected = Math.max(0, selected - 1);
-        scrollSelectedIntoView();
-        return true;
-      }
-      if (e.key === 'Enter' || e.key === 'e') {
-        const r = rows[selected];
-        if (r) goto(`/companies/${r.id}`);
-        return true;
-      }
-      if (e.key === '*') {
-        const r = rows[selected];
-        if (r) patch(r.id, { isFavorite: !r.isFavorite });
-        return true;
-      }
-      if (e.key === '#') {
-        const r = rows[selected];
-        if (r) patch(r.id, { isArchived: !r.isArchived });
-        return true;
-      }
-    })
-  );
+    ]);
+  });
 
   function scrollSelectedIntoView() {
     setTimeout(() => {

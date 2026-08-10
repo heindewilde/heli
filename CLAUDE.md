@@ -156,6 +156,23 @@ query *count*, and the lever is fewer round trips.
 ## Search
 
 - **CommandPalette debounce: 40ms**. Stale-response guard (`q.trim() !== v`) prevents out-of-order renders.
+- **The palette runs commands as well as search.** Entities come from the
+  server (FTS5 + the LRU); *commands* are matched client-side by
+  `src/lib/commands/fuzzy.ts`. Don't move entity search to the client — it would
+  mean shipping the workspace to the browser to do worse than SQLite does.
+- **One keyboard dispatcher: `src/lib/commands/registry.svelte.ts`.** Register
+  commands with `registerCommands([...])` in `onMount` and return the cleanup;
+  `when` gates a binding by context, `hidden` keeps it out of the palette while
+  still listing it in the shortcut sheet. Shortcuts are chords (`mod+k`, `?`) or
+  sequences (`g p`, `n i`).
+  - Never add another `window.addEventListener('keydown')`. `bindKeys` is gone
+    precisely because it bailed on any modifier — which is why ⌘K needed its own
+    listener — and because every page added a second one.
+  - `ShortcutHelp` is *generated* from the registry. The old hand-kept list had
+    drifted (four scope prefixes documented, six supported).
+  - **Palette recents live in `localStorage` and are per-workspace.** They are
+    cleared alongside `PURGE_API` on workspace switch and sign-out; a stale href
+    from another tenant is both a 404 and a leak of a record's name.
 - **Server-side LRU** in `src/lib/server/search.ts` wraps `searchAll()`. Cap 256, TTL 30s, keyed by `region:userId:perKind:rawQ`. Per-process so multi-region deployments get one cache per region for free. 30s TTL means a freshly-added entity can take up to 30s to appear in cached hits — acceptable; add explicit invalidation if it bites.
 
 ## Tenancy — read this before touching any query

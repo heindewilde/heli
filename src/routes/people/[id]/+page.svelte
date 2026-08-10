@@ -16,13 +16,44 @@
   import CompanyLogo from '$lib/components/CompanyLogo.svelte';
   import CompanyPicker from '$lib/components/CompanyPicker.svelte';
   import SocialLinks from '$lib/components/SocialLinks.svelte';
-  import { Plus } from 'lucide-svelte';
+  import { Plus, MessageSquarePlus } from 'lucide-svelte';
   import { toast } from '$lib/toasts.svelte';
+  import { registerCommands } from '$lib/commands/registry.svelte';
   import { onMount } from 'svelte';
   import { pollWhile } from '$lib/polling';
 
   let { data } = $props();
   const person = $derived(data.person);
+
+  // Page-scoped commands. Registering them on mount and unregistering on
+  // destroy is what lets the palette offer "Log an interaction with Ada"
+  // without every page's actions polluting every other page.
+  onMount(() =>
+    registerCommands([
+      {
+        id: 'ctx:log-interaction',
+        title: `Log an interaction with ${person.name}`,
+        section: 'This page',
+        icon: MessageSquarePlus,
+        keywords: ['call', 'meeting', 'note', 'email'],
+        run: () => goto(`/interactions/new?person=${person.id}`)
+      },
+      {
+        id: 'ctx:favorite',
+        title: person.isFavorite ? `Unfavourite ${person.name}` : `Favourite ${person.name}`,
+        section: 'This page',
+        icon: Star,
+        run: () => patch({ isFavorite: !person.isFavorite })
+      },
+      {
+        id: 'ctx:archive',
+        title: person.isArchived ? `Unarchive ${person.name}` : `Archive ${person.name}`,
+        section: 'This page',
+        icon: Archive,
+        run: () => patch({ isArchived: !person.isArchived })
+      }
+    ])
+  );
   const company = $derived(data.company);
   // interactions / tags / projects / collections / pipelines / tasks arrive as
   // promises now — the page shell paints before they resolve. See the load
