@@ -65,6 +65,12 @@
   // invalidateAll so the next render reflects the new option.
   let statuses = $derived<StatusRow[]>(data.statuses);
 
+  // The grid template for this table, defined once. The header row and the data
+  // rows must agree exactly; they were previously two identical literals kept
+  // in sync by hand, which is a misalignment waiting to happen.
+  const GRID = 'grid-template-columns: 24px minmax(0,1.5fr) minmax(0,1.1fr) minmax(0,0.9fr) 150px minmax(0,1fr);';
+  const ROW_GRID = `${GRID} min-height: 56px; padding-top: 8px; padding-bottom: 8px;`;
+
   let showAdd = $state(false);
   let addName = $state('');
   let addBusy = $state(false);
@@ -413,7 +419,7 @@
     <div class="overflow-hidden rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)] shadow-[var(--shadow-xs)]">
       <div
         class="hidden md:grid items-center gap-3 border-b border-[var(--color-border)] bg-[var(--color-surface-2)] px-3 py-2 text-[var(--color-subtle)]"
-        style="grid-template-columns: 24px minmax(0,1.5fr) minmax(0,1.1fr) minmax(0,0.9fr) 150px minmax(0,1fr);"
+        style={GRID}
       >
         <span class="cap-label">·</span>
         <SortHeader label="Name" sortKey="name" current={data.sort} href={sortHref} direction="asc" />
@@ -462,7 +468,7 @@
             <!-- Desktop row (>= md) -->
             <div
               class="group relative hidden md:grid items-center gap-3 border-b border-[var(--color-border)] px-3 transition-colors last:border-b-0 {sel ? 'bg-[var(--color-highlight-bg)]' : 'hover:bg-[var(--color-row-hover)]'} {person.isArchived ? 'opacity-60' : ''}"
-              style="grid-template-columns: 24px minmax(0,1.5fr) minmax(0,1.1fr) minmax(0,0.9fr) 150px minmax(0,1fr); min-height: 56px; padding-top: 8px; padding-bottom: 8px;"
+              style={ROW_GRID}
             >
               <PriorityFlag
                 value={(person.priority as Priority) ?? null}

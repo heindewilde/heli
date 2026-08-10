@@ -217,6 +217,28 @@ html, body {
   border-radius: var(--radius-sm);
 }
 
+/*
+ * Honour the OS "reduce motion" setting globally.
+ *
+ * Five components had their own @media block; every other transition and
+ * animation in the app — 78 `transition-colors`, the spinners, the hover lifts
+ * — had none. One rule at the end of the cascade covers all of them, including
+ * anything added later, which is the only version of this that stays true.
+ *
+ * Not `animation: none`: killing an animation mid-flight can leave an element
+ * at its start frame. A near-zero duration lets it finish instantly instead.
+ */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
 /* Quiet the default selection color so it matches the system. */
 ::selection {
   background: var(--color-highlight-bg);

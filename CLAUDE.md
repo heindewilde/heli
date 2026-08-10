@@ -406,6 +406,25 @@ Every push to `main` triggers two workflows:
 - Both `:latest` and `:stable` are pushed on every tag build — don't remove either.
 - `VERSION` in the Dockerfile is set at build time via `--build-arg`. The value flows through to `PUBLIC_HELI_VERSION` (read in `src/lib/version.ts`). Don't add a runtime env var for this — it's intentionally baked in at build time.
 
+## Visual conventions
+
+- **A list's grid template is defined once per page** (`GRID` / `ROW_GRID`) and
+  used by both the header row and the data rows. They were two identical inline
+  literals kept in sync by hand; a column added to one and not the other
+  misaligns the whole table silently.
+- **Reduced motion is handled globally** in `src/app.css` — one `@media` rule at
+  the end of the cascade covering every transition and animation, including ones
+  added later. Don't add per-component `prefers-reduced-motion` blocks; the five
+  that existed covered five things out of ninety. It sets a near-zero duration
+  rather than `animation: none`, because killing an animation mid-flight can
+  strand an element on its first frame.
+- **The focus ring is global** (`*:focus-visible` in app.css) and uses
+  `--color-border-strong`, never the accent. When a container needs focus for a
+  trap, focus a focusable *child* — a `tabindex="-1"` wrapper picks up the ring
+  and draws a frame round the whole surface.
+- **`Skeleton`** (`src/lib/ui/Skeleton.svelte`) is the placeholder for streamed
+  sections; size it to match what replaces it so nothing jumps.
+
 ## Naming
 
 - Brand strings live in `src/lib/branding.ts` only (`APP_NAME`, `APP_DOMAIN`, `APP_TAGLINE`, `BRAND_ACCENT`). Never hardcode "Heli" elsewhere — keep a single rename point.
