@@ -1,7 +1,8 @@
 <script lang="ts">
   import { Flag, Check } from 'lucide-svelte';
   import { PRIORITIES, toneColor, type Priority } from '$lib/priority';
-  import { dismiss } from '$lib/dismiss.svelte';
+  import Popover from '$lib/ui/Popover.svelte';
+  import Button from '$lib/ui/Button.svelte';
 
   type Props = {
     selected: Priority[] | null;
@@ -33,50 +34,48 @@
     working = has ? working.filter((x) => x !== p) : [...working, p];
   }
 
+  // Dismissing the popover any way at all applies the buffer — pressing
+  // outside is a commit, not a cancel, which is what the original did too.
   function commit() {
-    const next = working.length === 0 ? null : [...working];
-    onChange(next);
-    open = false;
+    onChange(working.length === 0 ? null : [...working]);
   }
 
-  function clearAll() {
+  function clearAll(close: () => void) {
     working = [];
     onChange(null);
-    open = false;
+    close();
   }
 </script>
 
-<div use:dismiss={open ? commit : null} class="relative inline-flex">
-  <button
-    type="button"
-    onclick={() => (open = !open)}
-    aria-expanded={open}
-    class="inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-xs transition-colors {active
-      ? 'border-[var(--color-border-strong)] bg-[var(--color-highlight-bg)] text-[var(--color-text)]'
-      : 'border-[var(--color-border)] text-[var(--color-muted)] hover:text-[var(--color-text)]'}"
-  >
-    <Flag size={12} strokeWidth={2} />
-    {summary}
-  </button>
-
-  {#if open}
-    <div
-      role="dialog"
-      aria-label="Priority filter"
-      class="absolute left-0 top-8 z-50 min-w-[180px] overflow-hidden rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)] py-1 shadow-[var(--shadow-lg)]"
+<Popover bind:open label="Priority filter" panelRole="dialog" onclose={commit}>
+  {#snippet trigger(attrs)}
+    <button
+      {...attrs}
+      type="button"
+      class="inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-xs transition-colors {active
+        ? 'border-[var(--color-border-strong)] bg-[var(--color-highlight-bg)] text-[var(--color-text)]'
+        : 'border-[var(--color-border)] text-[var(--color-muted)] hover:text-[var(--color-text)]'}"
     >
+      <Flag size={12} strokeWidth={2} />
+      {summary}
+    </button>
+  {/snippet}
+
+  {#snippet content({ close })}
+    <div class="min-w-[180px]">
       {#each PRIORITIES as p (p.label)}
         {@const checked = working.some((x) => x === p.value)}
         {@const color = toneColor(p.tone)}
         <button
           type="button"
-          onclick={(e) => {
-            e.stopPropagation();
-            toggle(p.value);
-          }}
+          onclick={() => toggle(p.value)}
           class="flex w-full items-center gap-2 px-2.5 py-1.5 text-left text-xs hover:bg-[var(--color-surface-2)]"
         >
-          <span class="flex h-3.5 w-3.5 items-center justify-center rounded-[3px] border border-[var(--color-border)] {checked ? 'bg-[var(--color-accent)] border-[var(--color-accent)]' : ''}">
+          <span
+            class="flex h-3.5 w-3.5 items-center justify-center rounded-[3px] border border-[var(--color-border)] {checked
+              ? 'border-[var(--color-accent)] bg-[var(--color-accent)]'
+              : ''}"
+          >
             {#if checked}<Check size={9} strokeWidth={3} class="text-[var(--color-accent-fg)]" />{/if}
           </span>
           {#if p.value == null}
@@ -87,18 +86,16 @@
           <span class="flex-1">{p.label}</span>
         </button>
       {/each}
-      <div class="flex items-center justify-between gap-2 border-t border-[var(--color-border)] px-2 py-1.5">
+      <div
+        class="flex items-center justify-between gap-2 border-t border-[var(--color-border)] px-2 py-1.5"
+      >
         <button
           type="button"
-          onclick={(e) => { e.stopPropagation(); clearAll(); }}
-          class="text-[11px] text-[var(--color-muted)] hover:text-[var(--color-text)]"
-        >Clear</button>
-        <button
-          type="button"
-          onclick={(e) => { e.stopPropagation(); commit(); }}
-          class="rounded-[var(--radius-sm)] bg-[var(--color-accent)] px-2 py-0.5 text-[11px] font-medium text-[var(--color-accent-fg)] transition-colors hover:bg-[var(--color-accent-hover)]"
-        >Apply</button>
+          onclick={() => clearAll(close)}
+          class="text-[11px] text-[var(--color-muted)] hover:text-[var(--color-text)]">Clear</button
+        >
+        <Button variant="primary" size="xs" onclick={close}>Apply</Button>
       </div>
     </div>
-  {/if}
-</div>
+  {/snippet}
+</Popover>

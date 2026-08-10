@@ -35,7 +35,14 @@
     placement?: Placement;
     /** Accessible name for the panel. */
     label: string;
-    role?: 'menu' | 'dialog' | 'listbox';
+    /**
+     * ARIA role for the panel. Named `panelRole` rather than `role` on purpose:
+     * `role="dialog"` at a call site should mean a hand-rolled modal surface,
+     * and scripts/check-overlays.ts fails the build on exactly that string. A
+     * prop spelled `role` would make every correct use of this primitive
+     * indistinguishable from the thing the lint exists to catch.
+     */
+    panelRole?: 'menu' | 'dialog' | 'listbox';
     /** Match the panel's minimum width to the trigger's. */
     matchWidth?: boolean;
     /** Move focus into the panel on open. Off for comboboxes, which keep focus in their input. */
@@ -54,7 +61,7 @@
     open = $bindable(false),
     placement = 'bottom-start',
     label,
-    role = 'dialog',
+    panelRole = 'dialog',
     matchWidth = false,
     autoFocus = true,
     panelClass = '',
@@ -82,7 +89,7 @@
 
   const attrs = $derived<TriggerAttrs>({
     id: `${panelId}-trigger`,
-    'aria-haspopup': role,
+    'aria-haspopup': panelRole,
     'aria-expanded': open,
     'aria-controls': open ? panelId : undefined,
     onclick: (e: MouseEvent) => {
@@ -134,7 +141,7 @@
     <div
       bind:this={panelEl}
       id={panelId}
-      {role}
+      role={panelRole}
       aria-label={label}
       popover="manual"
       tabindex="-1"

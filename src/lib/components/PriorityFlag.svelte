@@ -1,7 +1,7 @@
 <script lang="ts">
   import { Flag, Check } from 'lucide-svelte';
   import { PRIORITIES, priorityMeta, toneColor, type Priority } from '$lib/priority';
-  import { dismiss } from '$lib/dismiss.svelte';
+  import Popover from '$lib/ui/Popover.svelte';
 
   // Same flag icon for every priority — color is the only differentiator
   // (per design spec).
@@ -15,52 +15,44 @@
   let { value, onChange, disabled = false, align = 'center' }: Props = $props();
 
   let open = $state(false);
-  let triggerEl = $state<HTMLButtonElement | undefined>(undefined);
 
   const meta = $derived(priorityMeta(value));
 
-  function pick(p: Priority) {
-    open = false;
+  function pick(p: Priority, close: () => void) {
+    close();
     if (p !== value) onChange(p);
-    triggerEl?.focus();
   }
 </script>
 
-<div
-  use:dismiss={open ? () => (open = false) : null}
-  class="relative inline-flex {align === 'center' ? 'items-center justify-center' : ''}"
+<Popover
+  bind:open
+  label="Priority"
+  panelRole="listbox"
+  class={align === 'center' ? 'items-center justify-center' : ''}
 >
-  <button
-    bind:this={triggerEl}
-    type="button"
-    {disabled}
-    aria-label={value == null ? 'Set priority' : `Priority: ${meta.label}`}
-    aria-haspopup="listbox"
-    aria-expanded={open}
-    onclick={(e) => {
-      e.stopPropagation();
-      open = !open;
-    }}
-    class="group inline-flex h-6 w-6 items-center justify-center rounded-[var(--radius-sm)] transition-colors hover:bg-[var(--color-surface-2)] disabled:opacity-40"
-  >
-    {#if value == null}
-      <Flag
-        size={12}
-        strokeWidth={1.75}
-        class="opacity-0 transition-opacity group-hover:opacity-100"
-        style="color: var(--color-subtle)"
-      />
-    {:else}
-      <Flag size={12} strokeWidth={2} fill="currentColor" style="color: {toneColor(meta.tone)}" />
-    {/if}
-  </button>
-
-  {#if open}
-    <div
-      role="listbox"
-      aria-label="Priority"
-      class="absolute left-0 top-7 z-50 min-w-[140px] overflow-hidden rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)] py-1 shadow-[var(--shadow-lg)]"
+  {#snippet trigger(attrs)}
+    <button
+      {...attrs}
+      type="button"
+      {disabled}
+      aria-label={value == null ? 'Set priority' : `Priority: ${meta.label}`}
+      class="group inline-flex h-6 w-6 items-center justify-center rounded-[var(--radius-sm)] transition-colors hover:bg-[var(--color-surface-2)] disabled:opacity-40"
     >
+      {#if value == null}
+        <Flag
+          size={12}
+          strokeWidth={1.75}
+          class="opacity-0 transition-opacity group-hover:opacity-100"
+          style="color: var(--color-subtle)"
+        />
+      {:else}
+        <Flag size={12} strokeWidth={2} fill="currentColor" style="color: {toneColor(meta.tone)}" />
+      {/if}
+    </button>
+  {/snippet}
+
+  {#snippet content({ close })}
+    <div class="min-w-[140px] py-1">
       {#each PRIORITIES as p (p.label)}
         {@const selected = p.value === value}
         {@const color = toneColor(p.tone)}
@@ -68,10 +60,7 @@
           type="button"
           role="option"
           aria-selected={selected}
-          onclick={(e) => {
-            e.stopPropagation();
-            pick(p.value);
-          }}
+          onclick={() => pick(p.value, close)}
           class="flex w-full items-center gap-2 px-2.5 py-1.5 text-left text-xs transition-colors hover:bg-[var(--color-surface-2)]"
         >
           <span class="flex h-3.5 w-3.5 items-center justify-center">
@@ -88,5 +77,5 @@
         </button>
       {/each}
     </div>
-  {/if}
-</div>
+  {/snippet}
+</Popover>
