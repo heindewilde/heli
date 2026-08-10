@@ -6,7 +6,7 @@
 </script>
 
 {#if status.updateAvailable}
-  <div class="pointer-events-none fixed inset-x-0 bottom-4 z-[60] flex justify-center px-4">
+  <div class="pointer-events-none fixed inset-x-0 bottom-4 z-[var(--z-toast)] flex justify-center px-4">
     <aside
       role="status"
       class="pointer-events-auto flex items-center gap-3 rounded-[var(--radius-md)] border border-[var(--color-info-border)] bg-[var(--color-info-bg)] px-3 py-2 text-sm text-[var(--color-info)] shadow-[var(--shadow-md)]"

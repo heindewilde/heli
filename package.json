@@ -10,7 +10,7 @@
     "dev": "vite dev",
     "build": "vite build",
     "preview": "vite preview",
-    "check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json && tsx scripts/check-tenancy.ts && vitest run",
+    "check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json && tsx scripts/check-tenancy.ts && tsx scripts/check-overlays.ts && vitest run",
     "check:watch": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --watch",
     "test": "vitest run",
     "test:watch": "vitest"

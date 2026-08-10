@@ -175,7 +175,7 @@
           class="h-9 w-full rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-surface)] pl-9 pr-3 text-sm focus:outline-none focus:border-[var(--color-accent)]"
         />
         {#if searchResults.length > 0}
-          <ul class="absolute z-20 mt-1 w-full overflow-hidden rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-bg)] shadow-lg">
+          <ul class="absolute z-[var(--z-popover)] mt-1 w-full overflow-hidden rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-bg)] shadow-lg">
             {#each searchResults as hit (hit.kind + hit.id)}
               {@const already = selectedMembers.some((m) => m.kind === hit.kind && m.id === hit.id)}
               <li>

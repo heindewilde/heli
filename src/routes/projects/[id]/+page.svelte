@@ -1,4 +1,5 @@
 <script lang="ts">
+  import IconPicker from '$lib/components/IconPicker.svelte';
   import { APP_NAME } from '$lib/branding';
   import { goto, invalidateAll } from '$app/navigation';
   import { Trash2, AlertTriangle, Plus, X, Briefcase } from 'lucide-svelte';
@@ -10,7 +11,7 @@
   import NotesEditor from '$lib/components/NotesEditor.svelte';
   import AddReminder from '$lib/components/AddReminder.svelte';
   import SaveBanner from '$lib/components/SaveBanner.svelte';
-  import { COLLECTION_ICON_MAP, COLLECTION_ICON_NAMES } from '$lib/collectionIcons';
+  import { COLLECTION_ICON_MAP } from '$lib/collectionIcons';
   import { TYPE_META, dayBucket, formatTime, type InteractionType } from '$lib/interactions';
   import { toast } from '$lib/toasts.svelte';
   import type { ProjectStatus } from '$lib/server/schema';
@@ -25,30 +26,6 @@
   let nameInput = $state<HTMLInputElement | undefined>(undefined);
   let nameCommitInFlight: Promise<void> | null = $state(null);
   let deleting = $state(false);
-
-  // Icon picker
-  let showIconPicker = $state(false);
-  let iconPickerEl = $state<HTMLDivElement | undefined>(undefined);
-  let iconButtonEl = $state<HTMLButtonElement | undefined>(undefined);
-
-  $effect(() => {
-    if (!showIconPicker) return;
-    const onMouseDown = (e: MouseEvent) => {
-      const t = e.target as Node;
-      if (iconPickerEl?.contains(t) || iconButtonEl?.contains(t)) return;
-      showIconPicker = false;
-    };
-    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') showIconPicker = false; };
-    const t = setTimeout(() => {
-      window.addEventListener('mousedown', onMouseDown);
-      window.addEventListener('keydown', onKey);
-    }, 0);
-    return () => {
-      clearTimeout(t);
-      window.removeEventListener('mousedown', onMouseDown);
-      window.removeEventListener('keydown', onKey);
-    };
-  });
 
   async function patch(body: Record<string, unknown>): Promise<boolean> {
     if (nameCommitInFlight) await nameCommitInFlight;
@@ -88,7 +65,6 @@
   }
 
   async function changeIcon(name: string | null) {
-    showIconPicker = false;
     if ((name || null) === (project.icon || null)) return;
     await patch({ icon: name || null });
   }
@@ -205,52 +181,13 @@
   {/if}
 
   <header class="flex items-start gap-3">
-    <!-- Icon button with popover picker -->
-    <div class="relative shrink-0">
-      <button
-        bind:this={iconButtonEl}
-        type="button"
-        title="Change icon"
-        onclick={() => (showIconPicker = !showIconPicker)}
-        class="flex h-12 w-12 items-center justify-center rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)] text-[var(--color-muted)] transition-colors hover:border-[var(--color-highlight-border)] hover:text-[var(--color-text)]"
-      >
-        {#if ProjectIcon}
-          <ProjectIcon size={22} strokeWidth={1.75} />
-        {:else}
-          <Briefcase size={22} strokeWidth={1.75} />
-        {/if}
-      </button>
-      {#if showIconPicker}
-        <div
-          bind:this={iconPickerEl}
-          class="absolute left-0 top-full z-30 mt-1 w-64 overflow-hidden rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)] shadow-[var(--shadow-md)]"
-        >
-          <div class="max-h-52 overflow-y-auto p-2">
-            <div class="flex flex-wrap gap-1">
-              <button
-                type="button"
-                title="No icon"
-                onclick={() => changeIcon(null)}
-                class="flex h-7 w-7 items-center justify-center rounded text-[10px] text-[var(--color-subtle)] {!project.icon ? 'bg-[var(--color-bg)] ring-1 ring-[var(--color-border-strong)]' : 'hover:bg-[var(--color-bg)]'}"
-              >—</button>
-              {#each COLLECTION_ICON_NAMES as name}
-                {@const Ic = COLLECTION_ICON_MAP[name]}
-                <button
-                  type="button"
-                  title={name}
-                  onclick={() => changeIcon(name)}
-                  class="flex h-7 w-7 items-center justify-center rounded transition-colors {project.icon === name
-                    ? 'bg-[var(--color-accent)] text-[var(--color-accent-fg)]'
-                    : 'text-[var(--color-muted)] hover:bg-[var(--color-bg)] hover:text-[var(--color-text)]'}"
-                >
-                  <Ic size={15} strokeWidth={2} />
-                </button>
-              {/each}
-            </div>
-          </div>
-        </div>
+    <IconPicker value={project.icon} onChange={changeIcon}>
+      {#if ProjectIcon}
+        <ProjectIcon size={22} strokeWidth={1.75} />
+      {:else}
+        <Briefcase size={22} strokeWidth={1.75} />
       {/if}
-    </div>
+    </IconPicker>
 
     <!-- Name + status -->
     <div class="min-w-0 flex-1">

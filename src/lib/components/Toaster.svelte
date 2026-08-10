@@ -10,7 +10,7 @@
   };
 </script>
 
-<div class="pointer-events-none fixed right-4 bottom-4 z-50 flex flex-col gap-2">
+<div class="pointer-events-none fixed right-4 bottom-4 z-[var(--z-toast)] flex flex-col gap-2">
   {#each toast.items as t (t.id)}
     <div
       class="pointer-events-auto flex items-center gap-3 rounded-[var(--radius-md)] border px-3 py-2 shadow-[var(--shadow-md)] {kindClasses[t.kind]}"

@@ -1,6 +1,7 @@
 <script lang="ts">
   import { X } from 'lucide-svelte';
-  import { dismiss } from '$lib/dismiss.svelte';
+  import Popover from '$lib/ui/Popover.svelte';
+  import Button from '$lib/ui/Button.svelte';
 
   type Props = {
     sector: string | null;
@@ -13,7 +14,6 @@
   const SIZE_BANDS = ['1-10', '10-50', '50-200', '200-1000', '1000+'] as const;
 
   let open = $state(false);
-  let triggerEl = $state<HTMLButtonElement | undefined>(undefined);
   let inputEl = $state<HTMLInputElement | undefined>(undefined);
   // svelte-ignore state_referenced_locally
   let draftSector = $state(sector ?? '');
@@ -21,17 +21,15 @@
   let draftSize = $state<string | null>(size);
   let saving = $state(false);
 
-  function openMenu() {
+  // Popover's trigger only flips `open`, so the drafts are seeded from an
+  // effect keyed on it. Depends on `open` alone — editing a draft will not
+  // re-run and clobber the edit.
+  $effect(() => {
+    if (!open) return;
     draftSector = sector ?? '';
     draftSize = size;
-    open = true;
-    setTimeout(() => inputEl?.focus(), 0);
-  }
-
-  function closeMenu() {
-    open = false;
-    triggerEl?.focus();
-  }
+    requestAnimationFrame(() => inputEl?.focus());
+  });
 
   async function save() {
     saving = true;
@@ -53,25 +51,17 @@
     if (e.key === 'Enter') {
       e.preventDefault();
       save();
-    } else if (e.key === 'Escape') {
-      e.preventDefault();
-      closeMenu();
     }
+    // Escape falls through to layerStack, which closes this popover.
   }
 </script>
 
-<div use:dismiss={open ? closeMenu : null} class="relative min-w-0">
+<Popover bind:open label="Company details" panelRole="dialog" autoFocus={false} class="min-w-0">
+  {#snippet trigger(attrs)}
   <button
-    bind:this={triggerEl}
+    {...attrs}
     type="button"
     aria-label="Edit sector and size"
-    aria-haspopup="dialog"
-    aria-expanded={open}
-    onclick={(e) => {
-      e.stopPropagation();
-      if (open) closeMenu();
-      else openMenu();
-    }}
     class="flex min-h-[28px] w-full cursor-pointer items-center truncate rounded-[var(--radius-sm)] px-1.5 py-1 text-left text-xs text-[var(--color-muted)] transition-colors hover:bg-[var(--color-surface-2)] hover:text-[var(--color-text)]"
   >
     {#if sector || size}
@@ -84,13 +74,10 @@
       <span class="text-[var(--color-subtle)]">·</span>
     {/if}
   </button>
+  {/snippet}
 
-  {#if open}
-    <div
-      role="dialog"
-      aria-label="Company details"
-      class="absolute left-0 top-full z-50 mt-1 w-[224px] overflow-hidden rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)] shadow-[var(--shadow-md)]"
-    >
+  {#snippet content({ close })}
+    <div class="w-[224px]">
       <div class="flex flex-col gap-2.5 p-2.5">
         <label class="flex flex-col gap-1">
           <span class="cap-label">Sector</span>
@@ -136,7 +123,7 @@
         <div class="flex items-center justify-end gap-1 pt-0.5">
           <button
             type="button"
-            onclick={closeMenu}
+            onclick={close}
             class="rounded-[var(--radius-sm)] px-2 py-1 text-[11px] text-[var(--color-muted)] hover:text-[var(--color-text)]"
           >Cancel</button>
           <button
@@ -150,5 +137,5 @@
         </div>
       </div>
     </div>
-  {/if}
-</div>
+  {/snippet}
+</Popover>

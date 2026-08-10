@@ -1,4 +1,5 @@
 <script lang="ts">
+  import Dialog from '$lib/ui/Dialog.svelte';
   import { goto } from '$app/navigation';
   import { Search, User, MessageSquare, FolderKanban, FolderOpen, Funnel } from 'lucide-svelte';
   import CompanyLogo from './CompanyLogo.svelte';
@@ -83,12 +84,9 @@
     goto(h.href);
   }
 
+  // Escape is not handled here — Dialog's layer owns dismissal, and handling
+  // it in both places would close a nested layer and this one on one press.
   function onKey(e: KeyboardEvent) {
-    if (e.key === 'Escape') {
-      e.preventDefault();
-      onClose();
-      return;
-    }
     if (e.key === 'Backspace' && activeScope && (e.target as HTMLInputElement)?.selectionStart === 0) {
       e.preventDefault();
       q = queryAfterPrefix;
@@ -152,92 +150,89 @@
   });
 </script>
 
-{#if open}
-  <div
-    role="dialog"
-    aria-modal="true"
-    aria-label="Search"
-    tabindex="-1"
-    class="fixed inset-0 z-50 flex items-start justify-center bg-black/40 px-4 pt-[5vh] sm:pt-[12vh]"
-    onclick={(e) => { if (e.target === e.currentTarget) onClose(); }}
-    onkeydown={onKey}
-  >
-    <div class="w-full max-w-lg overflow-hidden rounded-[var(--radius-lg)] border border-[var(--color-border)] bg-[var(--color-bg)] shadow-[var(--shadow-lg)]">
-      <!-- Search input -->
-      <div class="flex items-center gap-2.5 px-4 py-3">
-        <Search size={15} strokeWidth={2} class="shrink-0 text-[var(--color-subtle)]" />
-        {#if activeScope}
-          <span class="inline-flex shrink-0 items-center rounded-full border border-[var(--color-highlight-border)] bg-[var(--color-highlight-bg)] px-2 py-0.5 text-[10px] font-medium text-[var(--color-text)]">
-            {activeScope.label}
-          </span>
-        {/if}
-        <input
-          bind:this={inputEl}
-          bind:value={q}
-          oninput={onInput}
-          type="search"
-          {placeholder}
-          class="flex-1 bg-transparent text-sm outline-none placeholder:text-[var(--color-subtle)]"
-        />
-      </div>
+<Dialog
+  {open}
+  onclose={onClose}
+  label="Search"
+  variant="top"
+  panelClass="max-w-lg bg-[var(--color-bg)]"
+>
+  {#snippet children()}
+    <!-- Search input -->
+    <div class="flex items-center gap-2.5 px-4 py-3">
+      <Search size={15} strokeWidth={2} class="shrink-0 text-[var(--color-subtle)]" />
+      {#if activeScope}
+        <span class="inline-flex shrink-0 items-center rounded-full border border-[var(--color-highlight-border)] bg-[var(--color-highlight-bg)] px-2 py-0.5 text-[10px] font-medium text-[var(--color-text)]">
+          {activeScope.label}
+        </span>
+      {/if}
+      <input
+        bind:this={inputEl}
+        bind:value={q}
+        oninput={onInput}
+        onkeydown={onKey}
+        type="search"
+        {placeholder}
+        class="flex-1 bg-transparent text-sm outline-none placeholder:text-[var(--color-subtle)]"
+      />
+    </div>
 
-      <div class="border-t border-[var(--color-border)]"></div>
+    <div class="border-t border-[var(--color-border)]"></div>
 
-      <!-- Results -->
-      <div class="max-h-[70vh] overflow-auto sm:max-h-[52vh]">
-        {#if items.length === 0}
-          <p class="px-4 py-8 text-center text-xs text-[var(--color-muted)]">
-            {emptyHint}
-          </p>
-        {:else}
-          <ul class="py-1.5">
-            {#each items as h, i (h.kind + ':' + h.id)}
-              <li>
-                <button
-                  type="button"
-                  onmousedown={(e) => { e.preventDefault(); pick(h); }}
-                  onmouseenter={() => (highlight = i)}
-                  class="flex w-full items-center gap-3 px-3 py-2 text-left {i === highlight ? 'bg-[var(--color-surface)]' : ''}"
-                >
-                  <!-- Avatar / Logo slot -->
-                  {#if h.kind === 'company'}
-                    <CompanyLogo domain={h.domain} fallbackUrl={h.logoUrl} name={h.title} size={30} rounded="sm" />
-                  {:else if h.kind === 'person'}
-                    <span class="flex h-[30px] w-[30px] shrink-0 items-center justify-center overflow-hidden rounded-full border border-[var(--color-border)] bg-[var(--color-surface)] text-[10px] font-medium text-[var(--color-muted)]">
-                      {#if h.avatarUrl}
-                        <img src={h.avatarUrl} alt="" loading="lazy" decoding="async" class="h-full w-full object-cover" />
-                      {:else}
-                        {getInitials(h.title)}
-                      {/if}
-                    </span>
-                  {:else}
-                    {@const Icon = KIND_ICON[h.kind as keyof typeof KIND_ICON]}
-                    <span class="flex h-[30px] w-[30px] shrink-0 items-center justify-center rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-surface)] text-[var(--color-muted)]">
-                      <Icon size={13} strokeWidth={2} />
-                    </span>
-                  {/if}
-
-                  <!-- Title + sub -->
-                  <span class="min-w-0 flex-1">
-                    <span class="block truncate text-sm font-medium text-[var(--color-text)]">{h.title}</span>
-                    {#if h.sub}
-                      <span class="block truncate text-xs text-[var(--color-muted)]">{h.sub}</span>
+    <!-- Results -->
+    <div class="max-h-[70vh] overflow-auto sm:max-h-[52vh]">
+      {#if items.length === 0}
+        <p class="px-4 py-8 text-center text-xs text-[var(--color-muted)]">
+          {emptyHint}
+        </p>
+      {:else}
+        <ul class="py-1.5">
+          {#each items as h, i (h.kind + ':' + h.id)}
+            <li>
+              <button
+                type="button"
+                onmousedown={(e) => { e.preventDefault(); pick(h); }}
+                onmouseenter={() => (highlight = i)}
+                class="flex w-full items-center gap-3 px-3 py-2 text-left {i === highlight ? 'bg-[var(--color-surface)]' : ''}"
+              >
+                <!-- Avatar / Logo slot -->
+                {#if h.kind === 'company'}
+                  <CompanyLogo domain={h.domain} fallbackUrl={h.logoUrl} name={h.title} size={30} rounded="sm" />
+                {:else if h.kind === 'person'}
+                  <span class="flex h-[30px] w-[30px] shrink-0 items-center justify-center overflow-hidden rounded-full border border-[var(--color-border)] bg-[var(--color-surface)] text-[10px] font-medium text-[var(--color-muted)]">
+                    {#if h.avatarUrl}
+                      <img src={h.avatarUrl} alt="" loading="lazy" decoding="async" class="h-full w-full object-cover" />
+                    {:else}
+                      {getInitials(h.title)}
                     {/if}
                   </span>
+                {:else}
+                  {@const Icon = KIND_ICON[h.kind as keyof typeof KIND_ICON]}
+                  <span class="flex h-[30px] w-[30px] shrink-0 items-center justify-center rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-surface)] text-[var(--color-muted)]">
+                    <Icon size={13} strokeWidth={2} />
+                  </span>
+                {/if}
 
-                  <!-- Kind label -->
-                  <span class="shrink-0 text-[10px] text-[var(--color-subtle)]">{KIND_LABEL[h.kind]}</span>
-                </button>
-              </li>
-            {/each}
-          </ul>
-        {/if}
-      </div>
+                <!-- Title + sub -->
+                <span class="min-w-0 flex-1">
+                  <span class="block truncate text-sm font-medium text-[var(--color-text)]">{h.title}</span>
+                  {#if h.sub}
+                    <span class="block truncate text-xs text-[var(--color-muted)]">{h.sub}</span>
+                  {/if}
+                </span>
 
-      <!-- Footer -->
-      <div class="hidden border-t border-[var(--color-border)] px-4 py-2 text-[10px] text-[var(--color-muted)] sm:block">
-        <kbd>↑↓</kbd> navigate · <kbd>enter</kbd> open · <kbd>esc</kbd> close
-      </div>
+                <!-- Kind label -->
+                <span class="shrink-0 text-[10px] text-[var(--color-subtle)]">{KIND_LABEL[h.kind]}</span>
+              </button>
+            </li>
+          {/each}
+        </ul>
+      {/if}
     </div>
-  </div>
-{/if}
+
+    <!-- Footer -->
+    <div class="hidden border-t border-[var(--color-border)] px-4 py-2 text-[10px] text-[var(--color-muted)] sm:block">
+      <kbd>↑↓</kbd> navigate · <kbd>enter</kbd> open · <kbd>esc</kbd> close
+    </div>
+  {/snippet}
+</Dialog>

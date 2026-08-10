@@ -3,6 +3,7 @@
   import { X } from 'lucide-svelte';
   import { untrack } from 'svelte';
   import AuthCard from './AuthCard.svelte';
+  import Dialog from '$lib/ui/Dialog.svelte';
 
   type Props = {
     open: boolean;
@@ -26,29 +27,6 @@
     if (open) mode = initialMode;
   });
 
-  let dialogEl = $state<HTMLDivElement | undefined>(undefined);
-  let prevOverflow = '';
-
-  $effect(() => {
-    if (open) {
-      prevOverflow = document.body.style.overflow;
-      document.body.style.overflow = 'hidden';
-      setTimeout(() => dialogEl?.focus(), 10);
-    } else {
-      document.body.style.overflow = prevOverflow;
-    }
-    return () => {
-      document.body.style.overflow = prevOverflow;
-    };
-  });
-
-  function onKey(e: KeyboardEvent) {
-    if (e.key === 'Escape') {
-      e.preventDefault();
-      open = false;
-    }
-  }
-
   async function handleSuccess() {
     // Cookie is set server-side; refreshing page data swaps landing for the
     // logged-in dashboard. Close after, so the dashboard isn't briefly covered.
@@ -64,51 +42,38 @@
   });
 </script>
 
-{#if open}
-  <div
-    bind:this={dialogEl}
-    role="dialog"
-    aria-modal="true"
-    aria-label={mode === 'login' ? 'Sign in' : 'Create account'}
-    tabindex="-1"
-    class="overlay"
-    onclick={(e) => { if (e.target === e.currentTarget) open = false; }}
-    onkeydown={onKey}
-  >
-    <AuthCard
-      data={formData}
-      actionBase="/auth"
-      onSuccess={handleSuccess}
-      headingLevel="h2"
-      bind:mode
-    >
-      <button class="close-btn" type="button" aria-label="Close" onclick={() => (open = false)}>
+<Dialog
+  {open}
+  onclose={() => (open = false)}
+  label={mode === 'login' ? 'Sign in' : 'Create account'}
+  chrome={false}
+  backdropClass="overlay-wash"
+  panelClass="max-w-none w-auto"
+>
+  {#snippet children({ close })}
+    <AuthCard data={formData} actionBase="/auth" onSuccess={handleSuccess} headingLevel="h2" bind:mode>
+      <button class="close-btn" type="button" aria-label="Close" onclick={close}>
         <X size={16} strokeWidth={2} />
       </button>
     </AuthCard>
-  </div>
-{/if}
+  {/snippet}
+</Dialog>
 
 <style>
-  .overlay {
-    position: fixed;
-    inset: 0;
-    z-index: 60;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    padding: 2rem 1.25rem;
+  /* The scrim is rendered by Dialog, so the class has to cross the component
+     boundary — hence :global. Everything positional (fixed, inset, z-index)
+     comes from Dialog; this only supplies the wash. */
+  :global(.overlay-wash) {
     background: rgba(199, 218, 234, 0.88);
     animation: fade-in 0.18s ease-out;
-    overflow-y: auto;
   }
 
-  :global([data-theme='dark']) .overlay {
+  :global([data-theme='dark'] .overlay-wash) {
     background: rgba(17, 30, 47, 0.88);
   }
 
   @supports ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
-    .overlay {
+    :global(.overlay-wash) {
       backdrop-filter: blur(4px) saturate(120%);
       -webkit-backdrop-filter: blur(4px) saturate(120%);
     }
@@ -148,6 +113,6 @@
   }
 
   @media (prefers-reduced-motion: reduce) {
-    .overlay { animation: none; }
+    :global(.overlay-wash) { animation: none; }
   }
 </style>

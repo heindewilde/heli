@@ -23,6 +23,16 @@
     variant?: 'center' | 'top' | 'drawer';
     /** Extra classes on the panel. */
     panelClass?: string;
+    /**
+     * Replaces the default scrim classes. The auth modal uses a tinted,
+     * blurred wash rather than a neutral dim.
+     */
+    backdropClass?: string;
+    /**
+     * Surface, border, radius and shadow on the panel. Off when the child
+     * already renders its own card (again, the auth modal).
+     */
+    chrome?: boolean;
     onclose: () => void;
     children: Snippet<[{ close: () => void }]>;
   };
@@ -33,6 +43,8 @@
     labelledBy,
     variant = 'center',
     panelClass = '',
+    backdropClass = 'bg-black/40',
+    chrome = true,
     onclose,
     children
   }: Props = $props();
@@ -60,21 +72,25 @@
     variant === 'drawer'
       ? 'items-stretch justify-start'
       : variant === 'top'
-        ? 'items-start justify-center pt-[12vh]'
-        : 'items-center justify-center p-4'
+        ? 'items-start justify-center overflow-y-auto px-4 pt-[5vh] sm:pt-[12vh]'
+        : // `overflow-y-auto` plus `m-auto` on the panel (below) rather than
+          // `items-center` alone: a form taller than the viewport would
+          // otherwise have its top clipped with no way to scroll to it.
+          'items-center justify-center overflow-y-auto p-4'
   );
 
-  const panelBase = $derived(
-    variant === 'drawer'
-      ? 'h-full w-64 max-w-[85vw] border-r border-[var(--color-border)] bg-[var(--color-surface)] shadow-[var(--shadow-lg)]'
-      : 'w-full max-w-lg overflow-hidden rounded-[var(--radius-lg)] border border-[var(--color-border)] bg-[var(--color-surface)] shadow-[var(--shadow-lg)]'
-  );
+  const panelBase = $derived.by(() => {
+    if (variant === 'drawer') {
+      return `h-full w-64 max-w-[85vw] ${chrome ? 'border-r border-[var(--color-border)] bg-[var(--color-surface)] shadow-[var(--shadow-lg)]' : ''}`;
+    }
+    return `m-auto w-full max-w-lg ${chrome ? 'overflow-hidden rounded-[var(--radius-lg)] border border-[var(--color-border)] bg-[var(--color-surface)] shadow-[var(--shadow-lg)]' : ''}`;
+  });
 </script>
 
 {#if open}
   <div class="fixed inset-0 z-[var(--z-dialog)] flex {wrapper}">
     <!-- Inert on purpose: dismissal is layerStack's job. -->
-    <div class="absolute inset-0 bg-black/40" aria-hidden="true"></div>
+    <div class="absolute inset-0 {backdropClass}" aria-hidden="true"></div>
     <div
       bind:this={panelEl}
       role="dialog"
