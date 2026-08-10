@@ -5,6 +5,7 @@ import { migrate } from '$lib/server/migrate';
 import { validateSession, SESSION_COOKIE } from '$lib/server/auth';
 import { checkRateLimit, LIMITS, RateLimitError } from '$lib/server/rate-limit';
 import { setPrivate, maybeCompress } from '$lib/server/cache';
+import { withTiming, current as currentTiming } from '$lib/server/timing';
 
 const ready = (async () => {
   await initDb();
@@ -30,12 +31,15 @@ const PROTECTED_PATTERNS = [
   /^\/settings(\/|$)/
 ];
 
-export const handle: Handle = async ({ event, resolve }) => {
+// The whole request runs inside one AsyncLocalStorage scope, so every query the
+// db client issues lands in this request's timing bucket rather than a shared
+// counter that would mix concurrent requests together.
+export const handle: Handle = (input) =>
+  withTiming(async () => handleRequest(input));
+
+const handleRequest: Handle = async ({ event, resolve }) => {
   await ready;
-  // In dev, emit a Server-Timing header so DevTools' Network panel shows the
-  // total time the server spent on each request. Cheap to compute; the
-  // window flips off in production so we don't leak timings to clients.
-  const startedAt = dev ? performance.now() : 0;
+  const startedAt = performance.now();
   const cookie = event.cookies.get(SESSION_COOKIE);
   if (cookie) {
     const session = await validateSession(cookie);
@@ -104,11 +108,26 @@ export const handle: Handle = async ({ event, resolve }) => {
   );
   if (!dev) {
     response.headers.set('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
-  } else {
+  }
+
+  // Server-Timing: always in dev, and in production only for workspace owners.
+  // Split into db vs the rest, because "spend the phase on fewer queries" and
+  // "spend it on more caching" are different answers and the header is what
+  // decides between them. Gated rather than public so request shape isn't
+  // broadcast to every visitor.
+  if (dev || event.locals.user?.role === 'owner') {
+    const t = currentTiming();
+    const total = performance.now() - startedAt;
+    const dbMs = t?.db ?? 0;
     response.headers.set(
       'Server-Timing',
-      `total;dur=${(performance.now() - startedAt).toFixed(1)}`
+      [
+        `db;desc="${t?.queries ?? 0} queries";dur=${dbMs.toFixed(1)}`,
+        `app;dur=${Math.max(0, total - dbMs).toFixed(1)}`,
+        `total;dur=${total.toFixed(1)}`
+      ].join(', ')
     );
+    response.headers.append('Vary', 'Cookie');
   }
   return maybeCompress(response, event.request.headers.get('accept-encoding'));
 };

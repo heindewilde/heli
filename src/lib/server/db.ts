@@ -3,6 +3,7 @@ import { dirname } from 'node:path';
 import { createClient, type Client } from '@libsql/client';
 import { drizzle, type LibSQLDatabase } from 'drizzle-orm/libsql';
 import * as schema from './schema';
+import { timed } from './timing';
 
 export type DB = LibSQLDatabase<typeof schema>;
 
@@ -58,13 +59,35 @@ export function isMultiRegion(): boolean {
   return euUrl !== regionUrl('us').url || euUrl !== regionUrl('apac').url;
 }
 
+/**
+ * Wrap `execute` and `batch` so every query lands in the current request's
+ * timing bucket. Outside a request (migrations, the seed script) `timed` is a
+ * pass-through, so this costs nothing there.
+ *
+ * Own properties shadowing the prototype methods, not a Proxy: the libSQL
+ * client uses private class fields, and calling a method through a Proxy makes
+ * `this` the Proxy, which fails the brand check with "Receiver must be an
+ * instance of class Sqlite3Client". Binding the originals keeps the real
+ * receiver, and leaves `executeMultiple` and friends untouched on the
+ * prototype.
+ */
+function instrument(client: Client): Client {
+  const realExecute = client.execute.bind(client);
+  const realBatch = client.batch.bind(client);
+  client.execute = (...args: Parameters<typeof realExecute>) =>
+    timed(() => realExecute(...args));
+  client.batch = (...args: Parameters<typeof realBatch>) => timed(() => realBatch(...args));
+  return client;
+}
+
 function buildBundle(url: string, authToken: string | undefined): Bundle {
   const isFile = url.startsWith('file:');
   if (isFile) {
     const path = url.slice('file:'.length);
     mkdirSync(dirname(path), { recursive: true });
   }
-  const client = createClient({ url, ...(authToken ? { authToken } : {}) });
+  const raw = createClient({ url, ...(authToken ? { authToken } : {}) });
+  const client = instrument(raw);
   const db = drizzle(client, { schema });
   return { client, db, isFile };
 }
