@@ -8,21 +8,16 @@ import {
   Sparkle
 } from 'lucide-svelte';
 
-export const INTERACTION_TYPES = [
-  'call',
-  'email',
-  'meeting',
-  'dm',
-  'event',
-  'note',
-  'other'
-] as const;
+// The vocabulary itself lives in a dependency-free module so server code can
+// import it without pulling in the icons above. Re-exported here so every
+// existing `$lib/interactions` call site keeps working.
+import type { InteractionType } from './interactionTypes';
 
-export type InteractionType = (typeof INTERACTION_TYPES)[number];
-
-export function isInteractionType(v: unknown): v is InteractionType {
-  return typeof v === 'string' && (INTERACTION_TYPES as readonly string[]).includes(v);
-}
+export {
+  INTERACTION_TYPES,
+  isInteractionType,
+  type InteractionType
+} from './interactionTypes';
 
 // Interaction tones are deliberately quiet. The icon carries the type;
 // color is a faint accent, not a banner. Synchronous/realtime modes

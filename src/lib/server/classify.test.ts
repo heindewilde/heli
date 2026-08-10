@@ -1,8 +1,9 @@
-import { classify, deriveHandle } from '../src/lib/server/classify';
+import { expect, test } from 'vitest';
+import { classify, deriveHandle, humanizeHandle } from './classify';
 
-type Case = { url: string; kind: 'person' | 'company'; handle?: string | null };
-
-const cases: Case[] = [
+// Ported from the old `scripts/check-classify.ts`, which ran as its own step in
+// `npm run check`. Same cases, now inside the suite.
+const cases: { url: string; kind: 'person' | 'company'; handle?: string | null }[] = [
   { url: 'https://www.linkedin.com/in/satyanadella', kind: 'person', handle: 'satyanadella' },
   { url: 'https://linkedin.com/in/satyanadella', kind: 'person', handle: 'satyanadella' },
   { url: 'https://www.linkedin.com/pub/jane-doe/12/345/678', kind: 'person' },
@@ -21,28 +22,18 @@ const cases: Case[] = [
   { url: 'https://anthropic.com', kind: 'company' }
 ];
 
-let failures = 0;
 for (const c of cases) {
-  const u = new URL(c.url);
-  const got = classify(u);
-  if (got !== c.kind) {
-    failures++;
-    console.error(`✗ classify(${c.url}) = ${got}, expected ${c.kind}`);
-    continue;
-  }
-  if (c.handle !== undefined) {
-    const handle = deriveHandle(u);
-    if (handle !== c.handle) {
-      failures++;
-      console.error(`✗ deriveHandle(${c.url}) = ${handle}, expected ${c.handle}`);
-      continue;
+  test(`${c.kind.padEnd(7)} ${c.url}`, () => {
+    const u = new URL(c.url);
+    expect(classify(u)).toBe(c.kind);
+    if (c.handle !== undefined) {
+      expect(deriveHandle(u)).toBe(c.handle);
     }
-  }
-  console.log(`✓ ${c.kind.padEnd(7)} ${c.url}`);
+  });
 }
 
-if (failures > 0) {
-  console.error(`\n${failures} classifier failure(s)`);
-  process.exit(1);
-}
-console.log(`\nclassify: ${cases.length} cases passed`);
+test('humanizeHandle turns a slug into a name', () => {
+  expect(humanizeHandle('satyanadella')).toBeTruthy();
+  expect(humanizeHandle(null)).toBeNull();
+  expect(humanizeHandle(undefined)).toBeNull();
+});

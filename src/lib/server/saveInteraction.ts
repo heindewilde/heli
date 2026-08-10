@@ -3,7 +3,11 @@ import { createId } from '@paralleldrive/cuid2';
 import { db } from './db';
 import { interactions, interactionPeople, interactionProjects, people, companies, projects } from './schema';
 import { sanitize, sanitizePlainText } from './sanitize';
-import { INTERACTION_TYPES, isInteractionType, type InteractionType } from '$lib/interactions';
+import {
+  INTERACTION_TYPES,
+  isInteractionType,
+  type InteractionType
+} from '$lib/interactionTypes';
 import type { Scope } from './scope';
 import { bumpSearchEpoch } from './search';
 
