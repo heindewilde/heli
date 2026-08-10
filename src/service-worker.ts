@@ -18,6 +18,18 @@ const PRECACHE: string[] = [...build, ...files];
 // `Cache-Control: private, max-age=*, must-revalidate` (set in cache.ts).
 const SWR_PATHS = /^\/api\/(?:people|companies|projects|interactions|search)(?:\/|\?|$)/;
 
+// CRM pages whose SSR HTML we keep a copy of, so back-navigation paints
+// instantly and a dropped connection still shows the last known state instead
+// of the browser's error page. hooks.server.ts marks exactly these routes
+// `private, max-age=0, must-revalidate` rather than `no-store` — the decision
+// to store them is made there, on purpose, not smuggled in here.
+const NAV_PATHS = /^\/(?:people|companies|projects|interactions|collections|pipelines)(?:\/|$)/;
+
+// Cap on stored pages. Each is a full SSR document, so this is a disk-footprint
+// bound as much as a freshness one; oldest entries go first.
+const NAV_CACHE_LIMIT = 30;
+const NAV_CACHE = `${CACHE}-nav`;
+
 sw.addEventListener('install', (event) => {
   // Pre-fill the cache so the next navigation is instant. Don't skipWaiting —
   // we want the user to opt in via the update banner so a mid-flight page
@@ -35,7 +47,9 @@ sw.addEventListener('activate', (event) => {
     (async () => {
       // Drop caches from previous versions.
       const keys = await caches.keys();
-      await Promise.all(keys.filter((k) => k !== CACHE).map((k) => caches.delete(k)));
+      await Promise.all(
+        keys.filter((k) => k !== CACHE && k !== NAV_CACHE).map((k) => caches.delete(k))
+      );
       // Take over already-open tabs so they start using this SW immediately.
       // First-install case: no controller existed, so this just attaches.
       await sw.clients.claim();
@@ -69,8 +83,43 @@ sw.addEventListener('fetch', (event) => {
     return;
   }
 
-  // SSR HTML, /api/save, /api/health, anything else: straight to network.
+  // SSR navigations for the CRM routes: network first, cache as a fallback.
+  // Never cache-first — a stale CRM page shown in preference to a live one is
+  // worse than a few hundred milliseconds of wait.
+  if (req.mode === 'navigate' && NAV_PATHS.test(url.pathname)) {
+    event.respondWith(networkFirst(req));
+    return;
+  }
+
+  // Everything else — /, /settings, /api/save, /api/health: straight to network.
 });
+
+async function networkFirst(req: Request): Promise<Response> {
+  const cache = await caches.open(NAV_CACHE);
+  try {
+    const res = await fetch(req);
+    if (res.ok && isCacheable(res)) {
+      cache.put(req, res.clone()).then(() => trimNavCache(cache)).catch(() => {});
+    }
+    return res;
+  } catch {
+    const cached = await cache.match(req);
+    if (cached) {
+      // Mark it, so the page can tell the user what they are looking at.
+      const headers = new Headers(cached.headers);
+      headers.set('X-Heli-Offline', '1');
+      return new Response(cached.body, { status: 200, headers });
+    }
+    throw new Error('offline and not cached');
+  }
+}
+
+async function trimNavCache(cache: Cache): Promise<void> {
+  const keys = await cache.keys();
+  if (keys.length <= NAV_CACHE_LIMIT) return;
+  // cache.keys() returns insertion order, so the head is the oldest.
+  await Promise.all(keys.slice(0, keys.length - NAV_CACHE_LIMIT).map((k) => cache.delete(k)));
+}
 
 async function cacheFirst(req: Request): Promise<Response> {
   const cache = await caches.open(CACHE);
@@ -121,6 +170,10 @@ sw.addEventListener('message', (event) => {
             .filter((req) => SWR_PATHS.test(new URL(req.url).pathname))
             .map((req) => cache.delete(req))
         );
+        // The navigation cache holds fully-rendered CRM pages, so it has to go
+        // too. Dropping the whole cache is simpler than filtering it and there
+        // is nothing in it worth keeping across a sign-out or a tenant switch.
+        await caches.delete(NAV_CACHE);
       })()
     );
   }

@@ -4,7 +4,7 @@ import { initDb } from '$lib/server/db';
 import { migrate } from '$lib/server/migrate';
 import { validateSession, SESSION_COOKIE } from '$lib/server/auth';
 import { checkRateLimit, LIMITS, RateLimitError } from '$lib/server/rate-limit';
-import { setPrivate, maybeCompress } from '$lib/server/cache';
+import { setPrivate, setPrivateRevalidate, maybeCompress } from '$lib/server/cache';
 import { withTiming, current as currentTiming } from '$lib/server/timing';
 
 const ready = (async () => {
@@ -34,6 +34,11 @@ const PROTECTED_PATTERNS = [
 // The whole request runs inside one AsyncLocalStorage scope, so every query the
 // db client issues lands in this request's timing bucket rather than a shared
 // counter that would mix concurrent requests together.
+// CRM pages whose SSR HTML the service worker may keep for back-navigation and
+// offline reads. Deliberately excludes /settings and /admin: nothing there is
+// worth an offline copy, and both render account-level detail.
+const NAV_CACHEABLE = /^\/(?:people|companies|projects|interactions|collections|pipelines)(?:\/|$)/;
+
 export const handle: Handle = (input) =>
   withTiming(async () => handleRequest(input));
 
@@ -81,8 +86,26 @@ const handleRequest: Handle = async ({ event, resolve }) => {
   // no-store + Vary: Cookie. Routes that opt-in to caching (landing page,
   // avatars, install page, list APIs via cache.ts helpers) already set their
   // own header and are left untouched.
+  //
+  // Exception: authenticated SSR HTML for the CRM routes gets
+  // `private, max-age=0, must-revalidate` instead, so the service worker may
+  // keep a copy for back-navigation and offline reads. That is the same trade
+  // the /api list endpoints already make — the JSON they cache is the same
+  // personal data — and the worker drops every copy on sign-out and on
+  // workspace switch. `no-store` would have meant caching it anyway while
+  // telling the browser not to, which is worse than deciding on purpose.
   if (!response.headers.has('Cache-Control')) {
-    setPrivate(response);
+    if (
+      event.locals.user &&
+      event.request.method === 'GET' &&
+      response.status === 200 &&
+      NAV_CACHEABLE.test(event.url.pathname) &&
+      (response.headers.get('Content-Type') ?? '').startsWith('text/html')
+    ) {
+      setPrivateRevalidate(response);
+    } else {
+      setPrivate(response);
+    }
   }
 
   response.headers.set('X-Content-Type-Options', 'nosniff');

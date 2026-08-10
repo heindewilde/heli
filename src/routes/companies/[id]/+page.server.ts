@@ -26,6 +26,8 @@ export const load: PageServerLoad = async ({ locals, params, url }) => {
   const justSaved = url.searchParams.get('just') === '1' && Date.now() - company.createdAt < FRESH_GRACE_MS;
   const dedup = url.searchParams.get('dedup') === '1';
 
+  // Only the header blocks first paint; everything else streams. See the note
+  // on the person detail load — same reasoning, same pattern.
   const linkedPeople = await d
     .select({
       id: people.id,
@@ -40,31 +42,17 @@ export const load: PageServerLoad = async ({ locals, params, url }) => {
     .orderBy(desc(people.updatedAt))
     .limit(50);
 
-  const interactions = await listInteractions(s, {
-    companyId: company.id,
-    limit: 50
-  });
-
-  const tags = await getTagsForEntity(s, 'company', company.id);
-
-  const projects = await projectsForCompany(s, company.id);
-
-  const [collections, pipelines, tasks] = await Promise.all([
-    listCollectionsForEntity(s, 'company', company.id),
-    listPipelinesForEntity(s, 'company', company.id),
-    listTasksForEntity(s, 'company', company.id)
-  ]);
-
   return {
     company,
     linkedPeople,
-    interactions,
-    tags,
     justSaved,
     dedup,
-    projects,
-    collections,
-    pipelines,
-    tasks
+    // Streamed — awaited in the template.
+    interactions: listInteractions(s, { companyId: company.id, limit: 50 }),
+    tags: getTagsForEntity(s, 'company', company.id),
+    projects: projectsForCompany(s, company.id),
+    collections: listCollectionsForEntity(s, 'company', company.id),
+    pipelines: listPipelinesForEntity(s, 'company', company.id),
+    tasks: listTasksForEntity(s, 'company', company.id)
   };
 };

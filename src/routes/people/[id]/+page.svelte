@@ -6,6 +6,7 @@
   import FieldRow from '$lib/components/FieldRow.svelte';
   import InteractionRow from '$lib/components/InteractionRow.svelte';
   import TagInput from '$lib/components/TagInput.svelte';
+  import Skeleton from '$lib/ui/Skeleton.svelte';
   import CollectionsCard from '$lib/components/CollectionsCard.svelte';
   import PipelinesCard from '$lib/components/PipelinesCard.svelte';
   import ProjectsCard from '$lib/components/ProjectsCard.svelte';
@@ -23,8 +24,9 @@
   let { data } = $props();
   const person = $derived(data.person);
   const company = $derived(data.company);
-  const interactions = $derived(data.interactions);
-  const tags = $derived(data.tags);
+  // interactions / tags / projects / collections / pipelines / tasks arrive as
+  // promises now — the page shell paints before they resolve. See the load
+  // function for why.
   const suggestion = $derived(data.suggestion);
 
   let editingName = $state(false);
@@ -308,7 +310,15 @@
             onSave={(next) => patch({ notes: next })}
           />
         </div>
-        <TasksCard kind="person" refId={person.id} tasks={data.tasks} />
+        {#await data.tasks}
+          <div
+            class="rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)] p-3"
+          >
+            <Skeleton lines={3} />
+          </div>
+        {:then tasks}
+          <TasksCard kind="person" refId={person.id} {tasks} />
+        {/await}
       </div>
 
       <div class="flex flex-col gap-2 rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)] p-3">
@@ -322,35 +332,63 @@
             Log
           </a>
         </div>
-        {#if interactions.length === 0}
-          <p class="px-1 py-2 text-xs text-[var(--color-muted)]">
-            No interactions logged with {person.name} yet.
-          </p>
-        {:else}
-          <ul class="flex flex-col gap-0.5">
-            {#each interactions as i (i.id)}
-              <li>
-                <InteractionRow
-                  {...i}
-                  showCompany={false}
-                  people={i.people.filter((p) => p.id !== person.id)}
-                />
-              </li>
-            {/each}
-          </ul>
-        {/if}
+        {#await data.interactions}
+          <Skeleton lines={4} class="px-1 py-2" />
+        {:then interactions}
+          {#if interactions.length === 0}
+            <p class="px-1 py-2 text-xs text-[var(--color-muted)]">
+              No interactions logged with {person.name} yet.
+            </p>
+          {:else}
+            <ul class="flex flex-col gap-0.5">
+              {#each interactions as i (i.id)}
+                <li>
+                  <InteractionRow
+                    {...i}
+                    showCompany={false}
+                    people={i.people.filter((p) => p.id !== person.id)}
+                  />
+                </li>
+              {/each}
+            </ul>
+          {/if}
+        {/await}
       </div>
 
       <div class="grid gap-6 md:grid-cols-3 [&>*]:min-w-0">
-        <CollectionsCard kind="person" refId={person.id} collections={data.collections} />
-        <PipelinesCard kind="person" refId={person.id} pipelines={data.pipelines} />
-        <ProjectsCard
-          kind="person"
-          refId={person.id}
-          projects={[...data.projectsTogether, ...data.projectsOther]}
-          sharedIds={new Set(data.projectsTogether.map((p) => p.id))}
-          sharedLabel={company?.name ?? ''}
-        />
+        {#await data.collections}
+          <div
+            class="rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)] p-3"
+          >
+            <Skeleton lines={2} />
+          </div>
+        {:then collections}
+          <CollectionsCard kind="person" refId={person.id} {collections} />
+        {/await}
+        {#await data.pipelines}
+          <div
+            class="rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)] p-3"
+          >
+            <Skeleton lines={2} />
+          </div>
+        {:then pipelines}
+          <PipelinesCard kind="person" refId={person.id} {pipelines} />
+        {/await}
+        {#await data.projects}
+          <div
+            class="rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)] p-3"
+          >
+            <Skeleton lines={2} />
+          </div>
+        {:then projects}
+          <ProjectsCard
+            kind="person"
+            refId={person.id}
+            projects={[...projects.together, ...projects.other]}
+            sharedIds={new Set(projects.together.map((p) => p.id))}
+            sharedLabel={company?.name ?? ''}
+          />
+        {/await}
       </div>
     </section>
 
@@ -379,7 +417,11 @@
       </div>
       <div class="flex flex-col gap-2 rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)] p-3">
         <h3 class="text-xs font-medium uppercase tracking-wide text-[var(--color-subtle)]">Tags</h3>
-        <TagInput scope="person" entityId={person.id} {tags} suggestions={tagSuggestions} />
+        {#await data.tags}
+          <Skeleton lines={1} class="px-1 py-1" />
+        {:then tags}
+          <TagInput scope="person" entityId={person.id} {tags} suggestions={tagSuggestions} />
+        {/await}
       </div>
     </aside>
   </div>

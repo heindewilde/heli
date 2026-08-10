@@ -44,9 +44,75 @@ Heli is a personal CRM. SvelteKit 2 (adapter-node, full SSR) + libSQL/SQLite + D
   - `jsonWithEtag(request, data)` — for **every** GET endpoint that returns per-user JSON. Sets `ETag` + `Cache-Control: private, max-age=0, must-revalidate` and short-circuits to a 304 on matching `If-None-Match`. The 5 list endpoints + the cursor-paginated `/api/{people,companies}/list` all use it.
   - `setPrivate(res)` / `setPrivateRevalidate(res)` — when you construct the Response yourself and need explicit Cache-Control + `Vary: Cookie`.
   - `maybeCompress(res, accept-encoding)` — streaming gzip via `node:zlib`. Already wired in `hooks.server.ts`; don't call again.
-- **`hooks.server.ts` auto-applies** `Cache-Control: private, no-store` + `Vary: Cookie` to any response without its own header. Routes that opt in to caching (avatars, landing, install, list APIs via `jsonWithEtag`) set their own. Don't fight the default.
+- **`hooks.server.ts` auto-applies** `Cache-Control: private, no-store` + `Vary: Cookie` to any response without its own header — except authenticated CRM navigations (`/people`, `/companies`, `/projects`, `/interactions`, `/collections`, `/pipelines`), which get `private, max-age=0, must-revalidate` so the service worker may keep a copy. Routes that opt in to caching (avatars, landing, install, list APIs via `jsonWithEtag`) set their own. Don't fight the default.
 - **`adapter-node` has `precompress: true`** in `svelte.config.js` — static assets are gzipped/brotli'd at build time. Dynamic responses are gzipped on the fly via `maybeCompress` (Cloudflare or Caddy in front then re-encodes to brotli for browsers).
-- **Server-Timing** header is emitted in `dev` only: `total;dur=<ms>`. Visible in DevTools Network → Timing.
+- **Server-Timing** is emitted in dev, and in production for workspace owners: `db;desc="N queries";dur=…, app;dur=…, total;dur=…`. Visible in DevTools Network → Timing. See the Performance section below.
+
+## UI primitives (`src/lib/ui/`)
+
+Every overlay in the app goes through these. `scripts/check-overlays.ts` fails
+the build on a hand-rolled `fixed inset-0`, a bare `role="dialog"`, or a numeric
+z-index outside `src/lib/ui/` — add the file to `ALLOW` with a reason if it
+genuinely owns its own stacking.
+
+- **`Popover.svelte`** — anchored panels: menus, pickers, cell popovers. Uses
+  `popover="manual"`, never `"auto"`: auto light-dismiss closes the whole
+  popover stack on one press, which breaks the status cell's create-a-status
+  sub-view and any menu inside a dialog.
+  - The trigger is a snippet receiving `attrs` (the ARIA wiring plus a click
+    handler that calls `stopPropagation` — list rows are wrapped in `<a href>`,
+    so without it every cell popover navigates).
+  - The role prop is `panelRole`, not `role`, so `role="dialog"` at a call site
+    still means "hand-rolled overlay" to the lint.
+  - Panels are `position: fixed` at coordinates from `position.ts`. That is what
+    escapes the `overflow-hidden` list containers; the top layer is a bonus.
+- **`Combobox.svelte`** — type-to-filter, arrow, Enter-to-create. `variant="panel"`
+  inside a Popover, `variant="field"` for the chip pickers. Selects on
+  `mousedown`, not `click`, so the press beats the blur.
+- **`Dialog.svelte`** — modal surfaces. The backdrop has **no** click handler;
+  dismissal comes from `layerStack`. Don't add one back — that is what forced
+  the two a11y workarounds this replaced.
+- **`Editable.svelte`** — click-to-edit a value, optimistic with rollback.
+- **`layerStack.ts`** — one stack, one pair of window listeners. Escape closes
+  only the top layer; a pointer press walks down until it hits a layer
+  containing the target. Never add a per-component Escape handler; it will fight
+  this. (`src/lib/dismiss.svelte.ts` was deleted for exactly that reason.)
+- **`scrollLock.ts`** — refcounted. Never touch `document.body.style.overflow`
+  directly.
+- **One popover per instance.** `Popover` owns a bindable `open`; a parent that
+  tracks `openFor = <id>` across N rows cannot bind to it. Extract a component
+  (see `PipelineStageChip`, `StageMoverButton`, `StageColorPicker`).
+
+## Performance: what is actually slow
+
+`Server-Timing` reports `db;desc="N queries"`, `app` and `total`, in dev always
+and in production for workspace owners. **Measure before optimising** — the
+numbers decide between "fewer queries" and "more caching", and they are not the
+same work.
+
+Measured on a production build against a local SQLite file, server render is
+2–5 ms. There is nothing to win there. The cloud runs against **remote libSQL**,
+where every query is a network round trip — so the metric that matters is the
+query *count*, and the lever is fewer round trips.
+
+- **Never `invalidateAll()` to display something you already have.** A create
+  returns its row in list shape (`fetchPersonRow` / `fetchCompanyRow`, built on
+  the same `*_ROW_COLS` the list query uses) and the page calls `cache.insert`.
+  Creating a person went from 11 queries across two requests to 3 in one.
+  `tests/create-returns-row.test.ts` pins that response shape — it is invisible
+  to the type checker, because the client receives `unknown` off the wire.
+- Genuine exceptions remain: tag counts, totals and the statuses list are not
+  owned by any local cache, so those paths still reload.
+- **Detail pages stream.** Only the header is awaited; interactions, tags,
+  tasks, projects, collections and pipelines are returned as unawaited promises
+  and wrapped in `{#await}`. Verified: on `/people/[id]` the name lands at byte
+  ~3k and the first deferred resolution at ~41k.
+- **No client-side entity cache, deliberately.** `preload-data="hover"` already
+  fetches the full page data before the click, so a module-scope entity map
+  would add a third tenancy-invalidation surface (after `Vary: Cookie` and the
+  service worker's `PURGE_API`) for a benefit that is already delivered. The
+  mobile card layouts opt into `"tap"` instead, since hover never fires on
+  touch.
 
 ## Client-side patterns
 
@@ -65,7 +131,15 @@ Heli is a personal CRM. SvelteKit 2 (adapter-node, full SSR) + libSQL/SQLite + D
   }
   ```
   **DO NOT** call `invalidateAll()` after a simple PATCH on a list-cache-backed page — it negates the optimism by triggering a full server reload. Trust the local cache. Only invalidate when the mutation crosses something the cache doesn't own (tag counts, totals, statuses-list).
-- **Service worker: `src/service-worker.ts`** auto-registers in prod builds. Cache-first for hashed build + static + `/avatars/*`; stale-while-revalidate for GET `/api/{people,companies,projects,interactions,search}`. Skips `no-store`/`no-cache` responses. New builds wait for explicit reload via the `UpdateBanner` (no `skipWaiting` on install — keeps mid-flight pages on one version).
+- **Service worker: `src/service-worker.ts`** auto-registers in prod builds. Cache-first for hashed build + static + `/avatars/*`; stale-while-revalidate for GET `/api/{people,companies,projects,interactions,search}`; **network-first with a 30-entry LRU fallback for SSR navigations** to `/people|companies|projects|interactions|collections|pipelines`. Skips `no-store`/`no-cache` responses. New builds wait for explicit reload via the `UpdateBanner` (no `skipWaiting` on install — keeps mid-flight pages on one version).
+  - Storing rendered CRM pages is a decision made **server-side**: `hooks.server.ts`
+    marks exactly those routes `private, max-age=0, must-revalidate` instead of
+    the `no-store` default. `/settings`, `/admin` and `/` stay `no-store`.
+    Caching a `no-store` response in the worker would be storing it anyway while
+    telling the browser not to — worse than deciding on purpose.
+  - `PURGE_API` therefore deletes the **whole** navigation cache as well as the
+    `/api/*` entries. Both hold tenant data and neither survives a sign-out or a
+    workspace switch.
 - **Reusable actions: `src/lib/actions.ts`** — `use:autofocus` (don't use the HTML `autofocus` attribute; svelte-check flags it), `use:onIntersect={callback}` (IntersectionObserver wrapper, fires on enter with `rootMargin: '200px'`).
 - **Streaming load**: `+layout.server.ts` returns the `listReminders` promise *unawaited* so HTML ships before the reminders query resolves. The popover wraps it in `{#await data.reminders}…{:then}…{/await}`. Use the same pattern for layout-level data that doesn't gate first paint.
 

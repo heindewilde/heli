@@ -332,7 +332,11 @@
           {@const sel = i === selected}
           <li data-entity-row>
             <!-- Mobile card (< md) -->
-            <div class="md:hidden group relative flex items-center gap-2 border-b border-[var(--color-border)] px-3 py-3 transition-colors last:border-b-0 {sel ? 'bg-[var(--color-highlight-bg)]' : 'hover:bg-[var(--color-row-hover)]'} {company.isArchived ? 'opacity-60' : ''}">
+            <!-- `tap` rather than the body-wide `hover`: hover never fires on
+                 touch, so the mobile layout would otherwise get no preload at
+                 all. `tap` starts the load on touchstart, ~80ms before the
+                 click lands. -->
+            <div data-sveltekit-preload-data="tap" class="md:hidden group relative flex items-center gap-2 border-b border-[var(--color-border)] px-3 py-3 transition-colors last:border-b-0 {sel ? 'bg-[var(--color-highlight-bg)]' : 'hover:bg-[var(--color-row-hover)]'} {company.isArchived ? 'opacity-60' : ''}">
               <PriorityFlag value={(company.priority as Priority) ?? null} onChange={(p) => setPriority(company.id, p)} />
               <a href={`/companies/${company.id}`} class="flex min-w-0 flex-1 items-center gap-3">
                 <CompanyLogo domain={company.domain} fallbackUrl={company.logoUrl ?? company.faviconUrl} name={company.name} size={36} />

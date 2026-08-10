@@ -7,6 +7,7 @@
   import FieldRow from '$lib/components/FieldRow.svelte';
   import InteractionRow from '$lib/components/InteractionRow.svelte';
   import TagInput from '$lib/components/TagInput.svelte';
+  import Skeleton from '$lib/ui/Skeleton.svelte';
   import AddReminder from '$lib/components/AddReminder.svelte';
   import CollectionsCard from '$lib/components/CollectionsCard.svelte';
   import PipelinesCard from '$lib/components/PipelinesCard.svelte';
@@ -23,8 +24,8 @@
   let { data } = $props();
   const company = $derived(data.company);
   const linkedPeople = $derived(data.linkedPeople);
-  const interactions = $derived(data.interactions);
-  const tags = $derived(data.tags);
+  // interactions / tags / projects / collections / pipelines / tasks are
+  // promises — the shell paints before they resolve.
 
   let tagSuggestions = $state<{ id: string; name: string; slug: string; count: number }[]>([]);
 
@@ -237,7 +238,15 @@
             onSave={(next) => patch({ notes: next })}
           />
         </div>
-        <TasksCard kind="company" refId={company.id} tasks={data.tasks} />
+        {#await data.tasks}
+          <div
+            class="rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)] p-3"
+          >
+            <Skeleton lines={3} />
+          </div>
+        {:then tasks}
+          <TasksCard kind="company" refId={company.id} {tasks} />
+        {/await}
       </div>
 
       <div class="flex flex-col gap-2 rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)] p-3">
@@ -251,25 +260,53 @@
             Log
           </a>
         </div>
-        {#if interactions.length === 0}
-          <p class="px-1 py-2 text-xs text-[var(--color-muted)]">
-            No interactions logged with {company.name} yet.
-          </p>
-        {:else}
-          <ul class="flex flex-col gap-0.5">
-            {#each interactions as i (i.id)}
-              <li>
-                <InteractionRow {...i} showCompany={false} />
-              </li>
-            {/each}
-          </ul>
-        {/if}
+        {#await data.interactions}
+          <Skeleton lines={4} class="px-1 py-2" />
+        {:then interactions}
+          {#if interactions.length === 0}
+            <p class="px-1 py-2 text-xs text-[var(--color-muted)]">
+              No interactions logged with {company.name} yet.
+            </p>
+          {:else}
+            <ul class="flex flex-col gap-0.5">
+              {#each interactions as i (i.id)}
+                <li>
+                  <InteractionRow {...i} showCompany={false} />
+                </li>
+              {/each}
+            </ul>
+          {/if}
+        {/await}
       </div>
 
       <div class="grid gap-6 md:grid-cols-3 [&>*]:min-w-0">
-        <CollectionsCard kind="company" refId={company.id} collections={data.collections} />
-        <PipelinesCard kind="company" refId={company.id} pipelines={data.pipelines} />
-        <ProjectsCard kind="company" refId={company.id} projects={data.projects} />
+        {#await data.collections}
+          <div
+            class="rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)] p-3"
+          >
+            <Skeleton lines={2} />
+          </div>
+        {:then collections}
+          <CollectionsCard kind="company" refId={company.id} {collections} />
+        {/await}
+        {#await data.pipelines}
+          <div
+            class="rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)] p-3"
+          >
+            <Skeleton lines={2} />
+          </div>
+        {:then pipelines}
+          <PipelinesCard kind="company" refId={company.id} {pipelines} />
+        {/await}
+        {#await data.projects}
+          <div
+            class="rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)] p-3"
+          >
+            <Skeleton lines={2} />
+          </div>
+        {:then projects}
+          <ProjectsCard kind="company" refId={company.id} {projects} />
+        {/await}
       </div>
     </section>
 
@@ -282,7 +319,11 @@
       </div>
       <div class="flex flex-col gap-2 rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)] p-3">
         <h3 class="text-xs font-medium uppercase tracking-wide text-[var(--color-subtle)]">Tags</h3>
-        <TagInput scope="company" entityId={company.id} {tags} suggestions={tagSuggestions} />
+        {#await data.tags}
+          <Skeleton lines={1} class="px-1 py-1" />
+        {:then tags}
+          <TagInput scope="company" entityId={company.id} {tags} suggestions={tagSuggestions} />
+        {/await}
       </div>
       <div class="flex flex-col gap-2 rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)] p-3">
         <div class="flex items-center gap-1.5">

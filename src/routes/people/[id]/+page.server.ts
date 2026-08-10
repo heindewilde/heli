@@ -12,6 +12,18 @@ import { listPipelinesForEntity } from '$lib/server/pipelines';
 import { listTasksForEntity } from '$lib/server/tasks';
 import { domainOf } from '$lib/server/url';
 
+/**
+ * Only the header blocks first paint.
+ *
+ * This page issued twelve queries and awaited all of them before sending a
+ * byte. On the cloud's remote libSQL that is twelve round trips of latency
+ * before the user sees a name. Everything below the header — timeline, tags,
+ * tasks, memberships — is returned as an unawaited promise and streamed, the
+ * same pattern `+layout.server.ts` already uses for the reminders popover.
+ *
+ * The header still needs `person`, `company` and `suggestion` (which renders a
+ * banner beside the name), so those three stay awaited.
+ */
 export const load: PageServerLoad = async ({ locals, params, url }) => {
   if (!locals.user) throw redirect(303, '/auth');
   const s = requireScope(locals);
@@ -27,30 +39,25 @@ export const load: PageServerLoad = async ({ locals, params, url }) => {
   // window (~30s grace gives the client a buffer over its 6s countdown);
   // ?dedup stays as long as the flag is set.
   const FRESH_GRACE_MS = 30_000;
-  const justSaved = url.searchParams.get('just') === '1' && Date.now() - person.createdAt < FRESH_GRACE_MS;
+  const justSaved =
+    url.searchParams.get('just') === '1' && Date.now() - person.createdAt < FRESH_GRACE_MS;
   const dedup = url.searchParams.get('dedup') === '1';
 
   let company = null;
   if (person.companyId) {
-    company = await d
-      .select({
-        id: companies.id,
-        name: companies.name,
-        domain: companies.domain,
-        logoUrl: companies.logoUrl,
-        faviconUrl: companies.faviconUrl
-      })
-      .from(companies)
-      .where(and(eq(companies.id, person.companyId), eq(companies.workspaceId, s.workspaceId)))
-      .get();
+    company =
+      (await d
+        .select({
+          id: companies.id,
+          name: companies.name,
+          domain: companies.domain,
+          logoUrl: companies.logoUrl,
+          faviconUrl: companies.faviconUrl
+        })
+        .from(companies)
+        .where(and(eq(companies.id, person.companyId), eq(companies.workspaceId, s.workspaceId)))
+        .get()) ?? null;
   }
-
-  const interactions = await listInteractions(s, {
-    personId: person.id,
-    limit: 50
-  });
-
-  const tags = await getTagsForEntity(s, 'person', person.id);
 
   // Re-check the suggested company against the user's companies on each load — a
   // matching company added later should auto-link instead of remaining a banner.
@@ -70,44 +77,32 @@ export const load: PageServerLoad = async ({ locals, params, url }) => {
         // bad url; fall through
       }
     }
-    suggestion = {
-      name: person.suggestedCompanyName,
-      url: person.suggestedCompanyUrl,
-      matchId
-    };
+    suggestion = { name: person.suggestedCompanyName, url: person.suggestedCompanyUrl, matchId };
   }
 
-  // Project surfacing. Two queries:
-  // - projectsAll: every active project this person is on
-  // - projectsTogetherList: subset that ALSO includes the linked company
-  const [projectsAll, projectsTogetherList] = await Promise.all([
+  // Project surfacing needs both queries before it can split them, so the split
+  // happens inside one streamed promise rather than blocking the header.
+  const companyId = company?.id ?? null;
+  const projects = Promise.all([
     projectsForPerson(s, person.id),
-    company
-      ? projectsTogether(s, person.id, company.id)
-      : Promise.resolve([])
-  ]);
-  const togetherIds = new Set(projectsTogetherList.map((p) => p.id));
-  // "Other projects" = projects this person is on that the company isn't.
-  const projectsOther = projectsAll.filter((p) => !togetherIds.has(p.id));
-
-  const [collections, pipelines, tasks] = await Promise.all([
-    listCollectionsForEntity(s, 'person', person.id),
-    listPipelinesForEntity(s, 'person', person.id),
-    listTasksForEntity(s, 'person', person.id)
-  ]);
+    companyId ? projectsTogether(s, person.id, companyId) : Promise.resolve([])
+  ]).then(([all, together]) => {
+    const togetherIds = new Set(together.map((p) => p.id));
+    return { together, other: all.filter((p) => !togetherIds.has(p.id)) };
+  });
 
   return {
     person,
     company,
-    interactions,
-    tags,
     suggestion,
     justSaved,
     dedup,
-    projectsTogether: projectsTogetherList,
-    projectsOther,
-    collections,
-    pipelines,
-    tasks
+    // Streamed. Each is awaited in the template, so the shell paints first.
+    interactions: listInteractions(s, { personId: person.id, limit: 50 }),
+    tags: getTagsForEntity(s, 'person', person.id),
+    projects,
+    collections: listCollectionsForEntity(s, 'person', person.id),
+    pipelines: listPipelinesForEntity(s, 'person', person.id),
+    tasks: listTasksForEntity(s, 'person', person.id)
   };
 };
