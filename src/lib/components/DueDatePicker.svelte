@@ -1,4 +1,5 @@
 <script lang="ts">
+  import Popover from '$lib/ui/Popover.svelte';
   import { Calendar, X, ChevronDown } from 'lucide-svelte';
 
   type Props = {
@@ -146,11 +147,12 @@
   const overdue = $derived(value != null && value < Date.now());
 </script>
 
-<div class="relative inline-flex">
+<Popover bind:open label="Due date" panelRole="dialog" autoFocus={false}>
+  {#snippet trigger(attrs)}
   {#if variant === 'icon' && value == null}
     <button
       type="button"
-      onclick={openPicker}
+      {...attrs}
       aria-label="Set due date"
       class="shrink-0 text-[var(--color-subtle)] opacity-60 transition-opacity group-hover:opacity-100"
     >
@@ -159,7 +161,7 @@
   {:else if value == null}
     <button
       type="button"
-      onclick={openPicker}
+      {...attrs}
       class="inline-flex items-center gap-1 rounded-full border border-dashed border-[var(--color-border)] px-2 py-0.5 text-[10px] text-[var(--color-muted)] hover:bg-[var(--color-bg)] hover:text-[var(--color-text)]"
     >
       <Calendar size={10} strokeWidth={2} />
@@ -168,7 +170,7 @@
   {:else}
     <button
       type="button"
-      onclick={openPicker}
+      {...attrs}
       class="inline-flex items-center gap-1 rounded-full border px-1.5 py-0.5 text-[10px] {overdue
         ? 'border-[var(--color-warning-border)] bg-[var(--color-warning-bg)] text-[var(--color-warning)]'
         : 'border-[var(--color-border)] bg-[var(--color-bg)] text-[var(--color-muted)] hover:text-[var(--color-text)]'}"
@@ -177,12 +179,11 @@
       <span>{fmtChip(value)}</span>
     </button>
   {/if}
+  {/snippet}
 
-  {#if open}
-    <!-- svelte-ignore a11y_click_events_have_key_events -->
-    <!-- svelte-ignore a11y_no_static_element_interactions -->
-    <div class="fixed inset-0 z-30" onclick={() => (open = false)}></div>
-    <div class="absolute left-0 top-full z-40 mt-1 w-60 rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)] p-1 shadow-[var(--shadow-lg)]">
+  {#snippet content()}
+    <div class="w-60 p-1">
+
       <button
         type="button"
         onclick={() => commitQuick(today())}
@@ -267,6 +268,7 @@
           class="w-full rounded-[var(--radius-sm)] bg-[var(--color-accent)] px-2 py-1 text-xs font-medium text-[var(--color-accent-fg)] hover:bg-[var(--color-accent-hover)] disabled:opacity-50"
         >Set</button>
       </div>
+    
     </div>
-  {/if}
-</div>
+  {/snippet}
+</Popover>

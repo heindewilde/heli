@@ -1,4 +1,5 @@
 <script lang="ts">
+  import Popover from '$lib/ui/Popover.svelte';
   import { invalidateAll } from '$app/navigation';
   import { Bell, Plus, X } from 'lucide-svelte';
   import { toast } from '$lib/toasts.svelte';
@@ -44,10 +45,11 @@
   }
 </script>
 
-<div class="relative">
+<Popover bind:open label="Upcoming reminders" panelRole="dialog" matchWidth class="w-full">
+  {#snippet trigger(attrs)}
   <button
     type="button"
-    onclick={() => (open = !open)}
+    {...attrs}
     class="flex w-full items-center justify-between gap-2 rounded-[var(--radius-sm)] px-2 py-1.5 text-xs text-[var(--color-muted)] hover:bg-[var(--color-surface)]"
   >
     <span class="flex items-center gap-2">
@@ -60,14 +62,16 @@
         : 'bg-[var(--color-bg)] text-[var(--color-muted)]'}">{items.length}</span>
     {/if}
   </button>
+  {/snippet}
 
-  {#if open}
-    <div class="absolute left-0 top-full z-30 mt-1 w-72 overflow-hidden rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)] shadow-[var(--shadow-md)]">
+  {#snippet content({ close })}
+    <div class="w-72">
+
       <header class="flex items-center justify-between gap-2 border-b border-[var(--color-border)] px-3 py-2">
         <span class="text-xs font-medium">Upcoming reminders</span>
         <button
           type="button"
-          onclick={() => (open = false)}
+          onclick={close}
           class="rounded-[var(--radius-sm)] p-1 text-[var(--color-subtle)] hover:bg-[var(--color-bg)]"
           aria-label="Close"
         ><X size={12} strokeWidth={2} /></button>
@@ -88,7 +92,7 @@
                   {#if r.refHref}
                     <a
                       href={r.refHref}
-                      onclick={() => (open = false)}
+                      onclick={close}
                       class="block truncate text-xs font-medium hover:underline"
                     >{r.refLabel ?? '(deleted)'}</a>
                   {:else}
@@ -110,6 +114,7 @@
       <footer class="border-t border-[var(--color-border)] px-3 py-1.5 text-[10px] text-[var(--color-muted)]">
         Set a reminder from any person, company, or interaction page.
       </footer>
+    
     </div>
-  {/if}
-</div>
+  {/snippet}
+</Popover>

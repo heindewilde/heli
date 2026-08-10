@@ -1,6 +1,7 @@
 <script lang="ts">
   import { Building2, ChevronsUpDown, Check } from 'lucide-svelte';
   import { toast } from '$lib/toasts.svelte';
+  import Popover from '$lib/ui/Popover.svelte';
 
   type Membership = { workspaceId: string; workspaceName: string; role: string };
 
@@ -54,30 +55,26 @@
 -->
 {#if memberships.length > 1}
   <div class="mb-3 border-b border-[var(--color-border)] pb-3">
-    <div class="relative">
-      <button
-        class="flex w-full items-center gap-2 rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-surface)] px-2.5 py-2 text-left text-sm transition-colors hover:bg-[var(--color-row-hover)]"
-        onclick={() => (open = !open)}
-        aria-haspopup="listbox"
-        aria-expanded={open}
-        aria-label="Switch workspace"
-      >
-        <Building2 size={14} strokeWidth={2} class="shrink-0 text-[var(--color-subtle)]" />
-        <span class="min-w-0 flex-1 truncate">{active?.workspaceName}</span>
-        <ChevronsUpDown size={13} strokeWidth={2} class="shrink-0 text-[var(--color-muted)]" />
-      </button>
-
-      {#if open}
-        <!-- svelte-ignore a11y_no_static_element_interactions -->
-        <!-- svelte-ignore a11y_click_events_have_key_events -->
-        <div class="fixed inset-0 z-40" onclick={() => (open = false)}></div>
-        <ul
-          class="absolute left-0 right-0 z-50 mt-1 overflow-hidden rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)] py-1 shadow-[var(--shadow-lg)]"
-          role="listbox"
+    <Popover bind:open label="Switch workspace" panelRole="listbox" matchWidth class="w-full">
+      {#snippet trigger(attrs)}
+        <button
+          {...attrs}
+          type="button"
+          aria-label="Switch workspace"
+          class="flex w-full items-center gap-2 rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-surface)] px-2.5 py-2 text-left text-sm transition-colors hover:bg-[var(--color-row-hover)]"
         >
+          <Building2 size={14} strokeWidth={2} class="shrink-0 text-[var(--color-subtle)]" />
+          <span class="min-w-0 flex-1 truncate">{active?.workspaceName}</span>
+          <ChevronsUpDown size={13} strokeWidth={2} class="shrink-0 text-[var(--color-muted)]" />
+        </button>
+      {/snippet}
+
+      {#snippet content()}
+        <ul class="py-1">
           {#each memberships as m (m.workspaceId)}
             <li role="option" aria-selected={m.workspaceId === activeId}>
               <button
+                type="button"
                 class="flex w-full items-center justify-between gap-2 px-3 py-1.5 text-left text-sm hover:bg-[var(--color-row-hover)]"
                 onclick={() => switchTo(m.workspaceId)}
                 disabled={switching}
@@ -92,7 +89,7 @@
             </li>
           {/each}
         </ul>
-      {/if}
-    </div>
+      {/snippet}
+    </Popover>
   </div>
 {/if}

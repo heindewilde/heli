@@ -1,9 +1,12 @@
 <script lang="ts">
   import { invalidateAll } from '$app/navigation';
-  import { Funnel, Plus, X, ChevronDown } from 'lucide-svelte';
+  import { Funnel, Plus, X } from 'lucide-svelte';
   import { toast } from '$lib/toasts.svelte';
   import type { PipelineMembershipForEntity } from '$lib/server/pipelines';
   import type { MemberKind } from '$lib/server/schema';
+  import Popover from '$lib/ui/Popover.svelte';
+  import Combobox from '$lib/ui/Combobox.svelte';
+  import PipelineStageChip from './PipelineStageChip.svelte';
 
   type Props = {
     kind: MemberKind;
@@ -13,16 +16,21 @@
 
   let { kind, refId, pipelines }: Props = $props();
 
-  let pickerOpen = $state(false);
-  let pickerQuery = $state('');
-  let candidates = $state<{ id: string; name: string; isArchived: number }[]>([]);
-  let loading = $state(false);
+  type Candidate = { id: string; name: string; isArchived: number };
 
+  let pickerOpen = $state(false);
   let stageOptions = $state<Record<string, { id: string; name: string; kind: string }[]>>({});
-  let stagePopoverFor = $state<string | null>(null);
 
   const memberOf = $derived(new Set(pipelines.map((p) => p.pipelineId)));
-  const filtered = $derived(candidates.filter((c) => !memberOf.has(c.id) && !c.isArchived));
+
+  async function search(q: string): Promise<Candidate[]> {
+    const r = await fetch(`/api/pipelines?mode=typeahead&q=${encodeURIComponent(q)}&limit=20`);
+    if (!r.ok) return [];
+    const data = await r.json();
+    return ((data.items ?? []) as Candidate[]).filter(
+      (c) => !memberOf.has(c.id) && !c.isArchived
+    );
+  }
 
   // Preload stage options so the popover opens with content on first click.
   $effect(() => {
@@ -31,37 +39,6 @@
       if (!stageOptions[pid]) loadStages(pid);
     }
   });
-
-  function stageDotClass(kind: string): string {
-    if (kind === 'won') return 'bg-emerald-500';
-    if (kind === 'lost') return 'bg-rose-500';
-    return 'bg-[var(--color-accent)]';
-  }
-
-  async function loadCandidates() {
-    loading = true;
-    try {
-      const r = await fetch(`/api/pipelines?mode=typeahead&q=${encodeURIComponent(pickerQuery)}&limit=20`);
-      if (!r.ok) {
-        candidates = [];
-        return;
-      }
-      const data = await r.json();
-      candidates = data.items ?? [];
-    } finally {
-      loading = false;
-    }
-  }
-
-  $effect(() => {
-    if (pickerOpen) loadCandidates();
-  });
-
-  let queryTimer: ReturnType<typeof setTimeout> | null = null;
-  function onQueryChange() {
-    if (queryTimer) clearTimeout(queryTimer);
-    queryTimer = setTimeout(loadCandidates, 150);
-  }
 
   async function add(pipelineId: string) {
     const res = await fetch(`/api/pipelines/${pipelineId}/items`, {
@@ -74,7 +51,6 @@
       return;
     }
     pickerOpen = false;
-    pickerQuery = '';
     await invalidateAll();
   }
 
@@ -117,11 +93,6 @@
     await invalidateAll();
   }
 
-  function stageClass(kind: string): string {
-    if (kind === 'won') return 'border-emerald-300/40 bg-emerald-300/15 text-emerald-700 dark:text-emerald-300';
-    if (kind === 'lost') return 'border-rose-300/40 bg-rose-300/15 text-rose-700 dark:text-rose-300';
-    return 'border-[var(--color-highlight-border)] bg-[var(--color-highlight-bg)] text-[var(--color-text)]';
-  }
 </script>
 
 <div class="flex flex-col rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)]">
@@ -157,42 +128,13 @@
               </button>
             </div>
             <div class="mt-1 flex items-center gap-1 pl-[18px]">
-              <div class="relative inline-flex">
-                <button
-                  type="button"
-                  onclick={() => (stagePopoverFor = stagePopoverFor === p.itemId ? null : p.itemId)}
-                  class="inline-flex items-center gap-1 rounded-full border px-1.5 py-px text-[10px] {stageClass(p.stageKind)} hover:opacity-90"
-                >
-                  <span>{p.stageName}</span>
-                  <ChevronDown size={9} strokeWidth={2.5} />
-                </button>
-                {#if stagePopoverFor === p.itemId}
-                  <!-- svelte-ignore a11y_click_events_have_key_events -->
-                  <!-- svelte-ignore a11y_no_static_element_interactions -->
-                  <div class="fixed inset-0 z-30" onclick={() => (stagePopoverFor = null)}></div>
-                  <div class="absolute left-0 top-full z-40 mt-1 min-w-[160px] rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)] p-1 shadow-[var(--shadow-lg)]">
-                    {#each stageOptions[p.pipelineId] ?? [] as s (s.id)}
-                      <button
-                        type="button"
-                        onclick={() => {
-                          stagePopoverFor = null;
-                          if (s.id !== p.stageId) moveStage(p.pipelineId, p.itemId, s.id);
-                        }}
-                        class="flex w-full items-center gap-2 rounded-[var(--radius-sm)] px-2 py-1.5 text-left text-xs hover:bg-[var(--color-bg)] {s.id === p.stageId ? 'bg-[var(--color-bg)] font-medium' : ''}"
-                      >
-                        <span class="inline-block h-1.5 w-1.5 rounded-full {stageDotClass(s.kind)}"></span>
-                        <span class="min-w-0 flex-1 truncate">{s.name}</span>
-                        {#if s.id === p.stageId}
-                          <span class="text-[10px] text-[var(--color-subtle)]">current</span>
-                        {/if}
-                      </button>
-                    {/each}
-                    {#if (stageOptions[p.pipelineId]?.length ?? 0) === 0}
-                      <p class="px-2 py-1.5 text-xs italic text-[var(--color-subtle)]">Loading stages…</p>
-                    {/if}
-                  </div>
-                {/if}
-              </div>
+              <PipelineStageChip
+                stageId={p.stageId}
+                stageName={p.stageName}
+                stageKind={p.stageKind}
+                stages={stageOptions[p.pipelineId] ?? []}
+                onMove={(to) => moveStage(p.pipelineId, p.itemId, to)}
+              />
             </div>
           </li>
         {/each}
@@ -200,48 +142,42 @@
     {/if}
   </div>
 
-  <footer class="relative border-t border-[var(--color-border)]">
-    <button
-      type="button"
-      onclick={() => (pickerOpen = !pickerOpen)}
-      class="flex w-full items-center justify-center gap-1.5 rounded-b-[var(--radius-md)] px-3 py-2 text-xs text-[var(--color-muted)] hover:bg-[var(--color-bg)] hover:text-[var(--color-text)]"
+  <footer class="border-t border-[var(--color-border)]">
+    <Popover
+      bind:open={pickerOpen}
+      label="Add to pipeline"
+      panelRole="dialog"
+      placement="top-start"
+      matchWidth
+      autoFocus={false}
+      class="w-full"
     >
-      <Plus size={12} strokeWidth={2} />
-      Add to pipeline
-    </button>
-    {#if pickerOpen}
-      <!-- svelte-ignore a11y_click_events_have_key_events -->
-      <!-- svelte-ignore a11y_no_static_element_interactions -->
-      <div class="fixed inset-0 z-30" onclick={() => (pickerOpen = false)}></div>
-      <div class="absolute bottom-full left-0 right-0 z-40 mb-1 rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-bg)] p-2 shadow-[var(--shadow-lg)]">
-        <input
-          bind:value={pickerQuery}
-          oninput={onQueryChange}
-          placeholder="Search pipelines…"
-          class="w-full rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-surface)] px-2 py-1 text-sm"
-        />
-        <ul class="mt-1 max-h-60 overflow-y-auto">
-          {#if loading}
-            <li class="px-2 py-1 text-xs italic text-[var(--color-subtle)]">Loading…</li>
-          {:else}
-            {#each filtered as p (p.id)}
-              <li>
-                <button
-                  type="button"
-                  onclick={() => add(p.id)}
-                  class="flex w-full items-center gap-1.5 rounded-[var(--radius-sm)] px-2 py-1 text-left text-sm hover:bg-[var(--color-surface)]"
-                >
-                  <Funnel size={12} strokeWidth={2} class="text-[var(--color-subtle)]" />
-                  <span class="truncate">{p.name}</span>
-                </button>
-              </li>
-            {/each}
-            {#if filtered.length === 0}
-              <li class="px-2 py-1 text-xs italic text-[var(--color-subtle)]">No matching pipelines. Create one from the Pipelines tab.</li>
-            {/if}
-          {/if}
-        </ul>
-      </div>
-    {/if}
+      {#snippet trigger(attrs)}
+        <button
+          {...attrs}
+          type="button"
+          class="flex w-full items-center justify-center gap-1.5 rounded-b-[var(--radius-md)] px-3 py-2 text-xs text-[var(--color-muted)] hover:bg-[var(--color-bg)] hover:text-[var(--color-text)]"
+        >
+          <Plus size={12} strokeWidth={2} />
+          Add to pipeline
+        </button>
+      {/snippet}
+
+      {#snippet content()}
+        <Combobox
+          {search}
+          getId={(p) => p.id}
+          searchOnOpen
+          placeholder="Search pipelines\u2026"
+          emptyText="No matching pipelines. Create one from the Pipelines tab."
+          onSelect={(p) => add(p.id)}
+        >
+          {#snippet option(p: Candidate)}
+            <Funnel size={12} strokeWidth={2} class="shrink-0 text-[var(--color-subtle)]" />
+            <span class="min-w-0 flex-1 truncate">{p.name}</span>
+          {/snippet}
+        </Combobox>
+      {/snippet}
+    </Popover>
   </footer>
 </div>

@@ -1,8 +1,9 @@
 <script lang="ts">
+  import StageColorPicker from './StageColorPicker.svelte';
   import { invalidateAll } from '$app/navigation';
   import { ArrowUp, ArrowDown, Trash2, X } from 'lucide-svelte';
   import { toast } from '$lib/toasts.svelte';
-  import { STAGE_COLORS, STAGE_COLOR_SWATCH, type StageColor } from '$lib/stageColors';
+  import { type StageColor } from '$lib/stageColors';
   import type { PipelineStage } from '$lib/server/schema';
 
   type Props = {
@@ -18,19 +19,6 @@
 
   let newName = $state('');
   let newColor = $state<StageColor>('gray');
-  let openPicker = $state<string | 'new' | null>(null);
-
-  $effect(() => {
-    if (openPicker === null) return;
-    const close = () => { openPicker = null; };
-    document.addEventListener('pointerdown', close);
-    return () => document.removeEventListener('pointerdown', close);
-  });
-
-  function togglePicker(id: string | 'new') {
-    openPicker = openPicker === id ? null : id;
-  }
-
   async function addStage() {
     const name = newName.trim();
     if (!name) return;
@@ -146,32 +134,7 @@
           onkeydown={(e) => { if (e.key === 'Enter') (e.currentTarget as HTMLInputElement).blur(); }}
           class="min-w-0 flex-1 rounded-[var(--radius-sm)] border border-transparent bg-transparent px-2 py-1 text-sm hover:border-[var(--color-border)] focus:border-[var(--color-highlight-border)] focus:outline-none"
         />
-        <div class="relative">
-          <button
-            type="button"
-            onclick={() => togglePicker(stage.id)}
-            aria-label="Change stage color"
-            class="h-4 w-4 rounded-full ring-offset-1 hover:ring-2 hover:ring-[var(--color-border)]"
-            style="background-color:{STAGE_COLOR_SWATCH[stageColor]}"
-          ></button>
-          {#if openPicker === stage.id}
-            <!-- svelte-ignore a11y_no_static_element_interactions -->
-            <div
-              class="absolute bottom-full right-0 z-10 mb-1.5 flex gap-1 rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-bg)] p-1.5 shadow-md"
-              onpointerdown={(e) => e.stopPropagation()}
-            >
-              {#each STAGE_COLORS as c (c)}
-                <button
-                  type="button"
-                  onclick={() => { setColor(stage.id, c); openPicker = null; }}
-                  title={c}
-                  class="h-4 w-4 rounded-full ring-offset-1 transition-transform hover:scale-110 {stageColor === c ? 'ring-2 ring-[var(--color-text)]' : ''}"
-                  style="background-color:{STAGE_COLOR_SWATCH[c]}"
-                ></button>
-              {/each}
-            </div>
-          {/if}
-        </div>
+        <StageColorPicker value={stageColor} onChange={(c) => setColor(stage.id, c)} />
         {#if canManage}
           <button
             type="button"
@@ -194,32 +157,11 @@
         onkeydown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addStage(); } }}
         class="min-w-0 flex-1 rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-surface)] px-2 py-1 text-sm"
       />
-      <div class="relative">
-        <button
-          type="button"
-          onclick={() => togglePicker('new')}
-          aria-label="Pick color for new stage"
-          class="h-4 w-4 rounded-full ring-offset-1 hover:ring-2 hover:ring-[var(--color-border)]"
-          style="background-color:{STAGE_COLOR_SWATCH[newColor]}"
-        ></button>
-        {#if openPicker === 'new'}
-          <!-- svelte-ignore a11y_no_static_element_interactions -->
-          <div
-            class="absolute bottom-full right-0 z-10 mb-1.5 flex gap-1 rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-bg)] p-1.5 shadow-md"
-            onpointerdown={(e) => e.stopPropagation()}
-          >
-            {#each STAGE_COLORS as c (c)}
-              <button
-                type="button"
-                onclick={() => { newColor = c; openPicker = null; }}
-                title={c}
-                class="h-4 w-4 rounded-full ring-offset-1 transition-transform hover:scale-110 {newColor === c ? 'ring-2 ring-[var(--color-text)]' : ''}"
-                style="background-color:{STAGE_COLOR_SWATCH[c]}"
-              ></button>
-            {/each}
-          </div>
-        {/if}
-      </div>
+      <StageColorPicker
+        value={newColor}
+        onChange={(c) => (newColor = c)}
+        label="Pick color for new stage"
+      />
       <div class="invisible p-1"><Trash2 size={12} strokeWidth={2} /></div>
     </div>
   </div>

@@ -1,4 +1,5 @@
 <script lang="ts">
+  import StageMoverButton from './StageMoverButton.svelte';
   import { invalidateAll } from '$app/navigation';
   import { ChevronDown, ChevronRight } from 'lucide-svelte';
   import PipelineItemCard from './PipelineItemCard.svelte';
@@ -82,32 +83,11 @@
                   />
                 </div>
                 <div class="relative shrink-0">
-                  <button
-                    type="button"
-                    title="Move to stage"
-                    onpointerdown={(e) => { e.stopPropagation(); openMoverFor = openMoverFor === item.id ? null : item.id; }}
-                    class="flex items-center gap-1.5 rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-surface)] px-2 py-1 text-xs text-[var(--color-muted)] opacity-0 transition-opacity hover:border-[var(--color-highlight-border)] hover:text-[var(--color-text)] group-hover:opacity-100 {openMoverFor === item.id ? 'opacity-100' : ''}"
-                  >
-                    Move
-                  </button>
-                  {#if openMoverFor === item.id}
-                    <!-- svelte-ignore a11y_no_static_element_interactions -->
-                    <div
-                      class="absolute right-0 top-full z-20 mt-1 min-w-[200px] rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-surface)] py-1 shadow-[var(--shadow-md)]"
-                      onpointerdown={(e) => e.stopPropagation()}
-                    >
-                      {#each stages.filter((s) => s.id !== item.stageId) as s (s.id)}
-                        <button
-                          type="button"
-                          onclick={() => moveItem(item.id, s.id)}
-                          class="flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm hover:bg-[var(--color-highlight-bg)]"
-                        >
-                          <span class="h-2 w-2 shrink-0 rounded-full" style="background-color:{STAGE_COLOR_SWATCH[(s.color ?? 'gray') as StageColor]}"></span>
-                          {s.name}
-                        </button>
-                      {/each}
-                    </div>
-                  {/if}
+                  <StageMoverButton
+                    {stages}
+                    currentStageId={item.stageId}
+                    onMove={(to) => moveItem(item.id, to)}
+                  />
                 </div>
               </li>
             {/each}

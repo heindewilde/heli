@@ -5,6 +5,8 @@
   import { COLLECTION_ICON_MAP } from '$lib/collectionIcons';
   import type { CollectionMembershipForEntity } from '$lib/server/collections';
   import type { MemberKind } from '$lib/server/schema';
+  import Popover from '$lib/ui/Popover.svelte';
+  import Combobox from '$lib/ui/Combobox.svelte';
 
   function iconFor(icon: string | null) {
     if (!icon) return null;
@@ -19,37 +21,21 @@
 
   let { kind, refId, collections }: Props = $props();
 
+  type Candidate = { id: string; name: string; isArchived: number };
+
   let pickerOpen = $state(false);
-  let pickerQuery = $state('');
-  let candidates = $state<{ id: string; name: string; isArchived: number }[]>([]);
-  let loading = $state(false);
 
   const memberOf = $derived(new Set(collections.map((c) => c.id)));
-  const filtered = $derived(candidates.filter((c) => !memberOf.has(c.id) && !c.isArchived));
 
-  async function loadCandidates() {
-    loading = true;
-    try {
-      const r = await fetch(`/api/collections?mode=typeahead&q=${encodeURIComponent(pickerQuery)}&limit=20`);
-      if (!r.ok) {
-        candidates = [];
-        return;
-      }
-      const data = await r.json();
-      candidates = data.items ?? [];
-    } finally {
-      loading = false;
-    }
-  }
-
-  $effect(() => {
-    if (pickerOpen) loadCandidates();
-  });
-
-  let queryTimer: ReturnType<typeof setTimeout> | null = null;
-  function onQueryChange() {
-    if (queryTimer) clearTimeout(queryTimer);
-    queryTimer = setTimeout(loadCandidates, 150);
+  async function search(q: string): Promise<Candidate[]> {
+    const r = await fetch(
+      `/api/collections?mode=typeahead&q=${encodeURIComponent(q)}&limit=20`
+    );
+    if (!r.ok) return [];
+    const data = await r.json();
+    return ((data.items ?? []) as Candidate[]).filter(
+      (c) => !memberOf.has(c.id) && !c.isArchived
+    );
   }
 
   async function add(collectionId: string) {
@@ -63,7 +49,6 @@
       return;
     }
     pickerOpen = false;
-    pickerQuery = '';
     await invalidateAll();
   }
 
@@ -80,8 +65,7 @@
     await invalidateAll();
   }
 
-  async function createAndAdd() {
-    const name = pickerQuery.trim();
+  async function createAndAdd(name: string) {
     if (!name) return;
     const res = await fetch('/api/collections', {
       method: 'POST',
@@ -138,60 +122,46 @@
     {/if}
   </div>
 
-  <footer class="relative border-t border-[var(--color-border)]">
-    <button
-      type="button"
-      onclick={() => (pickerOpen = !pickerOpen)}
-      class="flex w-full items-center justify-center gap-1.5 rounded-b-[var(--radius-md)] px-3 py-2 text-xs text-[var(--color-muted)] hover:bg-[var(--color-bg)] hover:text-[var(--color-text)]"
+  <footer class="border-t border-[var(--color-border)]">
+    <Popover
+      bind:open={pickerOpen}
+      label="Add to collection"
+      panelRole="dialog"
+      placement="top-start"
+      matchWidth
+      autoFocus={false}
+      class="w-full"
     >
-      <Plus size={12} strokeWidth={2} />
-      Add to collection
-    </button>
-    {#if pickerOpen}
-      <!-- svelte-ignore a11y_click_events_have_key_events -->
-      <!-- svelte-ignore a11y_no_static_element_interactions -->
-      <div class="fixed inset-0 z-30" onclick={() => (pickerOpen = false)}></div>
-      <div class="absolute bottom-full left-0 right-0 z-40 mb-1 rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-bg)] p-2 shadow-[var(--shadow-lg)]">
-        <input
-          bind:value={pickerQuery}
-          oninput={onQueryChange}
+      {#snippet trigger(attrs)}
+        <button
+          {...attrs}
+          type="button"
+          class="flex w-full items-center justify-center gap-1.5 rounded-b-[var(--radius-md)] px-3 py-2 text-xs text-[var(--color-muted)] hover:bg-[var(--color-bg)] hover:text-[var(--color-text)]"
+        >
+          <Plus size={12} strokeWidth={2} />
+          Add to collection
+        </button>
+      {/snippet}
+
+      {#snippet content()}
+        <Combobox
+          {search}
+          getId={(c) => c.id}
+          searchOnOpen
           placeholder="Search or create…"
-          class="w-full rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-surface)] px-2 py-1 text-sm"
-        />
-        <ul class="mt-1 max-h-60 overflow-y-auto">
-          {#if loading}
-            <li class="px-2 py-1 text-xs italic text-[var(--color-subtle)]">Loading…</li>
-          {:else}
-            {#each filtered as c (c.id)}
-              <li>
-                <button
-                  type="button"
-                  onclick={() => add(c.id)}
-                  class="flex w-full items-center gap-1.5 rounded-[var(--radius-sm)] px-2 py-1 text-left text-sm hover:bg-[var(--color-surface)]"
-                >
-                  <FolderOpen size={12} strokeWidth={2} class="text-[var(--color-subtle)]" />
-                  <span class="truncate">{c.name}</span>
-                </button>
-              </li>
-            {/each}
-            {#if pickerQuery.trim() && !filtered.some((c) => c.name.toLowerCase() === pickerQuery.trim().toLowerCase())}
-              <li>
-                <button
-                  type="button"
-                  onclick={createAndAdd}
-                  class="flex w-full items-center gap-1.5 rounded-[var(--radius-sm)] px-2 py-1 text-left text-sm hover:bg-[var(--color-surface)]"
-                >
-                  <Plus size={12} strokeWidth={2} class="text-[var(--color-subtle)]" />
-                  <span>Create &ldquo;{pickerQuery.trim()}&rdquo;</span>
-                </button>
-              </li>
-            {/if}
-            {#if filtered.length === 0 && !pickerQuery.trim()}
-              <li class="px-2 py-1 text-xs italic text-[var(--color-subtle)]">No more collections.</li>
-            {/if}
-          {/if}
-        </ul>
-      </div>
-    {/if}
+          emptyText="No more collections."
+          canCreate={(q, results) =>
+            !results.some((c) => c.name.toLowerCase() === q.toLowerCase())}
+          createLabel={(q) => `Create \u201c${q}\u201d`}
+          onCreate={createAndAdd}
+          onSelect={(c) => add(c.id)}
+        >
+          {#snippet option(c: Candidate)}
+            <FolderOpen size={12} strokeWidth={2} class="shrink-0 text-[var(--color-subtle)]" />
+            <span class="min-w-0 flex-1 truncate">{c.name}</span>
+          {/snippet}
+        </Combobox>
+      {/snippet}
+    </Popover>
   </footer>
 </div>

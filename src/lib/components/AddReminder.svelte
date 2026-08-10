@@ -1,4 +1,5 @@
 <script lang="ts">
+  import Popover from '$lib/ui/Popover.svelte';
   import { invalidateAll } from '$app/navigation';
   import { Bell, Plus, X } from 'lucide-svelte';
   import { toast } from '$lib/toasts.svelte';
@@ -26,6 +27,13 @@
     when = defaultWhen();
     open = true;
   }
+
+  // The icon variant's trigger is Popover's, which only flips `open` — so the
+  // default (+7d, 09:00) is seeded here instead. Depends on `open` alone, so
+  // editing the field does not re-run it.
+  $effect(() => {
+    if (open) when = defaultWhen();
+  });
 
   async function save() {
     if (saving) return;
@@ -55,17 +63,22 @@
 </script>
 
 {#if iconOnly}
-  <div class="relative">
-    <button
-      type="button"
-      title="Set reminder"
-      onclick={open ? () => (open = false) : startOpen}
-      class="rounded-[var(--radius-sm)] p-2 text-[var(--color-subtle)] hover:bg-[var(--color-surface)] {open ? 'text-[var(--color-accent)]' : ''}"
-    >
-      <Bell size={16} strokeWidth={2} />
-    </button>
-    {#if open}
-      <div class="absolute right-0 top-full z-20 mt-1 flex items-center gap-1 rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-bg)] p-2 shadow-md">
+  <Popover bind:open label="Set reminder" panelRole="dialog" placement="bottom-end">
+    {#snippet trigger(attrs)}
+      <button
+        {...attrs}
+        type="button"
+        title="Set reminder"
+        class="rounded-[var(--radius-sm)] p-2 text-[var(--color-subtle)] hover:bg-[var(--color-surface)] {open
+          ? 'text-[var(--color-accent)]'
+          : ''}"
+      >
+        <Bell size={16} strokeWidth={2} />
+      </button>
+    {/snippet}
+
+    {#snippet content({ close })}
+      <div class="flex items-center gap-1 p-2">
         <input
           type="datetime-local"
           bind:value={when}
@@ -75,20 +88,20 @@
           type="button"
           onclick={save}
           disabled={saving}
-          class="inline-flex items-center gap-1 rounded-[var(--radius-sm)] bg-[var(--color-accent)] transition-colors hover:bg-[var(--color-accent-hover)] px-2 py-1 text-xs text-[var(--color-accent-fg)]"
+          class="inline-flex items-center gap-1 rounded-[var(--radius-sm)] bg-[var(--color-accent)] px-2 py-1 text-xs text-[var(--color-accent-fg)] transition-colors hover:bg-[var(--color-accent-hover)]"
         >
           <Plus size={12} strokeWidth={2} />
           Set
         </button>
         <button
           type="button"
-          onclick={() => (open = false)}
+          onclick={close}
           class="rounded-[var(--radius-sm)] p-1 text-[var(--color-subtle)] hover:bg-[var(--color-surface)]"
-          aria-label="Cancel"
-        ><X size={12} strokeWidth={2} /></button>
+          aria-label="Cancel"><X size={12} strokeWidth={2} /></button
+        >
       </div>
-    {/if}
-  </div>
+    {/snippet}
+  </Popover>
 {:else}
   <div class="flex flex-col gap-2">
     {#if !open}
