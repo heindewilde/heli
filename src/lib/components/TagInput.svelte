@@ -2,6 +2,7 @@
   import { invalidateAll } from '$app/navigation';
   import { Tag, X } from 'lucide-svelte';
   import { toast } from '$lib/toasts.svelte';
+  import Combobox from '$lib/ui/Combobox.svelte';
 
   type ScopeTag = { id: string; name: string; slug: string; count?: number };
 
@@ -14,18 +15,15 @@
 
   let { scope, entityId, tags, suggestions = [] }: Props = $props();
 
-  let q = $state('');
-  let inputEl = $state<HTMLInputElement | undefined>(undefined);
   let saving = $state(false);
-  let open = $state(false);
+  let box = $state<ReturnType<typeof Combobox> | undefined>(undefined);
 
-  const filtered = $derived.by(() => {
+  function search(q: string): ScopeTag[] {
     const v = q.trim().toLowerCase();
     const taken = new Set(tags.map((t) => t.id));
     const pool = suggestions.filter((s) => !taken.has(s.id));
-    if (!v) return pool.slice(0, 8);
-    return pool.filter((s) => s.name.toLowerCase().includes(v)).slice(0, 8);
-  });
+    return (v ? pool.filter((s) => s.name.toLowerCase().includes(v)) : pool).slice(0, 8);
+  }
 
   async function addByName(name: string) {
     if (saving) return;
@@ -42,8 +40,9 @@
         toast.danger('Could not add tag');
         return;
       }
-      q = '';
-      open = false;
+      box?.reset();
+      // Tag counts and the workspace tag list are not owned by any local
+      // cache, so a reload is genuinely owed here.
       await invalidateAll();
     } finally {
       saving = false;
@@ -62,77 +61,49 @@
     }
     await invalidateAll();
   }
-
-  function onKey(e: KeyboardEvent) {
-    if (e.key === 'Enter') {
-      e.preventDefault();
-      addByName(q);
-    } else if (e.key === 'Escape') {
-      open = false;
-      q = '';
-    } else if (e.key === 'Backspace' && q === '' && tags.length > 0) {
-      remove(tags[tags.length - 1].id);
-      e.preventDefault();
-    }
-  }
 </script>
 
-<div class="flex flex-col gap-1">
-  <div class="flex flex-wrap items-center gap-1.5 rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-surface)] p-1.5">
+<Combobox
+  bind:this={box}
+  variant="field"
+  {search}
+  getId={(t) => t.id}
+  searchOnOpen
+  debounce={0}
+  placeholder={tags.length === 0 ? 'Add a tag…' : ''}
+  autoFocus={false}
+  inputClass="text-xs"
+  onSelect={(t) => addByName(t.name)}
+  onCreate={addByName}
+  canCreate={(q, results) => !results.some((s) => s.name.toLowerCase() === q.toLowerCase())}
+  createLabel={(q) => `Create “${q}”`}
+  onBackspaceEmpty={() => {
+    if (tags.length > 0) remove(tags[tags.length - 1].id);
+  }}
+>
+  {#snippet chips()}
     <span class="flex items-center pl-1 text-[var(--color-subtle)]">
       <Tag size={12} strokeWidth={2} />
     </span>
     {#each tags as t (t.id)}
-      <span class="inline-flex items-center gap-1 rounded-full bg-[var(--color-highlight-bg)] py-0.5 pl-2 pr-0.5 text-xs text-[var(--color-text)]">
+      <span
+        class="inline-flex items-center gap-1 rounded-full bg-[var(--color-highlight-bg)] py-0.5 pl-2 pr-0.5 text-xs text-[var(--color-text)]"
+      >
         <span class="font-medium">{t.name}</span>
         <button
           type="button"
           onclick={() => remove(t.id)}
           aria-label="Remove {t.name}"
-          class="rounded-full p-0.5 hover:bg-[var(--color-highlight-border)]"
-        ><X size={10} strokeWidth={2} /></button>
+          class="rounded-full p-0.5 hover:bg-[var(--color-highlight-border)]"><X size={10} strokeWidth={2} /></button
+        >
       </span>
     {/each}
-    <input
-      bind:this={inputEl}
-      bind:value={q}
-      onkeydown={onKey}
-      onfocus={() => (open = true)}
-      onblur={() => setTimeout(() => (open = false), 150)}
-      type="text"
-      placeholder={tags.length === 0 ? 'Add a tag…' : ''}
-      class="min-w-[100px] flex-1 bg-transparent px-1 py-0.5 text-xs outline-none"
-    />
-  </div>
-  {#if open && filtered.length > 0}
-    <div class="relative">
-      <ul class="absolute inset-x-0 top-0 z-10 max-h-48 overflow-auto rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-surface)] py-1 shadow-[var(--shadow-md)]">
-        {#each filtered as s (s.id)}
-          <li>
-            <button
-              type="button"
-              onmousedown={(e) => { e.preventDefault(); addByName(s.name); }}
-              class="flex w-full items-center justify-between gap-2 px-3 py-1.5 text-left text-xs hover:bg-[var(--color-bg)]"
-            >
-              <span>{s.name}</span>
-              {#if s.count != null}
-                <span class="text-[var(--color-subtle)]">{s.count}</span>
-              {/if}
-            </button>
-          </li>
-        {/each}
-        {#if q.trim() && !filtered.some((s) => s.name.toLowerCase() === q.trim().toLowerCase())}
-          <li>
-            <button
-              type="button"
-              onmousedown={(e) => { e.preventDefault(); addByName(q); }}
-              class="flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs text-[var(--color-text)] hover:bg-[var(--color-bg)]"
-            >
-              Create &ldquo;{q.trim()}&rdquo;
-            </button>
-          </li>
-        {/if}
-      </ul>
-    </div>
-  {/if}
-</div>
+  {/snippet}
+
+  {#snippet option(s: ScopeTag)}
+    <span class="min-w-0 flex-1 truncate">{s.name}</span>
+    {#if s.count != null}
+      <span class="shrink-0 text-[var(--color-subtle)]">{s.count}</span>
+    {/if}
+  {/snippet}
+</Combobox>

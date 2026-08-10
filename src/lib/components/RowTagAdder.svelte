@@ -2,6 +2,8 @@
   import { invalidateAll } from '$app/navigation';
   import { Plus, Tag, Check } from 'lucide-svelte';
   import { toast } from '$lib/toasts.svelte';
+  import Popover from '$lib/ui/Popover.svelte';
+  import Combobox from '$lib/ui/Combobox.svelte';
 
   type AttachedTag = { id: string; name: string };
   type SuggestionTag = { id: string; name: string; slug: string; count?: number };
@@ -17,54 +19,17 @@
   let { scope, entityId, currentTags, suggestions, revealOnHover = false }: Props = $props();
 
   let open = $state(false);
-  let q = $state('');
-  let inputEl = $state<HTMLInputElement | undefined>(undefined);
   let saving = $state(false);
-  let panelEl = $state<HTMLDivElement | undefined>(undefined);
-  let chipEl = $state<HTMLButtonElement | undefined>(undefined);
 
   const attachedIds = $derived(new Set(currentTags.map((t) => t.id)));
-  const filtered = $derived.by(() => {
+
+  function search(q: string): SuggestionTag[] {
     const v = q.trim().toLowerCase();
-    const pool = v
-      ? suggestions.filter((s) => s.name.toLowerCase().includes(v))
-      : suggestions;
-    return pool.slice(0, 8);
-  });
-  const hasExact = $derived(
-    suggestions.some((s) => s.name.toLowerCase() === q.trim().toLowerCase())
-  );
-
-  // Click-outside + Escape close. Only attached while open so we don't leak
-  // listeners when the popover is dormant on every list row.
-  $effect(() => {
-    if (!open) return;
-    const onMouseDown = (e: MouseEvent) => {
-      const t = e.target as Node;
-      if (panelEl?.contains(t) || chipEl?.contains(t)) return;
-      open = false;
-    };
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        open = false;
-      }
-    };
-    // Defer the listener attachment a tick so the click that opened us
-    // doesn't immediately close on capture.
-    const t = setTimeout(() => {
-      window.addEventListener('mousedown', onMouseDown);
-      window.addEventListener('keydown', onKey);
-    }, 0);
-    return () => {
-      clearTimeout(t);
-      window.removeEventListener('mousedown', onMouseDown);
-      window.removeEventListener('keydown', onKey);
-    };
-  });
-
-  $effect(() => {
-    if (open) setTimeout(() => inputEl?.focus(), 0);
-  });
+    return (v ? suggestions.filter((s) => s.name.toLowerCase().includes(v)) : suggestions).slice(
+      0,
+      8
+    );
+  }
 
   async function attachByName(name: string) {
     if (saving) return;
@@ -81,7 +46,9 @@
         toast.danger('Could not add tag');
         return;
       }
-      q = '';
+      // Tag counts and the workspace-wide tag list both change here, so this
+      // is one of the cases where a reload is genuinely owed — the row cache
+      // does not own either.
       await invalidateAll();
     } finally {
       saving = false;
@@ -111,97 +78,63 @@
     if (attachedIds.has(t.id)) await detach(t.id);
     else await attachByName(t.name);
   }
-
-  function onKey(e: KeyboardEvent) {
-    if (e.key === 'Enter') {
-      e.preventDefault();
-      if (q.trim()) attachByName(q.trim());
-    }
-  }
 </script>
 
-<div class="relative inline-block {revealOnHover ? 'row-tag-adder' : ''}" data-open={open}>
-  <button
-    bind:this={chipEl}
-    type="button"
-    aria-label="Add tag"
-    aria-expanded={open}
-    onclick={() => (open = !open)}
-    class="inline-flex items-center gap-0.5 rounded-full border border-dashed border-[var(--color-border)] bg-transparent px-1.5 py-0.5 text-[10px] text-[var(--color-muted)] transition-[color,border-color,background-color,opacity] hover:border-[var(--color-highlight-border)] hover:bg-[var(--color-highlight-bg)] hover:text-[var(--color-text)]"
-  >
-    <Plus size={10} strokeWidth={2} />
-    tag
-  </button>
+<span class="inline-block">
+  <Popover bind:open label="Tag {scope}" panelRole="dialog" autoFocus={false}>
+    {#snippet trigger(attrs)}
+      <!--
+        The reveal-on-hover lives on the trigger, not on a descendant selector
+        from a wrapper. The panel is a DOM descendant of that wrapper — even
+        when the browser paints it in the top layer — so `.wrapper button`
+        would fade out every option in the open panel too. Inline style for the
+        open state because it has to beat the opacity-0 class, and class order
+        in the generated sheet is not something to bet on.
+      -->
+      <button
+        {...attrs}
+        type="button"
+        aria-label="Add tag"
+        style={revealOnHover && open ? 'opacity:1' : ''}
+        class="inline-flex items-center gap-0.5 rounded-full border border-dashed border-[var(--color-border)] bg-transparent px-1.5 py-0.5 text-[10px] text-[var(--color-muted)] transition-[color,border-color,background-color,opacity] hover:border-[var(--color-highlight-border)] hover:bg-[var(--color-highlight-bg)] hover:text-[var(--color-text)] {revealOnHover
+          ? 'opacity-0 group-hover:opacity-100 group-focus-within:opacity-100'
+          : ''}"
+      >
+        <Plus size={10} strokeWidth={2} />
+        tag
+      </button>
+    {/snippet}
 
-  {#if open}
-    <div
-      bind:this={panelEl}
-      role="dialog"
-      aria-label="Tag {scope}"
-      class="absolute left-0 top-full z-20 mt-1 w-52 overflow-hidden rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)] shadow-[var(--shadow-md)]"
-    >
-      <input
-        bind:this={inputEl}
-        bind:value={q}
-        onkeydown={onKey}
-        type="text"
-        placeholder="Search or create…"
-        class="w-full border-b border-[var(--color-border)] bg-transparent px-3 py-2 text-xs outline-none placeholder:text-[var(--color-subtle)]"
-      />
-      <ul class="max-h-48 overflow-auto py-1">
-        {#each filtered as s (s.id)}
-          {@const attached = attachedIds.has(s.id)}
-          <li>
-            <button
-              type="button"
-              onclick={() => toggle(s)}
-              disabled={saving}
-              class="flex w-full items-center justify-between gap-2 px-3 py-1.5 text-left text-xs hover:bg-[var(--color-bg)] disabled:opacity-60"
-            >
-              <span class="flex min-w-0 items-center gap-1.5">
-                {#if attached}
-                  <Check size={10} strokeWidth={2} class="shrink-0 text-[var(--color-text)]" />
-                {:else}
-                  <Tag size={10} strokeWidth={2} class="shrink-0 text-[var(--color-subtle)]" />
-                {/if}
-                <span class="truncate {attached ? 'text-[var(--color-text)]' : ''}">{s.name}</span>
-              </span>
-              {#if s.count != null}
-                <span class="shrink-0 text-[var(--color-subtle)]">{s.count}</span>
+    {#snippet content()}
+      <div class="w-52">
+        <Combobox
+          {search}
+          getId={(t) => t.id}
+          searchOnOpen
+          debounce={0}
+          placeholder="Search or create…"
+          emptyText="No tags yet. Type to create one."
+          canCreate={(q) => !suggestions.some((s) => s.name.toLowerCase() === q.toLowerCase())}
+          createLabel={(q) => `Create “${q}”`}
+          onCreate={attachByName}
+          onSelect={toggle}
+        >
+          {#snippet option(s: SuggestionTag)}
+            {@const attached = attachedIds.has(s.id)}
+            <span class="flex min-w-0 flex-1 items-center gap-1.5">
+              {#if attached}
+                <Check size={10} strokeWidth={2} class="shrink-0 text-[var(--color-text)]" />
+              {:else}
+                <Tag size={10} strokeWidth={2} class="shrink-0 text-[var(--color-subtle)]" />
               {/if}
-            </button>
-          </li>
-        {/each}
-        {#if q.trim() && !hasExact}
-          <li>
-            <button
-              type="button"
-              onclick={() => attachByName(q.trim())}
-              disabled={saving}
-              class="flex w-full items-center gap-1.5 px-3 py-1.5 text-left text-xs text-[var(--color-text)] hover:bg-[var(--color-bg)] disabled:opacity-60"
-            >
-              <Plus size={10} strokeWidth={2} />
-              Create &ldquo;{q.trim()}&rdquo;
-            </button>
-          </li>
-        {/if}
-        {#if filtered.length === 0 && !q.trim()}
-          <li class="px-3 py-2 text-[10px] italic text-[var(--color-subtle)]">No tags yet. Type to create one.</li>
-        {/if}
-      </ul>
-    </div>
-  {/if}
-</div>
-
-<style>
-  /* When mounted inside a `.group` row with revealOnHover, keep the chip
-     hidden until the row is interacted with or the popover is open. */
-  :global(.group) .row-tag-adder > button {
-    opacity: 0;
-  }
-  :global(.group:hover) .row-tag-adder > button,
-  :global(.group:focus-within) .row-tag-adder > button,
-  .row-tag-adder[data-open='true'] > button {
-    opacity: 1;
-  }
-</style>
+              <span class="truncate {attached ? 'text-[var(--color-text)]' : ''}">{s.name}</span>
+            </span>
+            {#if s.count != null}
+              <span class="shrink-0 text-[var(--color-subtle)]">{s.count}</span>
+            {/if}
+          {/snippet}
+        </Combobox>
+      </div>
+    {/snippet}
+  </Popover>
+</span>

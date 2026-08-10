@@ -1,11 +1,26 @@
 <script lang="ts">
-  import { Plus, Loader2 } from 'lucide-svelte';
+  import { Plus } from 'lucide-svelte';
   import CompanyLogo from './CompanyLogo.svelte';
   import { toast } from '$lib/toasts.svelte';
+  import Combobox from '$lib/ui/Combobox.svelte';
 
   type Person = { id: string; name: string; avatarUrl: string | null; role: string | null };
-  type Company = { id: string; name: string; logoUrl: string | null; faviconUrl: string | null; domain: string | null };
-  type Result = { kind: 'person'; data: Person } | { kind: 'company'; data: Company };
+  type Company = {
+    id: string;
+    name: string;
+    logoUrl: string | null;
+    faviconUrl: string | null;
+    domain: string | null;
+  };
+
+  // This picker is the one site with *two* create affordances ("new person" and
+  // "new company"). Rather than growing the primitive a second create slot,
+  // they ride along as synthetic rows — which keeps them inside the same
+  // arrow-key sequence they were already part of.
+  type Row =
+    | { kind: 'person'; id: string; data: Person }
+    | { kind: 'company'; id: string; data: Company }
+    | { kind: 'new'; id: string; create: 'person' | 'company'; name: string };
 
   type Props = {
     onAdd: (kind: 'person' | 'company', refId: string) => void;
@@ -13,155 +28,104 @@
 
   let { onAdd }: Props = $props();
 
-  let q = $state('');
-  let results = $state<Result[]>([]);
-  let open = $state(false);
-  let highlight = $state(0);
-  let creating = $state<'person' | 'company' | null>(null);
-  let inputEl = $state<HTMLInputElement | undefined>(undefined);
-  let timer: ReturnType<typeof setTimeout> | null = null;
+  let box = $state<ReturnType<typeof Combobox> | undefined>(undefined);
 
-  async function onInput() {
-    if (timer) clearTimeout(timer);
-    const v = q.trim();
-    if (!v) { results = []; open = false; return; }
-    timer = setTimeout(async () => {
-      try {
-        const [pr, cr] = await Promise.all([
-          fetch(`/api/people?q=${encodeURIComponent(v)}&limit=5`).then((r) => r.json()),
-          fetch(`/api/companies?q=${encodeURIComponent(v)}&limit=5`).then((r) => r.json())
-        ]);
-        results = [
-          ...(pr.items as Person[]).map((p) => ({ kind: 'person' as const, data: p })),
-          ...(cr.items as Company[]).map((c) => ({ kind: 'company' as const, data: c }))
-        ];
-        open = true;
-        highlight = 0;
-      } catch { /* ignore */ }
-    }, 150);
+  async function search(q: string): Promise<Row[]> {
+    if (!q) return [];
+    const [pr, cr] = await Promise.all([
+      fetch(`/api/people?q=${encodeURIComponent(q)}&limit=5`).then((r) => r.json()),
+      fetch(`/api/companies?q=${encodeURIComponent(q)}&limit=5`).then((r) => r.json())
+    ]);
+    return [
+      ...(pr.items as Person[]).map((p) => ({ kind: 'person' as const, id: `p:${p.id}`, data: p })),
+      ...(cr.items as Company[]).map((c) => ({
+        kind: 'company' as const,
+        id: `c:${c.id}`,
+        data: c
+      })),
+      { kind: 'new' as const, id: 'new:person', create: 'person' as const, name: q },
+      { kind: 'new' as const, id: 'new:company', create: 'company' as const, name: q }
+    ];
   }
 
-  function pick(r: Result) {
-    onAdd(r.kind, r.data.id);
-    q = '';
-    results = [];
-    open = false;
-    inputEl?.focus();
-  }
-
-  async function create(kind: 'person' | 'company') {
-    const name = q.trim();
-    if (!name || creating) return;
-    creating = kind;
+  async function create(kind: 'person' | 'company', name: string) {
     try {
       const res = await fetch(kind === 'person' ? '/api/people' : '/api/companies', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ name })
       });
-      if (!res.ok) { toast.danger(`Could not create ${kind}`); return; }
+      if (!res.ok) {
+        toast.danger(`Could not create ${kind}`);
+        return;
+      }
       const data = (await res.json()) as { id: string };
       onAdd(kind, data.id);
-      q = '';
-      results = [];
-      open = false;
-      inputEl?.focus();
+      box?.reset();
+      box?.focus();
     } catch {
       toast.danger(`Could not create ${kind}`);
-    } finally {
-      creating = null;
     }
   }
 
-  function onKey(e: KeyboardEvent) {
-    if (!open) return;
-    const total = results.length + 2;
-    if (e.key === 'ArrowDown') { highlight = Math.min(total - 1, highlight + 1); e.preventDefault(); }
-    else if (e.key === 'ArrowUp') { highlight = Math.max(0, highlight - 1); e.preventDefault(); }
-    else if (e.key === 'Enter') {
-      if (highlight < results.length) { pick(results[highlight]!); e.preventDefault(); }
-      else if (highlight === results.length) { create('person'); e.preventDefault(); }
-      else { create('company'); e.preventDefault(); }
-    } else if (e.key === 'Escape') { open = false; e.preventDefault(); }
+  function select(r: Row) {
+    if (r.kind === 'new') {
+      create(r.create, r.name);
+      return;
+    }
+    onAdd(r.kind, r.data.id);
+    box?.reset();
+    box?.focus();
   }
 </script>
 
-<div class="relative">
-  <div class="rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-surface)] p-1.5">
-    <input
-      bind:this={inputEl}
-      bind:value={q}
-      oninput={onInput}
-      onkeydown={onKey}
-      onfocus={() => (open = q.trim().length > 0)}
-      onblur={() => setTimeout(() => (open = false), 150)}
-      type="text"
-      placeholder="Add person or company…"
-      class="w-full bg-transparent px-2 py-1 text-sm outline-none"
-    />
-  </div>
-  {#if open}
-    <div class="absolute inset-x-0 top-full z-20 mt-1 max-h-72 overflow-auto rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-surface)] py-1 shadow-[var(--shadow-md)]">
-      {#each results as r, i (r.kind + r.data.id)}
-        <button
-          type="button"
-          onmousedown={(e) => { e.preventDefault(); pick(r); }}
-          class="flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm {i === highlight ? 'bg-[var(--color-highlight-bg)]' : 'hover:bg-[var(--color-bg)]'}"
-        >
-          {#if r.kind === 'person'}
-            <span class="flex h-6 w-6 shrink-0 items-center justify-center overflow-hidden rounded-full border border-[var(--color-border)] bg-[var(--color-bg)] text-[10px] text-[var(--color-muted)]">
-              {#if r.data.avatarUrl}
-                <img src={r.data.avatarUrl} alt="" class="h-full w-full object-cover" />
-              {:else}
-                {(r.data.name[0] ?? '·').toUpperCase()}
-              {/if}
-            </span>
-          {:else}
-            <CompanyLogo
-              domain={r.data.domain}
-              fallbackUrl={r.data.logoUrl ?? r.data.faviconUrl}
-              name={r.data.name}
-              size={24}
-              class="text-[10px]"
-            />
-          {/if}
-          <span class="flex min-w-0 flex-1 flex-col">
-            <span class="truncate font-medium">{r.data.name}</span>
-            {#if r.kind === 'person' && r.data.role}
-              <span class="truncate text-xs text-[var(--color-muted)]">{r.data.role}</span>
-            {:else if r.kind === 'company' && r.data.domain}
-              <span class="truncate text-xs text-[var(--color-muted)]">{r.data.domain}</span>
-            {/if}
-          </span>
-          <span class="shrink-0 text-[10px] text-[var(--color-subtle)]">{r.kind}</span>
-        </button>
-      {/each}
-      <button
-        type="button"
-        onmousedown={(e) => { e.preventDefault(); create('person'); }}
-        disabled={!!creating}
-        class="flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm {highlight === results.length ? 'bg-[var(--color-highlight-bg)]' : 'hover:bg-[var(--color-bg)]'} text-[var(--color-muted)]"
+<Combobox
+  bind:this={box}
+  variant="field"
+  {search}
+  getId={(r) => r.id}
+  placeholder="Add person or company…"
+  autoFocus={false}
+  onSelect={select}
+>
+  {#snippet option(r: Row)}
+    {#if r.kind === 'new'}
+      <Plus size={14} strokeWidth={2} class="shrink-0 text-[var(--color-muted)]" />
+      <span class="min-w-0 flex-1 truncate text-[var(--color-muted)]"
+        >New {r.create} “<span class="font-medium text-[var(--color-text)]">{r.name}</span>”</span
       >
-        {#if creating === 'person'}
-          <Loader2 size={14} strokeWidth={2} class="animate-spin" />
-        {:else}
-          <Plus size={14} strokeWidth={2} />
-        {/if}
-        <span>New person "<span class="font-medium text-[var(--color-text)]">{q.trim()}</span>"</span>
-      </button>
-      <button
-        type="button"
-        onmousedown={(e) => { e.preventDefault(); create('company'); }}
-        disabled={!!creating}
-        class="flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm {highlight === results.length + 1 ? 'bg-[var(--color-highlight-bg)]' : 'hover:bg-[var(--color-bg)]'} text-[var(--color-muted)]"
+    {:else if r.kind === 'person'}
+      <span
+        class="flex h-6 w-6 shrink-0 items-center justify-center overflow-hidden rounded-full border border-[var(--color-border)] bg-[var(--color-bg)] text-[10px] text-[var(--color-muted)]"
       >
-        {#if creating === 'company'}
-          <Loader2 size={14} strokeWidth={2} class="animate-spin" />
+        {#if r.data.avatarUrl}
+          <img src={r.data.avatarUrl} alt="" class="h-full w-full object-cover" />
         {:else}
-          <Plus size={14} strokeWidth={2} />
+          {(r.data.name[0] ?? '·').toUpperCase()}
         {/if}
-        <span>New company "<span class="font-medium text-[var(--color-text)]">{q.trim()}</span>"</span>
-      </button>
-    </div>
-  {/if}
-</div>
+      </span>
+      <span class="flex min-w-0 flex-1 flex-col">
+        <span class="truncate font-medium">{r.data.name}</span>
+        {#if r.data.role}
+          <span class="truncate text-xs text-[var(--color-muted)]">{r.data.role}</span>
+        {/if}
+      </span>
+      <span class="shrink-0 text-[10px] text-[var(--color-subtle)]">person</span>
+    {:else}
+      <CompanyLogo
+        domain={r.data.domain}
+        fallbackUrl={r.data.logoUrl ?? r.data.faviconUrl}
+        name={r.data.name}
+        size={24}
+        class="text-[10px]"
+      />
+      <span class="flex min-w-0 flex-1 flex-col">
+        <span class="truncate font-medium">{r.data.name}</span>
+        {#if r.data.domain}
+          <span class="truncate text-xs text-[var(--color-muted)]">{r.data.domain}</span>
+        {/if}
+      </span>
+      <span class="shrink-0 text-[10px] text-[var(--color-subtle)]">company</span>
+    {/if}
+  {/snippet}
+</Combobox>
