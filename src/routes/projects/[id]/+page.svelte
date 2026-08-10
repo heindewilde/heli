@@ -1,4 +1,5 @@
 <script lang="ts">
+  import Editable from '$lib/ui/Editable.svelte';
   import IconPicker from '$lib/components/IconPicker.svelte';
   import { APP_NAME } from '$lib/branding';
   import { goto, invalidateAll } from '$app/navigation';
@@ -20,10 +21,7 @@
   const project = $derived(data.project);
 
   // Name editing
-  let editingName = $state(false);
   // svelte-ignore state_referenced_locally
-  let nameDraft = $state(project.name);
-  let nameInput = $state<HTMLInputElement | undefined>(undefined);
   let nameCommitInFlight: Promise<void> | null = $state(null);
   let deleting = $state(false);
 
@@ -42,23 +40,23 @@
     return true;
   }
 
-  async function commitName() {
-    if (!editingName) return;
-    const next = nameDraft.trim();
-    editingName = false;
-    if (!next || next === project.name) return;
+  // Editable exits edit mode synchronously before awaiting, so a blur during
+  // teardown cannot re-enter. The in-flight handle stays because delete still
+  // has to settle a rename before it runs.
+  async function saveName(next: string | null): Promise<boolean> {
+    const name = next?.trim();
+    if (!name) return false; // empty name is a rejection, not a clear
     nameCommitInFlight = (async () => {
-      try { await patch({ name: next }); }
-      finally { nameCommitInFlight = null; }
+      try {
+        await patch({ name });
+      } finally {
+        nameCommitInFlight = null;
+      }
     })();
     await nameCommitInFlight;
+    return true;
   }
 
-  function startEditingName() {
-    nameDraft = project.name;
-    editingName = true;
-    setTimeout(() => nameInput?.focus(), 0);
-  }
 
   async function changeStatus(next: ProjectStatus) {
     await patch({ status: next });
@@ -70,7 +68,6 @@
   }
 
   async function del() {
-    if (editingName) await commitName();
     if (nameCommitInFlight) await nameCommitInFlight;
     if (!confirm(`Delete project "${project.name}"? Member links and interactions stay; the project itself is removed.`)) return;
     deleting = true;
@@ -192,24 +189,13 @@
     <!-- Name + status -->
     <div class="min-w-0 flex-1">
       <div class="flex flex-wrap items-center gap-2">
-        {#if editingName}
-          <input
-            bind:this={nameInput}
-            bind:value={nameDraft}
-            onblur={commitName}
-            onkeydown={(e) => {
-              if (e.key === 'Enter') { e.preventDefault(); commitName(); }
-              if (e.key === 'Escape') { editingName = false; nameDraft = project.name; }
-            }}
-            class="rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-surface)] px-2 py-1 text-2xl font-semibold tracking-tight"
-          />
-        {:else}
-          <button
-            type="button"
-            onclick={startEditingName}
-            class="-mx-1 rounded-[var(--radius-sm)] px-1 text-2xl font-semibold tracking-tight hover:bg-[var(--color-surface)]"
-          >{project.name}</button>
-        {/if}
+        <Editable
+          value={project.name}
+          label="Name"
+          onCommit={saveName}
+          inputClass="px-2 py-1 text-2xl font-semibold tracking-tight"
+          displayClass="text-2xl font-semibold tracking-tight"
+        />
         <StatusChip status={project.status as ProjectStatus} size="md" onChange={changeStatus} />
         {#if overdue}
           <span class="inline-flex items-center gap-1 rounded-full border border-[var(--color-danger-border)] bg-[var(--color-danger-bg)] px-2 py-0.5 text-xs font-medium text-[var(--color-danger)]">

@@ -46,6 +46,7 @@
         {label}
         placeholder={`Add ${label.toLowerCase()}…`}
         onCommit={save}
+        tabToNext
       >
         {#snippet display(shown)}
           <span class="truncate {shown ? '' : 'italic text-[var(--color-subtle)]'}">

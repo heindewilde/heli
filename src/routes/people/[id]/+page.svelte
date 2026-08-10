@@ -4,6 +4,7 @@
   import { Star, Archive, Trash2, Loader2, Mail, Phone, MapPin, Building2, Sparkles, Linkedin, Twitter } from 'lucide-svelte';
   import NotesEditor from '$lib/components/NotesEditor.svelte';
   import FieldRow from '$lib/components/FieldRow.svelte';
+  import Editable from '$lib/ui/Editable.svelte';
   import InteractionRow from '$lib/components/InteractionRow.svelte';
   import TagInput from '$lib/components/TagInput.svelte';
   import Skeleton from '$lib/ui/Skeleton.svelte';
@@ -60,10 +61,9 @@
   // function for why.
   const suggestion = $derived(data.suggestion);
 
-  let editingName = $state(false);
+
   // svelte-ignore state_referenced_locally
-  let nameDraft = $state(person.name);
-  let nameInput = $state<HTMLInputElement | undefined>(undefined);
+
   // Tracks an in-flight commitName so action buttons (delete/favorite/archive)
   // can serialize against it. Without this, clicking Delete during a name edit
   // races: blur commits the rename, click runs delete; the rename then 404s
@@ -106,32 +106,25 @@
     if (!deleting) await invalidateAll();
   }
 
-  async function commitName() {
-    // Exit edit mode synchronously so onblur firing during shutdown can't
-    // re-enter this function while the PATCH is in flight.
-    if (!editingName) return;
-    const next = nameDraft.trim();
-    editingName = false;
-    if (!next || next === person.name) return;
+  // Editable exits edit mode synchronously before awaiting, so a blur during
+  // teardown cannot re-enter. The in-flight handle survives because delete
+  // still has to settle a rename before it runs — see del().
+  async function saveName(next: string | null): Promise<boolean> {
+    const name = next?.trim();
+    if (!name) return false; // empty name is a rejection, not a clear
     nameCommitInFlight = (async () => {
       try {
-        await patch({ name: next });
+        await patch({ name });
       } finally {
         nameCommitInFlight = null;
       }
     })();
     await nameCommitInFlight;
-  }
-
-  function startEditingName() {
-    nameDraft = person.name;
-    editingName = true;
-    setTimeout(() => nameInput?.focus(), 0);
+    return true;
   }
 
   async function del() {
     // Settle any in-flight rename first so we don't race the delete.
-    if (editingName) await commitName();
     if (nameCommitInFlight) await nameCommitInFlight;
     if (!confirm(`Delete ${person.name}?`)) return;
     deleting = true;
@@ -218,24 +211,13 @@
     </span>
     <div class="min-w-0 flex-1">
       <div class="flex items-center gap-2">
-        {#if editingName}
-          <input
-            bind:this={nameInput}
-            bind:value={nameDraft}
-            onblur={commitName}
-            onkeydown={(e) => {
-              if (e.key === 'Enter') { e.preventDefault(); commitName(); }
-              if (e.key === 'Escape') { editingName = false; nameDraft = person.name; }
-            }}
-            class="rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-surface)] px-2 py-1 text-2xl font-semibold tracking-tight"
-          />
-        {:else}
-          <button
-            type="button"
-            onclick={startEditingName}
-            class="rounded-[var(--radius-sm)] px-1 -mx-1 text-2xl font-semibold tracking-tight hover:bg-[var(--color-surface)]"
-          >{person.name}</button>
-        {/if}
+        <Editable
+          value={person.name}
+          label="Name"
+          onCommit={saveName}
+          inputClass="px-2 py-1 text-2xl font-semibold tracking-tight"
+          displayClass="text-2xl font-semibold tracking-tight"
+        />
         {#if person.source === 'parsing'}
           <span class="inline-flex items-center gap-1 text-xs text-[var(--color-muted)]">
             <Loader2 size={12} strokeWidth={2} class="animate-spin" />
