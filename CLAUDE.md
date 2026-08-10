@@ -6,7 +6,21 @@ The phased build spec is gone — work from what the user says in conversation, 
 
 - Branch: `main` (user approved working directly on main, no PRs).
 - Quality bar: `npm run check` is **0 errors, 0 warnings**. The a11y warnings were all cleared (`91df127`); don't reintroduce them. If you must, add a `// svelte-ignore <rule>` comment matching the existing convention.
-- No test framework — `npm run check` is what we have. Verify UI changes by running the feature in a browser when possible.
+- **Tests are Vitest, server-side only** (`npm test`, and `npm run check` runs
+  them). Config is `vitest.config.ts` — deliberately separate from
+  `vite.config.ts` so `vite build` never reads it. Node environment, no
+  sveltekit plugin, `pool: 'forks'` because `db.ts` computes `PRIMARY_REGION`
+  at module load.
+  - `tests/helpers/testDb.ts` gives each test file a temp **file** database.
+    Never `:memory:` — `buildBundle` gates `applyPragmas` on
+    `url.startsWith('file:')`, so in-memory silently skips
+    `PRAGMA foreign_keys = ON` and FK tests pass for the wrong reason. It also
+    clears `DATABASE_URL*` before the first import of `db.ts` and refuses a
+    path inside the repo.
+  - A `Scope` is branded and cannot be faked; `tests/helpers/fixtures.ts` calls
+    the real `register()` and mints scopes through `requireScope`.
+  - There is still no component/browser testing. Verify UI changes by running
+    the feature in a browser.
 - App must stay lean enough to self-host on a cheap (1 GB RAM) VPS. Treat any new dependency as a footprint decision, not just an API choice.
 
 ## App overview
@@ -155,9 +169,10 @@ tables is *created-by attribution only and must never be used as a filter*.
 ## Implementation gotchas to remember
 
 - **FTS5 triggers**: when adding/altering FTS5 virtual tables, mirror `ai/ad/au` triggers for every column listed in the `CREATE VIRTUAL TABLE` block. On migration, seed `INSERT INTO *_fts(rowid, …) SELECT …` so pre-existing rows are searchable.
-- **SSRF guard with redirects**: `fetch` follows redirects automatically; `assertPublicUrl` on the input URL is not enough. Use `redirect: 'manual'` and re-check `assertPublicUrl` on each `Location` header before re-fetching. Cap to a few hops. See `fetchWithRedirectGuard` in `src/lib/server/og.ts`.
+- **SSRF guard with redirects**: `fetch` follows redirects automatically; `assertPublicUrl` on the input URL is not enough. Use `redirect: 'manual'` and re-check `assertPublicUrl` on each `Location` header before re-fetching. Cap to a few hops. The implementation is the private `fetchOnce` in `src/lib/server/og.ts` — it is **not** shared yet, so anything else making outbound requests has to reimplement it. Extract it before adding a second caller.
+- **IPv6 in the SSRF guard**: `u.hostname` keeps the brackets on a literal (`[::1]`) and `isIP()` rejects that form, so strip them before the check. And `new URL()` re-serializes `[::ffff:127.0.0.1]` to `::ffff:7f00:1` — never match private ranges against the dotted spelling. `isPrivateIPv6` works on the eight expanded groups and covers IPv4-mapped, IPv4-compatible, NAT64 and 6to4, all of which carry a real IPv4 address. Covered by `src/lib/server/url.test.ts`.
 - **Bookmarklet** posts to `/api/save` with `credentials:'include'` — only works when invoked from same-origin (i.e. while on a Heli tab) or when CORS is configured. Same-origin limitation is documented in Settings; do not loosen CORS for it.
-- **Bootstrap escape hatch**: `DISABLE_REGISTRATION=1` must still allow registration when `users` table is empty.
+- **Registration has two flags, and the docs must name both.** `ENABLE_REGISTRATION=1` reopens public sign-ups, which self-host closes automatically once one account exists; `DISABLE_REGISTRATION=1` is the hard kill switch and wins. Bootstrap escape hatch: registration is always allowed while `users` is empty, and a live invite admits its addressee even when public signup is closed.
 - **Janitor**: at startup, clear `source='parsing'` rows where `updatedAt < now-10min` — covers crashed enrichments mid-fetch, and retire expired invites. It runs once per regional DB at boot (last step of `migrateOne`), not on a timer, so it is hygiene rather than a correctness mechanism.
 - **Sanitize on write**, not on read. Stored notes are already-sanitized HTML.
 - **`PRIMARY_REGION`** defaults to `'local'` on single-host setups and only falls back to `'EU'` when a `DATABASE_URL_EU/US/APAC` is configured. Don't reintroduce a hardcoded `'EU'` default.

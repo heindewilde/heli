@@ -454,15 +454,13 @@ All configuration is via environment variables (or a `.env` file).
 | `DATABASE_AUTH_TOKEN` | — | No | Auth token for remote libSQL. Required when `DATABASE_URL` points to a remote instance. |
 | `DATABASE_URL_EU` / `_US` / `_APAC` | — | No | Per-region libSQL replicas for advanced multi-region setups. Writes go to `PRIMARY_REGION`. |
 | `ADMIN_SECRET` | — | No | Shared secret required to call `GET /api/admin/stats`. Set to any strong random string. |
-| `DISABLE_REGISTRATION` | — | No | Set to `1` to block new sign-ups. The first account can always be created so you can bootstrap your own instance with this already on. |
-| `INBOUND_EMAIL_SECRET` | — | No | 32-byte hex shared secret for the `/api/inbound-email` webhook. Optional — see note below. |
+| `ENABLE_REGISTRATION` | — | No | Set to `1` to keep public sign-ups open. Self-host closes them automatically once the first account exists, so set this if you want an open instance. |
+| `DISABLE_REGISTRATION` | — | No | Set to `1` to block new sign-ups outright. A hard kill switch — it wins over `ENABLE_REGISTRATION`. The first account can always be created, so you can bootstrap with this already on, and a live invite still admits its addressee. |
 | `SQLITE_CACHE_MB` | `16` | No | SQLite page-cache size. Raise on bigger boxes for more in-memory query hits. |
 | `SQLITE_MMAP_MB` | `64` | No | SQLite mmap window. Raise on bigger boxes. |
 | `PUBLIC_LOGODEV_KEY` | — | No | [logo.dev](https://logo.dev) publishable token for live company brand logos. Leave blank to fall back to initials. |
 | `RESEND_API_KEY` | — | No | Required for password-reset email delivery. Without it, reset links print to the container logs. |
 | `EMAIL_FROM` | `Heli <noreply@heli.so>` | No | Override the From address used for outbound mail. |
-
-**Advanced — inbound email.** Heli exposes `/api/inbound-email` for posting parsed inbound payloads (newsletters, replies, anything you'd like attributed to a user as an interaction). Set `INBOUND_EMAIL_SECRET` to a long random string (e.g. `openssl rand -hex 32`) and point your inbound-email provider's webhook at `https://your.domain/api/inbound-email?secret=<that-value>`. A provider-specific walkthrough is on the [roadmap](#-roadmap).
 
 ---
 
@@ -500,7 +498,7 @@ For the technically curious:
 Not promises — a rough direction. Open an issue to vote or propose changes.
 
 - **Server-side reminder delivery** (email + push).
-- **Inbound-email provider guide** — Postmark / SES / Mailgun walkthroughs.
+- **Inbound email** — BCC or forward a thread to your Heli address and have it logged as an interaction. Nothing is built yet.
 - **More importers** — HubSpot CSV, Notion DB exports, vCard, Google Contacts.
 - **Two-way calendar & email integrations** — pull meetings and messages into the interaction log automatically.
 - **Native mobile shell** — wrapping the PWA for App Store / Play Store distribution.

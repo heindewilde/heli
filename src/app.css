@@ -65,6 +65,36 @@
   --color-info-bg: #eff4ff;
   --color-info-border: #c7d7fe;
 
+  /* Pipeline stage colors. Eight hues a user picks per stage, each with a
+     swatch (the dot), plus a board column border and wash. These live here
+     rather than in stageColors.ts so the dark block below can restate them —
+     as literals they were light-mode only, and the 97%-lightness column
+     backgrounds were invisible-on-invisible in dark mode. */
+  --stage-gray-swatch: hsl(220 8% 60%);
+  --stage-gray-border: hsl(220 8% 82%);
+  --stage-gray-bg: hsl(220 8% 97%);
+  --stage-sky-swatch: hsl(200 35% 58%);
+  --stage-sky-border: hsl(200 35% 78%);
+  --stage-sky-bg: hsl(200 40% 97%);
+  --stage-green-swatch: hsl(145 30% 50%);
+  --stage-green-border: hsl(145 30% 72%);
+  --stage-green-bg: hsl(145 35% 97%);
+  --stage-yellow-swatch: hsl(42 45% 55%);
+  --stage-yellow-border: hsl(42 45% 72%);
+  --stage-yellow-bg: hsl(42 50% 97%);
+  --stage-orange-swatch: hsl(24 40% 55%);
+  --stage-orange-border: hsl(24 40% 72%);
+  --stage-orange-bg: hsl(24 45% 97%);
+  --stage-red-swatch: hsl(2 35% 55%);
+  --stage-red-border: hsl(2 35% 72%);
+  --stage-red-bg: hsl(2 40% 97%);
+  --stage-violet-swatch: hsl(255 30% 58%);
+  --stage-violet-border: hsl(255 30% 75%);
+  --stage-violet-bg: hsl(255 35% 97%);
+  --stage-pink-swatch: hsl(330 30% 58%);
+  --stage-pink-border: hsl(330 30% 75%);
+  --stage-pink-bg: hsl(330 35% 97%);
+
   --radius-sm: 0.375rem;
   --radius-md: 0.5rem;
   --radius-lg: 0.75rem;
@@ -111,6 +141,34 @@
   --color-info: #84adff;
   --color-info-bg: #101a30;
   --color-info-border: #1e3a7a;
+
+  /* Stage colors, dark. Same hues; the swatch brightens so the dot still
+     reads against a dark surface, and the column wash/border invert to a deep
+     tint — the same move the semantic bg/border pairs above make. */
+  --stage-gray-swatch: hsl(220 8% 62%);
+  --stage-gray-border: hsl(220 8% 26%);
+  --stage-gray-bg: hsl(220 8% 13%);
+  --stage-sky-swatch: hsl(200 45% 66%);
+  --stage-sky-border: hsl(200 30% 27%);
+  --stage-sky-bg: hsl(200 28% 13%);
+  --stage-green-swatch: hsl(145 38% 60%);
+  --stage-green-border: hsl(145 26% 26%);
+  --stage-green-bg: hsl(145 26% 12%);
+  --stage-yellow-swatch: hsl(42 58% 62%);
+  --stage-yellow-border: hsl(42 36% 26%);
+  --stage-yellow-bg: hsl(42 34% 12%);
+  --stage-orange-swatch: hsl(24 55% 62%);
+  --stage-orange-border: hsl(24 34% 26%);
+  --stage-orange-bg: hsl(24 32% 12%);
+  --stage-red-swatch: hsl(2 50% 65%);
+  --stage-red-border: hsl(2 32% 27%);
+  --stage-red-bg: hsl(2 30% 13%);
+  --stage-violet-swatch: hsl(255 40% 70%);
+  --stage-violet-border: hsl(255 26% 29%);
+  --stage-violet-bg: hsl(255 26% 14%);
+  --stage-pink-swatch: hsl(330 38% 68%);
+  --stage-pink-border: hsl(330 26% 28%);
+  --stage-pink-bg: hsl(330 26% 14%);
 
   --shadow-xs: 0 1px 1px 0 rgb(0 0 0 / 0.25);
   --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.30), 0 1px 1px -0.5px rgb(0 0 0 / 0.20);

@@ -4,26 +4,32 @@ export const STAGE_COLORS: StageColor[] = [
   'gray', 'sky', 'green', 'yellow', 'orange', 'red', 'violet', 'pink'
 ];
 
+// The values live in `@theme` / `[data-theme='dark']` in src/app.css, not here.
+// As literals these were light-mode only — a 97%-lightness column background
+// is invisible on a dark surface — and nothing in a TS module can respond to
+// the theme attribute. Emitting `var()` keeps every call site unchanged (they
+// are all inline `style=` attributes) while letting the cascade do the work.
+
 export const STAGE_COLOR_SWATCH: Record<StageColor, string> = {
-  gray:   'hsl(220 8% 60%)',
-  sky:    'hsl(200 35% 58%)',
-  green:  'hsl(145 30% 50%)',
-  yellow: 'hsl(42 45% 55%)',
-  orange: 'hsl(24 40% 55%)',
-  red:    'hsl(2 35% 55%)',
-  violet: 'hsl(255 30% 58%)',
-  pink:   'hsl(330 30% 58%)',
+  gray:   'var(--stage-gray-swatch)',
+  sky:    'var(--stage-sky-swatch)',
+  green:  'var(--stage-green-swatch)',
+  yellow: 'var(--stage-yellow-swatch)',
+  orange: 'var(--stage-orange-swatch)',
+  red:    'var(--stage-red-swatch)',
+  violet: 'var(--stage-violet-swatch)',
+  pink:   'var(--stage-pink-swatch)',
 };
 
 export const STAGE_COLOR_BOARD: Record<StageColor, { border: string; bg: string }> = {
-  gray:   { border: 'hsl(220 8% 82%)',  bg: 'hsl(220 8% 97%)' },
-  sky:    { border: 'hsl(200 35% 78%)', bg: 'hsl(200 40% 97%)' },
-  green:  { border: 'hsl(145 30% 72%)', bg: 'hsl(145 35% 97%)' },
-  yellow: { border: 'hsl(42 45% 72%)',  bg: 'hsl(42 50% 97%)' },
-  orange: { border: 'hsl(24 40% 72%)',  bg: 'hsl(24 45% 97%)' },
-  red:    { border: 'hsl(2 35% 72%)',   bg: 'hsl(2 40% 97%)' },
-  violet: { border: 'hsl(255 30% 75%)', bg: 'hsl(255 35% 97%)' },
-  pink:   { border: 'hsl(330 30% 75%)', bg: 'hsl(330 35% 97%)' },
+  gray:   { border: 'var(--stage-gray-border)',   bg: 'var(--stage-gray-bg)' },
+  sky:    { border: 'var(--stage-sky-border)',    bg: 'var(--stage-sky-bg)' },
+  green:  { border: 'var(--stage-green-border)',  bg: 'var(--stage-green-bg)' },
+  yellow: { border: 'var(--stage-yellow-border)', bg: 'var(--stage-yellow-bg)' },
+  orange: { border: 'var(--stage-orange-border)', bg: 'var(--stage-orange-bg)' },
+  red:    { border: 'var(--stage-red-border)',    bg: 'var(--stage-red-bg)' },
+  violet: { border: 'var(--stage-violet-border)', bg: 'var(--stage-violet-bg)' },
+  pink:   { border: 'var(--stage-pink-border)',   bg: 'var(--stage-pink-bg)' },
 };
 
 export function colorToKind(color: string | null | undefined): 'open' | 'won' | 'lost' {

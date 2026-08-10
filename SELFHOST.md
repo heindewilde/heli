@@ -31,8 +31,7 @@ The installer creates `/srv/heli/` with:
 
 - `docker-compose.yml` — pulled from the public repo, pinned to the
   latest stable image.
-- `.env` — your domain, a random `INBOUND_EMAIL_SECRET`, and commented-out
-  optional knobs.
+- `.env` — your domain and commented-out optional knobs.
 - `data/` — SQLite database and uploaded avatars. Survives restarts and
   upgrades.
 
@@ -158,7 +157,7 @@ docker compose up -d
 
 Test the restore on a throwaway box at least once before you need it.
 
-## Email (password resets, inbound email)
+## Email (password resets, invites)
 
 By default, password-reset links only print to the container logs.
 Wire up [Resend](https://resend.com) (free tier: 3000 emails/mo) to

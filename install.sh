@@ -95,9 +95,9 @@ mv docker-compose.yml.new docker-compose.yml
 if [ ! -f .env ]; then
   cat > .env <<EOF
 ORIGIN=https://$HELI_DOMAIN
-INBOUND_EMAIL_SECRET=$(openssl rand -hex 32)
 # PUBLIC_LOGODEV_KEY=     # free key at https://logo.dev for pretty company logos
-# DISABLE_REGISTRATION=1  # set after creating your admin account
+# ENABLE_REGISTRATION=1   # sign-ups close after the first account; set this to reopen them
+# DISABLE_REGISTRATION=1  # hard kill switch for sign-ups
 EOF
   chmod 600 .env
   ok "Wrote $INSTALL_DIR/.env"
