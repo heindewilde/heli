@@ -60,9 +60,16 @@ async function stage(csv: string, cookies: ReturnType<typeof jar>['cookies']) {
   } as never);
 }
 
-async function commit(cookies: ReturnType<typeof jar>['cookies']) {
+/** `include` omitted is the no-selection case: commit everything staged. */
+async function commit(cookies: ReturnType<typeof jar>['cookies'], include?: number[]) {
   const { POST } = await import('../src/routes/api/import/+server');
-  return POST({ cookies, locals: locals() } as never);
+  const request = new Request('http://localhost/api/import', {
+    method: 'POST',
+    ...(include
+      ? { headers: { 'content-type': 'application/json' }, body: JSON.stringify({ include }) }
+      : {})
+  });
+  return POST({ request, cookies, locals: locals() } as never);
 }
 
 describe('the LinkedIn connections import', () => {
@@ -159,6 +166,65 @@ describe('the LinkedIn connections import', () => {
       duplicates: number;
     };
     expect(staged).toEqual({ staged: 1, duplicates: 1, skipped: 0 });
+  });
+
+  /**
+   * The review screen sends indices into the staged list, never rows — so the
+   * commit still writes only data the server parsed itself. What is worth
+   * pinning is that the subset is honoured exactly, and that a bad selection
+   * costs a click rather than the whole upload.
+   */
+  test('only the selected rows are committed, and the rest are counted', async () => {
+    const csv = [
+      'First Name,Last Name,URL,Email Address,Company,Position,Connected On',
+      'Ida,Rhodes,https://www.linkedin.com/in/ida,,IBM,Programmer,03 Feb 2021',
+      'Karen,Sparck Jones,https://www.linkedin.com/in/karen,k@example.com,Cambridge,Professor,09 Sep 2022',
+      'Barbara,Liskov,https://www.linkedin.com/in/barbara,,MIT,Professor,15 Jun 2023'
+    ].join('\r\n');
+    const j = jar();
+    await stage(csv, j.cookies);
+
+    const done = (await (await commit(j.cookies, [1, 2])).json()) as {
+      imported: number;
+      errors: number;
+      deselected: number;
+    };
+    expect(done).toMatchObject({ imported: 2, errors: 0, deselected: 1 });
+
+    const rows = await ctx.client.execute({
+      sql: `SELECT name FROM people WHERE handle IN ('ida', 'karen', 'barbara') ORDER BY name`,
+      args: []
+    });
+    // Ida was index 0 and was left out: not written, not half-written.
+    expect(rows.rows.map((r) => r.name)).toEqual(['Barbara Liskov', 'Karen Sparck Jones']);
+  });
+
+  test('an empty selection is refused without destroying the staged import', async () => {
+    const csv = [
+      'First Name,Last Name,URL,Email Address,Company,Position,Connected On',
+      'Frances,Allen,https://www.linkedin.com/in/frances,,IBM,Fellow,01 Jan 2020',
+      'Adele,Goldberg,https://www.linkedin.com/in/adele,,Xerox,Researcher,02 Feb 2021'
+    ].join('\r\n');
+    const j = jar();
+    await stage(csv, j.cookies);
+
+    // Deselecting everything is a mis-click, not an instruction to throw away
+    // ten minutes of triage.
+    await expect(commit(j.cookies, [])).rejects.toMatchObject({ status: 400 });
+
+    // Indices outside the staged list are ignored rather than fatal — same
+    // reasoning: the user still gets the import they asked for.
+    const done = (await (await commit(j.cookies, [0, 99, -1])).json()) as {
+      imported: number;
+      deselected: number;
+    };
+    expect(done).toMatchObject({ imported: 1, deselected: 1 });
+
+    const rows = await ctx.client.execute({
+      sql: `SELECT name FROM people WHERE handle IN ('frances', 'adele')`,
+      args: []
+    });
+    expect(rows.rows.map((r) => r.name)).toEqual(['Frances Allen']);
   });
 
   test('a member cannot commit an import: it is an unbounded bulk insert', async () => {

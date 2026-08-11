@@ -32,6 +32,14 @@ export type MappedPerson = {
    * instead of creating a second person.
    */
   url?: string | null;
+  /**
+   * When the connection was made, epoch ms, for sources that record it — only
+   * the LinkedIn export does. This exists for the review screen: "everyone I
+   * connected with since 2022" is the one filter that turns an 800-row decision
+   * into a click. The human-readable date still goes into `notes`; this is for
+   * triage, not display, and is never written to a column.
+   */
+  connectedOn?: number | null;
 };
 
 /**

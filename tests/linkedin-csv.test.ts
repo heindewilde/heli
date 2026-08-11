@@ -67,10 +67,37 @@ describe('parseLinkedInConnections', () => {
       role: 'Engineer',
       location: null,
       notes: 'Connected on LinkedIn: 04 Mar 2019',
+      // The same date as an instant, for the review screen's date filter. The
+      // note above is what a person reads; this is what the filter sorts on.
+      connectedOn: Date.UTC(2019, 2, 4),
       // A name, not an id — the same suggestion the extension produces.
       suggestedCompanyName: 'Analytical Engines',
       url: 'https://www.linkedin.com/in/ada'
     });
+  });
+
+  test('the connection date is read as UTC, not as local midnight', () => {
+    // `Date.parse('01 Jan 2020')` is local time, which puts this connection in
+    // 2019 for anyone west of Greenwich — and year is exactly the granularity
+    // the "connected since" filter offers.
+    const { people } = parseLinkedInConnections(
+      file('Grace,Hopper,https://www.linkedin.com/in/grace,,US Navy,Rear Admiral,01 Jan 2020')
+    );
+    expect(people[0].connectedOn).toBe(Date.UTC(2020, 0, 1));
+    expect(new Date(people[0].connectedOn as number).getUTCFullYear()).toBe(2020);
+  });
+
+  test('a missing or unreadable date is null, never a guess', () => {
+    // A null date drops the row out of a date filter. Inventing one would put
+    // people into a "connected since 2022" import who do not belong there.
+    const { people } = parseLinkedInConnections(
+      file(
+        'Ada,Lovelace,,,,,',
+        'Grace,Hopper,,,,,sometime last spring',
+        'Alan,Turing,,,,,1946-01-01'
+      )
+    );
+    expect(people.map((p) => p.connectedOn)).toEqual([null, null, null]);
   });
 
   test('reads by column name, so a reordered export still works', () => {

@@ -261,30 +261,13 @@
     }
   }
 
-  let importState = $state<'idle' | 'importing' | 'done'>('idle');
-  let importResult = $state<{ imported: number; duplicates: number; errors: number } | null>(null);
-
-  async function confirmImport() {
-    importState = 'importing';
-    try {
-      const res = await fetch('/api/import', { method: 'POST' });
-      if (!res.ok) {
-        toast.danger('Import failed. Please try again.');
-        importState = 'idle';
-        return;
-      }
-      importResult = await res.json();
-      importState = 'done';
-      await invalidateAll();
-    } catch {
-      toast.danger('Import failed. Please try again.');
-      importState = 'idle';
-    }
-  }
-
-  async function cancelImport() {
+  /**
+   * Reviewing and committing live on /settings/import; this page only stages,
+   * links across, and can throw a staged import away.
+   */
+  async function discardImport() {
     await fetch('/api/import', { method: 'DELETE' });
-    await goto('/settings', { replaceState: true });
+    await invalidateAll();
   }
 
   let csvBusy = $state(false);
@@ -301,9 +284,8 @@
   };
 
   /**
-   * Uploads the CSV, which *stages* the import, then navigates to the URL the
-   * staged-preview block is gated on so it renders — the same landing the Google
-   * OAuth callback redirects to.
+   * Uploads the CSV, which *stages* the import, then hands over to the review
+   * screen — the same landing the Google OAuth callback redirects to.
    */
   async function uploadLinkedInCsv(event: Event) {
     const input = event.currentTarget as HTMLInputElement;
@@ -325,7 +307,7 @@
       if (skipped > 0) {
         toast.info(`${skipped} row${skipped === 1 ? '' : 's'} had no name and were ignored.`);
       }
-      await goto('/settings?import=contacts', { invalidateAll: true });
+      await goto('/settings/import');
     } catch {
       csvError = 'Could not read that file.';
     } finally {
@@ -1182,9 +1164,9 @@
   <!-- Importing bulk-inserts into the shared people table, so POST /api/import
        is admin-only; don't show members a flow that ends in a 403.
 
-       One section, one staged preview, two sources. Both stage into the same
-       pending import and commit through the same POST /api/import, so the
-       preview and confirm markup below must not be duplicated per source. -->
+       One section, two sources, one handoff. Both stage into the same pending
+       import and are reviewed and committed on /settings/import, so nothing
+       below is duplicated per source. -->
   {#if teamAdmin}
     <section class="flex flex-col gap-3 rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)] p-5">
       <h2 class="flex items-center gap-2 text-sm font-medium"><Users size={14} strokeWidth={2} /> Import contacts</h2>
@@ -1200,54 +1182,28 @@
         </p>
       {/if}
 
-      {#if importState === 'done' && importResult}
-        <p class="rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-bg)] px-3 py-2 text-sm text-[var(--color-muted)]">
-          Imported {importResult.imported} contact{importResult.imported !== 1 ? 's' : ''}.{importResult.duplicates > 0 ? ` ${importResult.duplicates} already existed and were skipped.` : ''}
-        </p>
-      {:else if data.pendingImport && importState !== 'done'}
-        <div class="flex flex-col gap-3 rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-bg)] p-4">
-          <p class="text-sm">
-            <strong>{data.pendingImport.totalToImport}</strong> contact{data.pendingImport.totalToImport !== 1 ? 's' : ''} ready to import
+      {#if data.pendingImport}
+        <div class="flex flex-wrap items-center gap-3 rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-bg)] p-4">
+          <p class="min-w-0 flex-1 text-sm">
+            <strong>{data.pendingImport.totalToImport}</strong> contact{data.pendingImport.totalToImport !== 1 ? 's' : ''} staged
             {#if data.pendingImport.duplicateCount > 0}
-              · <span class="text-[var(--color-muted)]">{data.pendingImport.duplicateCount} already in {APP_NAME}, will be skipped</span>
+              · <span class="text-[var(--color-muted)]">{data.pendingImport.duplicateCount} already in {APP_NAME}, left out</span>
             {/if}
           </p>
-
-          {#if data.pendingImport.preview.length > 0}
-            <ul class="flex flex-col gap-1">
-              {#each data.pendingImport.preview as contact}
-                <li class="flex items-baseline gap-2 text-sm">
-                  <span class="font-medium">{contact.name}</span>
-                  {#if contact.email}<span class="text-[var(--color-muted)] text-xs">{contact.email}</span>{/if}
-                </li>
-              {/each}
-              {#if data.pendingImport.totalToImport > data.pendingImport.preview.length}
-                <li class="text-xs text-[var(--color-subtle)]">… and {data.pendingImport.totalToImport - data.pendingImport.preview.length} more</li>
-              {/if}
-            </ul>
-          {/if}
-
-          <div class="flex items-center gap-2">
-            <button
-              type="button"
-              onclick={confirmImport}
-              disabled={importState === 'importing'}
-              class="rounded-[var(--radius-sm)] bg-[var(--color-accent)] px-3 py-2 text-sm font-medium text-[var(--color-accent-fg)] transition-colors hover:bg-[var(--color-accent-hover)] disabled:opacity-60"
-            >
-              {importState === 'importing' ? 'Importing…' : `Import ${data.pendingImport.totalToImport} contact${data.pendingImport.totalToImport !== 1 ? 's' : ''}`}
-            </button>
-            <button
-              type="button"
-              onclick={cancelImport}
-              disabled={importState === 'importing'}
-              class="rounded-[var(--radius-sm)] border border-[var(--color-border)] px-3 py-2 text-sm hover:bg-[var(--color-surface)] disabled:opacity-60"
-            >Cancel</button>
-          </div>
+          <a
+            href="/settings/import"
+            class="rounded-[var(--radius-sm)] bg-[var(--color-accent)] px-3 py-2 text-sm font-medium text-[var(--color-accent-fg)] transition-colors hover:bg-[var(--color-accent-hover)]"
+          >Review and import</a>
+          <button
+            type="button"
+            onclick={discardImport}
+            class="rounded-[var(--radius-sm)] border border-[var(--color-border)] px-3 py-2 text-sm hover:bg-[var(--color-surface)]"
+          >Discard</button>
         </div>
       {:else}
         <p class="text-sm text-[var(--color-muted)]">
-          Bring an existing address book into {APP_NAME}. You'll see what's about to be
-          added before anything is written, and people already here are skipped.
+          Bring an existing address book into {APP_NAME}. Nothing is written until you've
+          been through the list and picked who to keep, and people already here are skipped.
         </p>
         <div class="flex flex-wrap items-center gap-2">
           {#if data.googleAuthEnabled}

@@ -39,26 +39,20 @@ export const load: PageServerLoad = async ({ locals, url, cookies }) => {
   // Redacted: the feed URL is the credential and must never reach a client.
   const calendars = (await listFeeds(s)).map(redactFeed);
 
-  // Resolve any pending contacts import
-  let pendingImport: {
-    token: string;
-    preview: Array<{ name: string; email: string | null }>;
-    totalToImport: number;
-    duplicateCount: number;
-  } | null = null;
+  // A staged import is resolved on every load rather than behind a query param:
+  // reviewing and committing belong to /settings/import now, and this is only
+  // the way back for someone who navigated away mid-triage. Counts only — the
+  // rows themselves would be most of this page's payload.
+  let pendingImport: { totalToImport: number; duplicateCount: number } | null = null;
 
-  if (url.searchParams.get('import') === 'contacts') {
-    const importId = cookies.get(CONTACTS_IMPORT_COOKIE);
-    if (importId) {
-      const pending = getPendingImport(importId, locals.user.id);
-      if (pending) {
-        pendingImport = {
-          token: importId,
-          preview: pending.toImport.slice(0, 10).map((c) => ({ name: c.name, email: c.email })),
-          totalToImport: pending.toImport.length,
-          duplicateCount: pending.duplicateCount
-        };
-      }
+  const importId = cookies.get(CONTACTS_IMPORT_COOKIE);
+  if (importId) {
+    const pending = getPendingImport(importId, locals.user.id);
+    if (pending) {
+      pendingImport = {
+        totalToImport: pending.toImport.length,
+        duplicateCount: pending.duplicateCount
+      };
     }
   }
 

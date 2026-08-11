@@ -96,5 +96,5 @@ export const GET: RequestHandler = async ({ url, cookies, locals }) => {
     maxAge: 900
   });
 
-  throw redirect(303, '/settings?import=contacts');
+  throw redirect(303, '/settings/import');
 };

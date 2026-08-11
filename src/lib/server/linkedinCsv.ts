@@ -41,6 +41,27 @@ function connectedNote(date: string): string | null {
   return trimmed ? `Connected on LinkedIn: ${trimmed}` : null;
 }
 
+const MONTHS = ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec'];
+
+/**
+ * The same date again, as an instant, for the review screen's "connected since"
+ * filter. Separate from `connectedNote` because they answer different questions:
+ * the note is what a person reads on the record, this is what the filter sorts on.
+ *
+ * Deliberately not `Date.parse`: a bare date string is read as *local* time, so a
+ * January connection lands in the previous year for anyone west of Greenwich —
+ * and year is exactly the granularity the filter offers. Anything the regex does
+ * not recognise is `null`, which drops the row out of a date filter rather than
+ * inventing a date for it.
+ */
+function parseConnectedOn(date: string): number | null {
+  const m = /^(\d{1,2})\s+([A-Za-z]{3})[a-z]*\s+(\d{4})$/.exec(date.trim());
+  if (!m) return null;
+  const month = MONTHS.indexOf(m[2].toLowerCase());
+  if (month < 0) return null;
+  return Date.UTC(Number(m[3]), month, Number(m[1]));
+}
+
 export function parseLinkedInConnections(text: string): LinkedInImport {
   const rows = parseCsv(text);
   const header = findHeader(rows, REQUIRED);
@@ -86,6 +107,7 @@ export function parseLinkedInConnections(text: string): LinkedInImport {
       role: at(row, 'position') || null,
       location: null,
       notes: connectedNote(at(row, 'connected on')),
+      connectedOn: parseConnectedOn(at(row, 'connected on')),
       // A company *name*, with no company row behind it — the same suggestion
       // the extension and the Google import produce, which `/people/[id]`
       // offers to link.

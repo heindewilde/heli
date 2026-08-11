@@ -397,6 +397,37 @@ The staging primitives used to live in `google.ts` and are re-exported from ther
 - **The commit bumps the search epoch.** Several hundred inserts is exactly the
   case that cache exists for.
 
+### Triage: `/settings/import`
+
+Nobody wants all 3,400 of their connections. The staged list is reviewed on its
+own route before it is committed — filter by search, has-email, connected-since
+and company, then pick.
+
+- **The commit takes indices, never rows.** `POST /api/import` accepts
+  `{ include: number[] }` into the staged list, so the server goes on inserting
+  only data it parsed itself; the worst a bad body can do is import fewer people.
+  An absent body still means "all of it", which is what a direct API caller and
+  the pre-review flow both expect.
+  - An empty selection is a `400` raised **before** `deletePendingImport`. A
+    mis-click must not cost someone the upload they have been triaging.
+- **The rows come from the page load, not a `GET` endpoint.** Same bytes, one
+  fewer round trip against an in-process map — and the map is the reason: stage,
+  review and commit already have to reach the same machine, so filtering happens
+  entirely in the browser rather than per keystroke over the wire. Only the five
+  rendered fields are sent; `url`, `phone`, `location` and `notes` are committed
+  but never shown, and across a few thousand rows they are most of the payload.
+- **`connectedOn` is parsed, `notes` is not.** LinkedIn's "Connected On" is
+  written to `notes` as its original string *and* parsed to an epoch for the
+  date filter — two purposes, two representations. Parsed as UTC explicitly:
+  `Date.parse` on a bare date reads local time, which moves a January connection
+  into the previous year west of Greenwich, and year is the granularity offered.
+  An unparseable date is `null` and drops out of the filter rather than being
+  guessed at.
+- **Bulk actions act on the filtered set, not the rendered rows.** The list
+  renders at most 200 with an explicit "showing 200 of N" line — a cap that is
+  stated beats a virtual-list dependency, and "select all matching" that quietly
+  meant "the ones on screen" is the bug this screen would ship with.
+
 ### Why the LinkedIn CSV, and not an API
 
 There is no API for other people's LinkedIn profiles. Sales Navigator's platform
