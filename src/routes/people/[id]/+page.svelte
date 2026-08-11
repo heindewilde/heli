@@ -17,7 +17,8 @@
   import CompanyLogo from '$lib/components/CompanyLogo.svelte';
   import CompanyPicker from '$lib/components/CompanyPicker.svelte';
   import SocialLinks from '$lib/components/SocialLinks.svelte';
-  import { Plus, MessageSquarePlus } from 'lucide-svelte';
+  import OutreachDialog from '$lib/components/OutreachDialog.svelte';
+  import { Plus, MessageSquarePlus, Send } from 'lucide-svelte';
   import { toast } from '$lib/toasts.svelte';
   import { registerCommands } from '$lib/commands/registry.svelte';
   import { onMount } from 'svelte';
@@ -25,6 +26,21 @@
 
   let { data } = $props();
   const person = $derived(data.person);
+
+  let outreachOpen = $state(false);
+
+  /** What the renderer needs, flattened out of the person row and its company. */
+  const outreachTarget = $derived({
+    id: person.id,
+    name: person.name,
+    role: person.role,
+    email: person.email,
+    location: person.location,
+    phone: person.phone,
+    linkedinUrl: person.linkedinUrl,
+    xUrl: person.xUrl,
+    companyName: data.company?.name ?? null
+  });
 
   // Page-scoped commands. Registering them on mount and unregistering on
   // destroy is what lets the palette offer "Log an interaction with Ada"
@@ -38,6 +54,14 @@
         icon: MessageSquarePlus,
         keywords: ['call', 'meeting', 'note', 'email'],
         run: () => goto(`/interactions/new?person=${person.id}`)
+      },
+      {
+        id: 'ctx:outreach',
+        title: `Write outreach to ${person.name}`,
+        section: 'This page',
+        icon: Send,
+        keywords: ['template', 'message', 'email', 'dm'],
+        run: () => (outreachOpen = true)
       },
       {
         id: 'ctx:favorite',
@@ -255,6 +279,14 @@
       </div>
     </div>
     <div class="flex items-center gap-1">
+      <button
+        type="button"
+        title="Write outreach"
+        onclick={() => (outreachOpen = true)}
+        class="rounded-[var(--radius-sm)] p-2 text-[var(--color-subtle)] hover:bg-[var(--color-surface)]"
+      >
+        <Send size={16} strokeWidth={2} />
+      </button>
       <AddReminder iconOnly kind="person" refId={person.id} />
       <button
         type="button"
@@ -439,3 +471,13 @@
     </aside>
   </div>
 </article>
+
+{#if data.user}
+  <OutreachDialog
+    open={outreachOpen}
+    person={outreachTarget}
+    sender={{ name: data.user.username ?? '', email: data.user.email }}
+    onclose={() => (outreachOpen = false)}
+    onSent={() => invalidateAll()}
+  />
+{/if}
