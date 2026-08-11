@@ -9,13 +9,28 @@
     /** Stored value. Plain text from before the editor existed is converted on load. */
     value: string | null;
     placeholder?: string;
-    onCommit: () => Promise<void> | void;
-    onCancel: () => void;
+    onCommit?: () => Promise<void> | void;
+    onCancel?: () => void;
     saving?: boolean;
+    /**
+     * Own the Save/Cancel row, or leave it to the parent. Off when this sits
+     * inside a larger form that has its own submit — the parent then reads the
+     * value with `getHtml()` at submit time.
+     */
+    showActions?: boolean;
+    /** Fires on every edit, for a live preview. */
+    onInput?: (html: string) => void;
   };
 
-  let { value, placeholder = 'Write something…', onCommit, onCancel, saving = false }: Props =
-    $props();
+  let {
+    value,
+    placeholder = 'Write something…',
+    onCommit,
+    onCancel,
+    saving = false,
+    showActions = true,
+    onInput
+  }: Props = $props();
 
   let rootEl = $state<HTMLDivElement | undefined>(undefined);
   let editor: Squire | undefined;
@@ -42,6 +57,16 @@
     editor?.focus();
   }
 
+  /**
+   * Replace the content. For programmatic edits from the parent — inserting a
+   * variable token, say. `value` seeds the editor once on mount and is not
+   * watched afterwards, because Squire owns the DOM from then on.
+   */
+  export function setHtml(html: string): void {
+    editor?.setHTML(html);
+    refreshState();
+  }
+
   function refreshState() {
     if (!editor) return;
     // Squire normalises to B/I, which is also what `sanitize.ts` maps back to
@@ -52,7 +77,9 @@
       ul: editor.hasFormat('UL'),
       ol: editor.hasFormat('OL')
     };
-    empty = !editor.getHTML().replace(/<[^>]+>|&nbsp;|\s/g, '');
+    const html = editor.getHTML();
+    empty = !html.replace(/<[^>]+>|&nbsp;|\s/g, '');
+    onInput?.(html);
   }
 
   function toggle(on: boolean, apply: () => void, remove: () => void) {
@@ -104,7 +131,7 @@
   function onKeydown(e: KeyboardEvent) {
     if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
       e.preventDefault();
-      onCommit();
+      onCommit?.();
     } else if (e.key === 'Escape') {
       e.preventDefault();
       // Stop here rather than letting it reach `layerStack`: when this editor
@@ -115,7 +142,7 @@
         linkOpen = false;
         editor?.focus();
       } else {
-        onCancel();
+        onCancel?.();
       }
     }
   }
@@ -213,19 +240,22 @@
     </div>
   </div>
 
-  <div class="flex items-center gap-2 text-xs">
-    <button
-      type="button"
-      onclick={onCommit}
-      disabled={saving}
-      class="rounded-[var(--radius-sm)] bg-[var(--color-accent)] px-3 py-1.5 font-medium text-[var(--color-accent-fg)] transition-colors hover:bg-[var(--color-accent-hover)] disabled:opacity-60"
-      >{saving ? 'Saving…' : 'Save'}</button
-    >
-    <button
-      type="button"
-      onclick={onCancel}
-      class="rounded-[var(--radius-sm)] border border-[var(--color-border)] px-3 py-1.5">Cancel</button
-    >
-    <span class="ml-auto text-[var(--color-subtle)]">⌘↩ to save · esc to cancel</span>
-  </div>
+  {#if showActions}
+    <div class="flex items-center gap-2 text-xs">
+      <button
+        type="button"
+        onclick={() => onCommit?.()}
+        disabled={saving}
+        class="rounded-[var(--radius-sm)] bg-[var(--color-accent)] px-3 py-1.5 font-medium text-[var(--color-accent-fg)] transition-colors hover:bg-[var(--color-accent-hover)] disabled:opacity-60"
+        >{saving ? 'Saving…' : 'Save'}</button
+      >
+      <button
+        type="button"
+        onclick={() => onCancel?.()}
+        class="rounded-[var(--radius-sm)] border border-[var(--color-border)] px-3 py-1.5"
+        >Cancel</button
+      >
+      <span class="ml-auto text-[var(--color-subtle)]">⌘↩ to save · esc to cancel</span>
+    </div>
+  {/if}
 </div>

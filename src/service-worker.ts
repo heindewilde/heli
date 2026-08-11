@@ -23,7 +23,7 @@ const SWR_PATHS = /^\/api\/(?:people|companies|projects|interactions|search)(?:\
 // of the browser's error page. hooks.server.ts marks exactly these routes
 // `private, max-age=0, must-revalidate` rather than `no-store` — the decision
 // to store them is made there, on purpose, not smuggled in here.
-const NAV_PATHS = /^\/(?:people|companies|projects|interactions|collections|pipelines)(?:\/|$)/;
+const NAV_PATHS = /^\/(?:people|companies|projects|interactions|collections|pipelines|outreach)(?:\/|$)/;
 
 // Cap on stored pages. Each is a full SSR document, so this is a disk-footprint
 // bound as much as a freshness one; oldest entries go first.

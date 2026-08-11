@@ -39,7 +39,7 @@ const PROTECTED_PATTERNS = [
 // CRM pages whose SSR HTML the service worker may keep for back-navigation and
 // offline reads. Deliberately excludes /settings and /admin: nothing there is
 // worth an offline copy, and both render account-level detail.
-const NAV_CACHEABLE = /^\/(?:people|companies|projects|interactions|collections|pipelines)(?:\/|$)/;
+const NAV_CACHEABLE = /^\/(?:people|companies|projects|interactions|collections|pipelines|outreach)(?:\/|$)/;
 
 // The whole request runs inside one AsyncLocalStorage scope, so every query the
 // db client issues lands in this request's timing bucket rather than a shared

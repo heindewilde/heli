@@ -9,7 +9,7 @@
   import ThemeToggle from '$lib/components/ThemeToggle.svelte';
   import UpdateBanner from '$lib/components/UpdateBanner.svelte';
   import { watchServiceWorker } from '$lib/client/sw.svelte';
-  import { LayoutDashboard, Users, Building2, MessagesSquare, Briefcase, Folder, Funnel, LogOut, Search, HelpCircle, Settings, Menu, X } from 'lucide-svelte';
+  import { LayoutDashboard, Users, Building2, MessagesSquare, Briefcase, Folder, Funnel, Send, LogOut, Search, HelpCircle, Settings, Menu, X } from 'lucide-svelte';
   import { page } from '$app/state';
   import { onMount } from 'svelte';
   import { invalidateAll, goto } from '$app/navigation';
@@ -46,7 +46,9 @@
     '/interactions': 'i',
     '/collections': 'o',
     '/pipelines': 'l',
-    '/projects': 'r'
+    '/projects': 'r',
+    // `o` is collections and `r` is projects, so outreach takes `u`.
+    '/outreach': 'u'
   };
 
   const tabs = [
@@ -56,7 +58,8 @@
     { href: '/interactions', label: 'Interactions', icon: MessagesSquare },
     { href: '/collections', label: 'Collections', icon: Folder },
     { href: '/pipelines', label: 'Pipelines', icon: Funnel },
-    { href: '/projects', label: 'Projects', icon: Briefcase }
+    { href: '/projects', label: 'Projects', icon: Briefcase },
+    { href: '/outreach', label: 'Outreach', icon: Send }
   ];
 
   // Close the mobile drawer whenever the route changes (clicking a tab inside
@@ -161,6 +164,16 @@
           shortcut: 'n c',
           when: signedIn,
           run: () => goto('/collections/new')
+        },
+        {
+          id: 'new-template',
+          title: 'New outreach template',
+          section: 'Create',
+          icon: Send,
+          keywords: ['message', 'email', 'outreach'],
+          shortcut: 'n o',
+          when: signedIn,
+          run: () => goto('/outreach/new')
         },
         {
           id: 'new-pipeline',
