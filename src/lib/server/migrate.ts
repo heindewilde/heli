@@ -411,6 +411,40 @@ CREATE TABLE IF NOT EXISTS daily_metrics (
   PRIMARY KEY (date, metric)
 );
 CREATE INDEX IF NOT EXISTS idx_daily_metrics_metric_date ON daily_metrics(metric, date);
+
+-- Outreach message templates.
+--
+-- Workspace-owned, so user_id is created-by attribution as usual — except when
+-- visibility is 'private', where it is a real owner. That split is per-ROW, not
+-- per-table, which is what ROW_PERSONAL below exists for.
+CREATE TABLE IF NOT EXISTS outreach_templates (
+  id TEXT PRIMARY KEY,
+  workspace_id TEXT NOT NULL REFERENCES workspaces(id),
+  user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  name TEXT NOT NULL,
+  platform TEXT NOT NULL,
+  subject TEXT,
+  body TEXT NOT NULL,
+  visibility TEXT NOT NULL DEFAULT 'shared',
+  nudge_days INTEGER,
+  is_archived INTEGER NOT NULL DEFAULT 0,
+  created_at INTEGER NOT NULL,
+  updated_at INTEGER NOT NULL
+);
+-- Tenancy indexes: see WORKSPACE_INDEXES.
+
+-- Which templates a pipeline stage offers, in order.
+--
+-- No workspace_id: pipeline_stages has none either, and scope reaches this
+-- table through pipelines. Every query joins that way — see outreach.ts.
+CREATE TABLE IF NOT EXISTS pipeline_stage_templates (
+  stage_id TEXT NOT NULL REFERENCES pipeline_stages(id) ON DELETE CASCADE,
+  template_id TEXT NOT NULL REFERENCES outreach_templates(id) ON DELETE CASCADE,
+  position INTEGER NOT NULL,
+  PRIMARY KEY (stage_id, template_id)
+);
+CREATE INDEX IF NOT EXISTS idx_pst_stage_pos ON pipeline_stage_templates(stage_id, position);
+CREATE INDEX IF NOT EXISTS idx_pst_template ON pipeline_stage_templates(template_id);
 `;
 
 const FTS = `
@@ -584,7 +618,15 @@ const ALTERS: string[] = [
   // anything a human created, and SQLite treats NULLs as distinct in a unique
   // index, so existing rows never collide.
   `ALTER TABLE interactions ADD COLUMN external_source TEXT`,
-  `ALTER TABLE interactions ADD COLUMN external_id TEXT`
+  `ALTER TABLE interactions ADD COLUMN external_id TEXT`,
+  // Which outreach template produced this message, when one did. There are no
+  // template statistics and none are planned — this exists because provenance
+  // is unrecoverable after the fact, and one nullable column today beats a
+  // migration plus permanently missing history later. SET NULL rather than
+  // CASCADE: deleting a template must not delete the record that you wrote to
+  // someone. `execMany(DDL)` runs before applyAlters, so the referenced table
+  // exists by the time this lands.
+  `ALTER TABLE interactions ADD COLUMN outreach_template_id TEXT REFERENCES outreach_templates(id) ON DELETE SET NULL`
 ];
 
 // Tables carrying workspace_id, in the order the backfill fills them. Also the
@@ -606,7 +648,8 @@ export const TENANT_TABLES = [
   'pipelines',
   'collection_pipeline_syncs',
   'api_tokens',
-  'calendar_feeds'
+  'calendar_feeds',
+  'outreach_templates'
 ] as const;
 
 /**
@@ -620,6 +663,24 @@ export const TENANT_TABLES = [
  * `reassignAuthorship` deletes them instead.
  */
 export const PERSONAL_TABLES: readonly string[] = ['reminders', 'api_tokens', 'calendar_feeds'];
+
+/**
+ * Tenant tables where personhood is decided per *row* rather than per table.
+ *
+ * `outreach_templates` is the first: a shared template is workspace property
+ * and passes to the owner like any other record, but a private one was
+ * deliberately kept unshared, and handing it over would publish it. Neither
+ * `TENANT_TABLES` nor `PERSONAL_TABLES` can express "some of both", so the
+ * value here is a constant SQL predicate selecting the rows to DELETE;
+ * everything else in the table is reassigned as normal.
+ *
+ * These are literals compiled into the query, never user input — keep them
+ * that way. Keys must be in TENANT_TABLES and must not also be in
+ * PERSONAL_TABLES, which `tests/workspaces.test.ts` asserts.
+ */
+export const ROW_PERSONAL: Record<string, string> = {
+  outreach_templates: "visibility = 'private'"
+};
 
 // Applied after the backfill so they are built against real data.
 const WORKSPACE_INDEXES = `
@@ -664,6 +725,13 @@ CREATE INDEX IF NOT EXISTS idx_pipelines_ws_updated ON pipelines(workspace_id, u
 
 CREATE INDEX IF NOT EXISTS idx_cps_ws ON collection_pipeline_syncs(workspace_id);
 CREATE INDEX IF NOT EXISTS idx_sessions_active_ws ON sessions(active_workspace_id, user_id);
+
+-- The library lists by workspace and filters by platform; the visibility
+-- predicate then narrows on user_id, so it carries its own index.
+CREATE INDEX IF NOT EXISTS idx_outreach_ws_arch ON outreach_templates(workspace_id, is_archived);
+CREATE INDEX IF NOT EXISTS idx_outreach_ws_platform ON outreach_templates(workspace_id, platform, is_archived);
+CREATE INDEX IF NOT EXISTS idx_outreach_ws_user ON outreach_templates(workspace_id, user_id);
+CREATE INDEX IF NOT EXISTS idx_outreach_ws_updated ON outreach_templates(workspace_id, updated_at);
 `;
 
 // Kept separate from WORKSPACE_INDEXES: a UNIQUE violation here is NOT swallowed

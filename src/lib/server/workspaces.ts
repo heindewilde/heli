@@ -1,7 +1,7 @@
 import { createId } from '@paralleldrive/cuid2';
 import { and, asc, desc, eq, sql } from 'drizzle-orm';
 import { client, db } from './db';
-import { PERSONAL_TABLES, TENANT_TABLES } from './migrate';
+import { PERSONAL_TABLES, ROW_PERSONAL, TENANT_TABLES } from './migrate';
 import { sanitizePlainText } from './sanitize';
 import { sessions, users, workspaces, workspaceMembers, type WorkspaceRole } from './schema';
 
@@ -143,6 +143,12 @@ export async function countMembers(region: string, workspaceId: string): Promise
  * PERSONAL_TABLES are the exception: their user_id is a real owner, not
  * attribution, so those rows are deleted rather than handed over. Reassigning a
  * reminder would put someone's private follow-ups in the owner's sidebar.
+ *
+ * ROW_PERSONAL is the third case, where the two apply to different rows of the
+ * same table: an outreach template that was shared is workspace property, one
+ * marked private was deliberately not. Those tables get both statements, and
+ * the DELETE must come first — run the other way round, the rows it targets
+ * have already been reassigned and no longer match `user_id = fromUserId`.
  */
 export async function reassignAuthorship(
   region: string,
@@ -152,13 +158,20 @@ export async function reassignAuthorship(
 ): Promise<void> {
   const c = client(region);
   for (const table of TENANT_TABLES) {
-    if (PERSONAL_TABLES.includes(table)) {
+    const wholeTableIsPersonal = PERSONAL_TABLES.includes(table);
+    // A constant predicate from ROW_PERSONAL, never user input.
+    const rowPredicate = ROW_PERSONAL[table];
+
+    if (wholeTableIsPersonal || rowPredicate) {
       await c.execute({
-        sql: `DELETE FROM ${table} WHERE workspace_id = ? AND user_id = ?`,
+        sql:
+          `DELETE FROM ${table} WHERE workspace_id = ? AND user_id = ?` +
+          (rowPredicate ? ` AND (${rowPredicate})` : ''),
         args: [workspaceId, fromUserId]
       });
-      continue;
+      if (wholeTableIsPersonal) continue;
     }
+
     await c.execute({
       sql: `UPDATE ${table} SET user_id = ? WHERE workspace_id = ? AND user_id = ?`,
       args: [toUserId, workspaceId, fromUserId]

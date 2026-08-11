@@ -344,6 +344,12 @@ export const interactions = sqliteTable(
     externalSource: text('external_source'),
     /** sha1(UID + NUL + RECURRENCE-ID) for .ics. Stable across re-syncs. */
     externalId: text('external_id'),
+    /**
+     * Which outreach template produced this message, when one did. Provenance
+     * only — there are no template statistics. SET NULL on delete: removing a
+     * template must not remove the record of what you wrote to someone.
+     */
+    outreachTemplateId: text('outreach_template_id'),
     createdAt: integer('created_at').notNull(),
     updatedAt: integer('updated_at').notNull()
   },
@@ -720,6 +726,73 @@ export const collectionPipelineSync = sqliteTable(
   },
   (t) => [index('idx_cps_pipeline').on(t.pipelineId)]
 );
+
+/**
+ * Outreach message templates.
+ *
+ * Workspace-owned, so `user_id` is created-by attribution — *except* on rows
+ * with `visibility = 'private'`, where it is a real owner. That is why the
+ * table is in TENANT_TABLES but also in ROW_PERSONAL (migrate.ts): a departing
+ * member's shared templates pass to the workspace owner, their private ones are
+ * deleted.
+ */
+export const outreachTemplates = sqliteTable(
+  'outreach_templates',
+  {
+    id: text('id').primaryKey(),
+    workspaceId: text('workspace_id')
+      .notNull()
+      .references(() => workspaces.id, { onDelete: 'cascade' }),
+    userId: text('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    name: text('name').notNull(),
+    platform: text('platform').notNull(),
+    /** Email and InMail only; null for every other platform. */
+    subject: text('subject'),
+    body: text('body').notNull(),
+    visibility: text('visibility').notNull().default('shared'),
+    /** Days until the follow-up reminder, or null for no nudge. */
+    nudgeDays: integer('nudge_days'),
+    isArchived: integer('is_archived').notNull().default(0),
+    createdAt: integer('created_at').notNull(),
+    updatedAt: integer('updated_at').notNull()
+  },
+  (t) => [
+    index('idx_outreach_ws_arch').on(t.workspaceId, t.isArchived),
+    index('idx_outreach_ws_platform').on(t.workspaceId, t.platform, t.isArchived),
+    index('idx_outreach_ws_user').on(t.workspaceId, t.userId),
+    index('idx_outreach_ws_updated').on(t.workspaceId, t.updatedAt)
+  ]
+);
+
+/**
+ * Which templates a stage offers, in order.
+ *
+ * No `workspace_id` — `pipeline_stages` has none either. Scope reaches this
+ * table by joining through `pipelines`, which every query in `outreach.ts`
+ * does.
+ */
+export const pipelineStageTemplates = sqliteTable(
+  'pipeline_stage_templates',
+  {
+    stageId: text('stage_id')
+      .notNull()
+      .references(() => pipelineStages.id, { onDelete: 'cascade' }),
+    templateId: text('template_id')
+      .notNull()
+      .references(() => outreachTemplates.id, { onDelete: 'cascade' }),
+    position: integer('position').notNull()
+  },
+  (t) => [
+    primaryKey({ columns: [t.stageId, t.templateId] }),
+    index('idx_pst_stage_pos').on(t.stageId, t.position),
+    index('idx_pst_template').on(t.templateId)
+  ]
+);
+
+export const OUTREACH_VISIBILITIES = ['shared', 'private'] as const;
+export type OutreachVisibility = (typeof OUTREACH_VISIBILITIES)[number];
 
 export type User = typeof users.$inferSelect;
 export type Session = typeof sessions.$inferSelect;
