@@ -610,6 +610,68 @@ while nothing checked them at all. `.github/workflows/ci.yml` runs
   `npm run package` zips `dist/` into `heli-extension-<version>.zip` for a store
   upload, shelling out to `zip` rather than taking a dependency.
 
+## Outreach
+
+Message templates that render against a person, get copied, and are logged.
+**Heli never sends.** That is the load-bearing constraint, not a stage: no SMTP,
+no queue, no deliverability, no unsubscribe law, no per-workspace credentials —
+and it works identically for LinkedIn, X and WhatsApp, none of which expose a
+send API anyway. Don't "finish" it by adding sending.
+
+- **Templates address a person, never a company.** You cannot DM a company. From
+  a company you pick one of its people.
+- **`user_id` on `outreach_templates` means two different things per row**:
+  attribution on a shared template, real ownership on a private one. Hence
+  `ROW_PERSONAL` in `migrate.ts` — a table → constant SQL predicate map naming
+  the rows to *delete* on member removal, with the rest reassigned as usual. In
+  `reassignAuthorship` the DELETE must run **before** the UPDATE; reversed, the
+  private rows have already been reassigned and survive as the owner's.
+- **Every template query lives in `src/lib/server/outreach.ts`**, which is in
+  `ALLOW_FILES`. The visibility predicate is
+  `workspace_id = ? AND (visibility = 'shared' OR user_id = ?)`, which trips
+  check-tenancy Rule A, and Rule A has no per-line pragma. Inline that predicate
+  in a route and you are adding files to the allowlist forever.
+- **The platform decides the shape, not the author.** `platforms.ts` holds
+  whether a subject exists, the character budget, the deep link, and which
+  `INTERACTION_TYPES` value gets logged. There is no `linkedin_dm` interaction
+  type and adding one would touch the type icons, the filters and `API.md` — the
+  specificity is carried by `interactions.outreach_template_id` instead. A test
+  asserts every platform maps to a real interaction type.
+  - **Only email keeps markup.** Every other composer pastes plain text, so
+    authoring rich text for them would show formatting that cannot survive.
+- **Rendering happens in the browser, and that is forced.** The clipboard write
+  must stay inside the user's click: Safari invalidates the gesture across an
+  `await`, and its escape hatch (a `Promise<Blob>` in `ClipboardItem`) is what
+  Firefox rejects. There is no portable async path, so `src/lib/outreach/render.ts`
+  is dependency-free and shared, and the bulk run pre-renders the whole batch.
+  - `navigator.clipboard` is **undefined**, not a rejected promise, outside a
+    secure context — the docker-compose quickstart before Caddy, and any LAN
+    self-host. `src/lib/client/clipboard.ts` falls back to `execCommand`, which
+    can only carry one flavour, and the UI says so.
+- **Character budgets count rendered plain text.** LinkedIn's 300 is 300
+  characters of message; counting stored HTML, or counting before substitution,
+  shows a number the platform disagrees with.
+- **Unresolved variables get a warning strip, never highlight markup.** There is
+  no `span`, `mark` or `class` on the sanitize allowlist, and decorating inside
+  a contenteditable lets someone delete half a highlight node.
+- **Copy and Mark as sent are two steps everywhere**, including the bulk run. A
+  queue is exactly where a one-click shortcut logs messages nobody sent.
+- **Mark-as-sent logs the edited body from the client**, not a re-render: the
+  preview is editable, so what gets recorded has to be what was copied. A failed
+  reminder does not fail the log.
+- **`interactions.outreach_template_id` is `ON DELETE SET NULL`**, never CASCADE
+  — deleting a template must not delete the record of what you wrote to someone.
+- **There are no template statistics and none are planned.** That column exists
+  only so provenance stays recoverable; one nullable column today beats a
+  migration plus permanently missing history later.
+- **A pipeline card links to the person's page** rather than opening a composer
+  on the board, because the board query carries name/role/avatar and the
+  composer needs email, LinkedIn URL and company name. `?outreach=<id>` opens it
+  and is stripped immediately so a refresh doesn't reopen it.
+- **Attaching templates to a stage is `requireRole`**, matching stage delete and
+  reorder — it is board configuration the whole workspace sees. Writing a
+  template stays open to members.
+
 ## Versioning
 
 Every push to `main` triggers two workflows:
