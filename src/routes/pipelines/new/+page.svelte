@@ -1,4 +1,5 @@
 <script lang="ts">
+  import Checkbox from '$lib/ui/Checkbox.svelte';
   import { APP_NAME } from '$lib/branding';
   import { enhance } from '$app/forms';
   import { ArrowUp, ArrowDown, Trash2 } from 'lucide-svelte';
@@ -84,11 +85,10 @@
         </p>
       </div>
       <div class="rounded-[var(--radius-sm)] border border-[var(--color-highlight-border)] bg-[var(--color-highlight-bg)] px-3 py-2.5 text-sm">
-        <label class="inline-flex cursor-pointer items-center gap-2">
-          <input type="checkbox" name="syncWithCollection" value="1" class="rounded-[var(--radius-sm)]" />
+        <Checkbox name="syncWithCollection" value="1">
           <span class="text-[var(--color-text)]">Keep in sync</span>
           <span class="text-[var(--color-muted)]">— adding or removing members on either side will mirror to the other</span>
-        </label>
+        </Checkbox>
       </div>
     {/if}
 

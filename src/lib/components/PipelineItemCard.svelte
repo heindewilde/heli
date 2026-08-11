@@ -1,4 +1,5 @@
 <script lang="ts">
+  import Avatar from '$lib/ui/Avatar.svelte';
   import { X, GripVertical, Send } from 'lucide-svelte';
   import CompanyLogo from './CompanyLogo.svelte';
   import type { PipelineItemRow } from '$lib/server/pipelines';
@@ -75,7 +76,7 @@
 <!-- svelte-ignore a11y_no_static_element_interactions -->
 <div
   role="article"
-  class="group relative flex flex-col gap-1.5 rounded-[var(--radius-md)] border bg-[var(--color-bg)] p-2.5 text-sm shadow-[var(--shadow-sm)] {selected
+  class="group relative flex flex-col gap-1.5 rounded-[var(--radius-lg)] border bg-[var(--color-surface)] p-2.5 text-sm shadow-raised {selected
     ? 'border-[var(--color-highlight-border)] ring-1 ring-[var(--color-highlight-border)]'
     : 'border-[var(--color-border)] hover:border-[var(--color-highlight-border)]'}"
   draggable={draggable}
@@ -88,13 +89,7 @@
       <span class="mt-0.5 cursor-grab text-[var(--color-subtle)] active:cursor-grabbing"><GripVertical size={12} strokeWidth={2} /></span>
     {/if}
     {#if item.kind === 'person'}
-      <span class="flex h-7 w-7 shrink-0 items-center justify-center overflow-hidden rounded-full border border-[var(--color-border)] bg-[var(--color-surface)] text-[10px] text-[var(--color-muted)]">
-        {#if item.member?.avatarUrl}
-          <img src={item.member.avatarUrl} alt="" class="h-full w-full object-cover" />
-        {:else}
-          {initials || '·'}
-        {/if}
-      </span>
+      <Avatar name={item.member?.name ?? null} src={item.member?.avatarUrl ?? null} size="sm" />
     {:else}
       <CompanyLogo
         domain={item.member?.domain}
@@ -140,7 +135,7 @@
         <a
           href={`/people/${item.refId}?outreach=${t.id}`}
           title={`Write "${t.name}" to ${item.member?.name ?? 'this person'}`}
-          class="inline-flex max-w-full items-center gap-1 rounded-full border border-[var(--color-border)] bg-[var(--color-surface)] px-2 py-0.5 text-[11px] text-[var(--color-muted)] hover:border-[var(--color-border-strong)] hover:text-[var(--color-text)]"
+          class="inline-flex max-w-full items-center gap-1 rounded-full border border-[var(--color-border)] bg-[var(--color-surface)] px-2 py-0.5 text-2xs text-[var(--color-muted)] hover:border-[var(--color-border-strong)] hover:text-[var(--color-text)]"
         >
           <Send size={10} strokeWidth={2} class="shrink-0" />
           <span class="truncate">{t.name}</span>

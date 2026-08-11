@@ -1,4 +1,5 @@
 <script lang="ts">
+  import Select from '$lib/ui/Select.svelte';
   import { invalidateAll } from '$app/navigation';
   import { X } from 'lucide-svelte';
   import PipelineItemCard from './PipelineItemCard.svelte';
@@ -123,11 +124,11 @@
       {@const items = itemsByStage.get(stage.id) ?? []}
       <section
         aria-label={`${stage.name} stage`}
-        class="rounded-[var(--radius-md)] border p-3 {!stage.color && stage.kind === 'open' ? 'border-[var(--color-border)] bg-[var(--color-surface)]' : ''}"
+        class="rounded-[var(--radius-lg)] border p-3 {!stage.color && stage.kind === 'open' ? 'border-[var(--color-border)] bg-[var(--color-surface)]' : ''}"
         style={stageColumnStyle(stage)}
       >
         <header class="mb-2 flex items-center justify-between">
-          <h3 class="text-xs font-medium uppercase tracking-wide text-[var(--color-subtle)]">{stage.name}</h3>
+          <h3 class="cap-label">{stage.name}</h3>
           <span class="text-xs text-[var(--color-muted)]">{items.length}</span>
         </header>
         {#if items.length === 0}
@@ -140,16 +141,15 @@
                 <a href={itemHref} class="min-w-0 flex-1 truncate text-sm font-medium text-[var(--color-text)]">
                   {item.member?.name ?? '(missing)'}
                 </a>
-                <select
+                <Select
                   value={item.stageId}
                   onchange={(e) => moveItem(item.id, (e.currentTarget as HTMLSelectElement).value)}
-                  class="rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-transparent py-1.5 pl-1 pr-1 text-xs outline-none"
                   aria-label="Move to stage"
                 >
                   {#each stages as s (s.id)}
                     <option value={s.id}>{s.name}</option>
                   {/each}
-                </select>
+                </Select>
                 {#if onRemoveItem}
                   <button
                     type="button"
@@ -175,14 +175,14 @@
       <!-- svelte-ignore a11y_no_static_element_interactions -->
       <section
         aria-label={`${stage.name} stage`}
-        class="flex w-72 shrink-0 flex-col gap-2 rounded-[var(--radius-md)] border p-2 transition-colors {!stage.color && stage.kind === 'open' ? 'border-[var(--color-border)] bg-[var(--color-surface)]' : ''} {hot ? 'ring-2 ring-[var(--color-accent)] ring-offset-2 ring-offset-[var(--color-bg)]' : ''}"
+        class="flex w-72 shrink-0 flex-col gap-2 rounded-[var(--radius-lg)] border p-2 transition-colors {!stage.color && stage.kind === 'open' ? 'border-[var(--color-border)] bg-[var(--color-surface)]' : ''} {hot ? 'ring-2 ring-[var(--color-interactive)] ring-offset-2 ring-offset-[var(--color-bg)]' : ''}"
         style={stageColumnStyle(stage)}
         ondragover={(e) => onDragOver(e, stage.id)}
         ondragleave={() => onDragLeave(stage.id)}
         ondrop={(e) => onDrop(e, stage.id)}
       >
         <header class="flex items-center justify-between px-1">
-          <h3 class="text-xs font-medium uppercase tracking-wide text-[var(--color-subtle)]">
+          <h3 class="cap-label">
             {stage.name}
           </h3>
           <span class="text-xs text-[var(--color-muted)]">{items.length}</span>
@@ -199,7 +199,7 @@
             />
           {/each}
           {#if items.length === 0}
-            <div class="rounded-[var(--radius-sm)] border border-dashed border-[var(--color-border)] p-3 text-center text-xs italic text-[var(--color-subtle)]">
+            <div class="rounded-[var(--radius-md)] border border-dashed border-[var(--color-border)] p-3 text-center text-xs text-[var(--color-subtle)]">
               Drop here
             </div>
           {/if}

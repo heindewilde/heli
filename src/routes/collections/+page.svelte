@@ -1,4 +1,5 @@
 <script lang="ts">
+  import Select from '$lib/ui/Select.svelte';
   import EmptyState from '$lib/ui/EmptyState.svelte';
   import Button from '$lib/ui/Button.svelte';
   import { Folder } from 'lucide-svelte';
@@ -99,19 +100,17 @@
       {data.total}
     </span>
     <div class="ml-auto flex items-center gap-2">
-      <label class="inline-flex items-center gap-1 rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-surface)] pl-2 pr-1 text-sm text-[var(--color-muted)]">
-        <ArrowDownUp size={14} strokeWidth={2} class="text-[var(--color-subtle)]" />
-        <span class="sr-only">Sort by</span>
-        <select
-          value={data.sort}
-          onchange={(e) => goto(buildUrl({ sort: (e.currentTarget as HTMLSelectElement).value }), { replaceState: true, keepFocus: true, noScroll: true })}
-          class="bg-transparent py-1.5 pl-1 pr-1 text-sm outline-none"
-        >
-          <option value="updated">Recently updated</option>
-          <option value="recent">Recently added</option>
-          <option value="name">Name</option>
-        </select>
-      </label>
+      <Select
+        size="md"
+        aria-label="Sort by"
+        value={data.sort}
+        onchange={(e) => goto(buildUrl({ sort: (e.currentTarget as HTMLSelectElement).value }), { replaceState: true, keepFocus: true, noScroll: true })}
+      >
+        {#snippet icon()}<ArrowDownUp size={14} strokeWidth={2} />{/snippet}
+        <option value="updated">Recently updated</option>
+        <option value="recent">Recently added</option>
+        <option value="name">Name</option>
+      </Select>
       <a
         href="/collections/new"
         class="inline-flex items-center gap-1 rounded-[var(--radius-sm)] bg-[var(--color-accent)] transition-colors hover:bg-[var(--color-accent-hover)] px-3 py-1.5 text-sm font-medium text-[var(--color-accent-fg)]"

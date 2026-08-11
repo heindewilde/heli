@@ -1,4 +1,5 @@
 <script lang="ts">
+  import Checkbox from '$lib/ui/Checkbox.svelte';
   import { goto } from '$app/navigation';
   import { APP_NAME } from '$lib/branding';
   import { toast } from '$lib/toasts.svelte';
@@ -267,10 +268,9 @@
           </label>
         {/if}
 
-        <label class="flex items-center gap-2 py-2 text-sm">
-          <input type="checkbox" bind:checked={emailOnly} />
-          Has an email address
-        </label>
+        <div class="py-2">
+          <Checkbox bind:checked={emailOnly} label="Has an email address" />
+        </div>
       </div>
 
       <div class="flex flex-wrap items-center gap-2 text-sm">
@@ -309,11 +309,10 @@
                 <label
                   class="{GRID} cursor-pointer border-b border-[var(--color-border)] px-3 py-2 text-sm last:border-b-0 hover:bg-[var(--color-surface)]"
                 >
-                  <input
-                    type="checkbox"
-                    class="w-4"
+                  <Checkbox
                     checked={selected.has(row.i)}
                     onchange={() => toggle(row.i)}
+                    class="pointer-events-none"
                   />
                   <span class="min-w-0">
                     <span class="block truncate font-medium">{row.name}</span>

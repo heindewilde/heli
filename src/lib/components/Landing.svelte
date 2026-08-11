@@ -230,12 +230,12 @@
   }
 
   .brand-mark {
-    font-size: 1.125rem;
+    font-size: var(--text-lg);
     line-height: 1;
   }
 
   .brand-text {
-    font-size: 1.25rem;
+    font-size: var(--text-xl);
     font-weight: 700;
     letter-spacing: -0.04em;
   }
@@ -272,7 +272,7 @@
     align-items: center;
     padding: 0.4rem 0.75rem;
     border-radius: var(--radius-md);
-    font-size: 0.875rem;
+    font-size: var(--text-sm);
     font-weight: 500;
     color: var(--color-muted);
     text-decoration: none;
@@ -289,9 +289,9 @@
     align-items: center;
     padding: 0.4rem 0.85rem;
     border-radius: var(--radius-md);
-    background: var(--color-text);
-    color: var(--color-bg);
-    font-size: 0.875rem;
+    background: var(--color-accent);
+    color: var(--color-accent-fg);
+    font-size: var(--text-sm);
     font-weight: 500;
     text-decoration: none;
     transition: opacity 0.15s;
@@ -327,7 +327,7 @@
     backdrop-filter: blur(14px);
     -webkit-backdrop-filter: blur(14px);
     color: var(--color-muted);
-    font-size: 0.75rem;
+    font-size: var(--text-xs);
     font-weight: 500;
     letter-spacing: -0.005em;
     text-decoration: none;
@@ -409,12 +409,12 @@
     gap: 0.5rem;
     padding: 0.625rem 1.125rem;
     border-radius: var(--radius-md);
-    font-size: 0.9375rem;
+    font-size: var(--text-sm);
     font-weight: 500;
     text-decoration: none;
-    background: var(--color-text);
-    color: var(--color-bg);
-    border: 1px solid var(--color-text);
+    background: var(--color-accent);
+    color: var(--color-accent-fg);
+    border: 1px solid var(--color-accent);
     transition: opacity 0.15s;
   }
 

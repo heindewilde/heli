@@ -1,4 +1,5 @@
 <script lang="ts">
+  import Select from '$lib/ui/Select.svelte';
   import { goto, invalidateAll } from '$app/navigation';
   import { APP_NAME } from '$lib/branding';
   import { toast } from '$lib/toasts.svelte';
@@ -637,9 +638,54 @@
 
 <article class="flex flex-col gap-8">
   <header>
-    <h1 class="text-2xl font-semibold tracking-tight">Settings</h1>
+    <h1 class="text-3xl font-bold">Settings</h1>
     <p class="text-sm text-[var(--color-muted)]">Account, capture surfaces, exports, and danger zone.</p>
   </header>
+
+  <!--
+    Nine panels in one 1300-line scroll, with nothing telling you what was
+    below the fold. This is a table of contents rather than tabs or routes:
+    it needs no restructuring of the panels, keeps ⌘F working across the whole
+    page, and every section stays linkable.
+  -->
+  <nav aria-label="Settings sections" class="flex flex-wrap gap-1">
+    <a
+      href="#workspaces"
+      class="inline-flex items-center gap-1.5 rounded-full border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-1 text-xs font-medium text-[var(--color-muted)] transition-colors hover:border-[var(--color-interactive-ring)] hover:text-[var(--color-text)]"
+    ><Building2 size={13} strokeWidth={2} class="text-[var(--color-subtle)]" /> Workspaces</a>
+    <a
+      href="#team"
+      class="inline-flex items-center gap-1.5 rounded-full border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-1 text-xs font-medium text-[var(--color-muted)] transition-colors hover:border-[var(--color-interactive-ring)] hover:text-[var(--color-text)]"
+    ><Users size={13} strokeWidth={2} class="text-[var(--color-subtle)]" /> Team</a>
+    <a
+      href="#bookmarklet"
+      class="inline-flex items-center gap-1.5 rounded-full border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-1 text-xs font-medium text-[var(--color-muted)] transition-colors hover:border-[var(--color-interactive-ring)] hover:text-[var(--color-text)]"
+    ><Bookmark size={13} strokeWidth={2} class="text-[var(--color-subtle)]" /> Bookmarklet</a>
+    <a
+      href="#calendars"
+      class="inline-flex items-center gap-1.5 rounded-full border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-1 text-xs font-medium text-[var(--color-muted)] transition-colors hover:border-[var(--color-interactive-ring)] hover:text-[var(--color-text)]"
+    ><CalendarDays size={13} strokeWidth={2} class="text-[var(--color-subtle)]" /> Calendars</a>
+    <a
+      href="#tokens"
+      class="inline-flex items-center gap-1.5 rounded-full border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-1 text-xs font-medium text-[var(--color-muted)] transition-colors hover:border-[var(--color-interactive-ring)] hover:text-[var(--color-text)]"
+    ><KeyRound size={13} strokeWidth={2} class="text-[var(--color-subtle)]" /> Access tokens</a>
+    <a
+      href="#export"
+      class="inline-flex items-center gap-1.5 rounded-full border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-1 text-xs font-medium text-[var(--color-muted)] transition-colors hover:border-[var(--color-interactive-ring)] hover:text-[var(--color-text)]"
+    ><Download size={13} strokeWidth={2} class="text-[var(--color-subtle)]" /> Export</a>
+    <a
+      href="#import"
+      class="inline-flex items-center gap-1.5 rounded-full border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-1 text-xs font-medium text-[var(--color-muted)] transition-colors hover:border-[var(--color-interactive-ring)] hover:text-[var(--color-text)]"
+    ><Users size={13} strokeWidth={2} class="text-[var(--color-subtle)]" /> Import contacts</a>
+    <a
+      href="#account"
+      class="inline-flex items-center gap-1.5 rounded-full border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-1 text-xs font-medium text-[var(--color-muted)] transition-colors hover:border-[var(--color-interactive-ring)] hover:text-[var(--color-text)]"
+    ><User size={13} strokeWidth={2} class="text-[var(--color-subtle)]" /> Account</a>
+    <a
+      href="#danger"
+      class="inline-flex items-center gap-1.5 rounded-full border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-1 text-xs font-medium text-[var(--color-muted)] transition-colors hover:border-[var(--color-interactive-ring)] hover:text-[var(--color-text)]"
+    ><ShieldAlert size={13} strokeWidth={2} class="text-[var(--color-subtle)]" /> Danger zone</a>
+  </nav>
 
   {#if !data.emailConfigured}
     <div class="flex items-start gap-3 rounded-[var(--radius-md)] border border-[var(--color-warning-border)] bg-[var(--color-warning-bg)] px-4 py-3 text-sm text-[var(--color-warning)]">
@@ -648,8 +694,8 @@
     </div>
   {/if}
 
-  <section class="flex flex-col gap-4 rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)] p-5">
-    <h2 class="flex items-center gap-2 text-sm font-medium">
+  <section id="workspaces" style="scroll-margin-top:1rem" class="flex flex-col gap-4 rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)] p-5">
+    <h2 class="flex items-center gap-2 text-sm font-semibold text-[var(--color-text)]">
       <Building2 size={14} strokeWidth={2} /> Workspaces
     </h2>
 
@@ -749,8 +795,8 @@
     {/if}
   </section>
 
-  <section class="flex flex-col gap-4 rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)] p-5">
-    <h2 class="flex items-center gap-2 text-sm font-medium">
+  <section id="team" style="scroll-margin-top:1rem" class="flex flex-col gap-4 rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)] p-5">
+    <h2 class="flex items-center gap-2 text-sm font-semibold text-[var(--color-text)]">
       <Users size={14} strokeWidth={2} /> Team
     </h2>
     <p class="text-sm text-[var(--color-muted)]">
@@ -769,8 +815,7 @@
             {#if teamAdmin && !m.isOwner && m.userId !== data.user.id}
               <!-- Self excluded deliberately: an admin demoting themselves would
                    lose the page they are standing on. -->
-              <select
-                class="rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-bg)] px-2 py-1 text-xs"
+              <Select
                 value={m.role}
                 onchange={(e) => changeRole(m.userId, e.currentTarget.value)}
                 disabled={busy === m.userId}
@@ -778,7 +823,7 @@
               >
                 <option value="member">Member</option>
                 <option value="admin">Admin</option>
-              </select>
+              </Select>
             {:else}
               <span class="cap-label text-[var(--color-muted)]">{m.role}</span>
             {/if}
@@ -814,13 +859,10 @@
           bind:value={inviteEmail}
           required
         />
-        <select
-          class="rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-bg)] px-2 py-2 text-sm"
-          bind:value={inviteRole}
-        >
+        <Select size="md" aria-label="Invite role" bind:value={inviteRole}>
           <option value="member">Member</option>
           <option value="admin">Admin</option>
-        </select>
+        </Select>
         <button
           class="rounded-[var(--radius-sm)] bg-[var(--color-accent)] px-3 py-2 text-sm text-[var(--color-accent-fg)] hover:bg-[var(--color-accent-hover)]"
           type="submit"
@@ -873,8 +915,8 @@
     {/if}
   </section>
 
-  <section class="flex flex-col gap-3 rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)] p-5">
-    <h2 class="flex items-center gap-2 text-sm font-medium"><Bookmark size={14} strokeWidth={2} /> Bookmarklet</h2>
+  <section id="bookmarklet" style="scroll-margin-top:1rem" class="flex flex-col gap-3 rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)] p-5">
+    <h2 class="flex items-center gap-2 text-sm font-semibold text-[var(--color-text)]"><Bookmark size={14} strokeWidth={2} /> Bookmarklet</h2>
     <p class="text-sm text-[var(--color-muted)]">
       Drag this button to your bookmarks bar. Clicking it from any page opens {APP_NAME} in a new tab with the page's URL queued for save.
     </p>
@@ -901,10 +943,10 @@
     </div>
   </section>
 
-  <section
+  <section id="calendars" style="scroll-margin-top:1rem"
     class="flex flex-col gap-3 rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)] p-5"
   >
-    <h2 class="flex items-center gap-2 text-sm font-medium">
+    <h2 class="flex items-center gap-2 text-sm font-semibold text-[var(--color-text)]">
       <CalendarDays size={14} strokeWidth={2} /> Calendars
     </h2>
     <p class="text-sm text-[var(--color-muted)]">
@@ -1040,10 +1082,10 @@
     {/if}
   </section>
 
-  <section
+  <section id="tokens" style="scroll-margin-top:1rem"
     class="flex flex-col gap-3 rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)] p-5"
   >
-    <h2 class="flex items-center gap-2 text-sm font-medium">
+    <h2 class="flex items-center gap-2 text-sm font-semibold text-[var(--color-text)]">
       <KeyRound size={14} strokeWidth={2} /> Personal access tokens
     </h2>
     <p class="text-sm text-[var(--color-muted)]">
@@ -1142,8 +1184,8 @@
   </section>
 
   {#if teamAdmin}
-  <section class="flex flex-col gap-3 rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)] p-5">
-    <h2 class="flex items-center gap-2 text-sm font-medium"><Download size={14} strokeWidth={2} /> Export</h2>
+  <section id="export" style="scroll-margin-top:1rem" class="flex flex-col gap-3 rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)] p-5">
+    <h2 class="flex items-center gap-2 text-sm font-semibold text-[var(--color-text)]"><Download size={14} strokeWidth={2} /> Export</h2>
     <p class="text-sm text-[var(--color-muted)]">
       Stream your data as CSV. Includes tags as a pipe-separated column and (for interactions) a pipe-separated <code>person_ids</code>.
     </p>
@@ -1168,8 +1210,8 @@
        import and are reviewed and committed on /settings/import, so nothing
        below is duplicated per source. -->
   {#if teamAdmin}
-    <section class="flex flex-col gap-3 rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)] p-5">
-      <h2 class="flex items-center gap-2 text-sm font-medium"><Users size={14} strokeWidth={2} /> Import contacts</h2>
+    <section id="import" style="scroll-margin-top:1rem" class="flex flex-col gap-3 rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)] p-5">
+      <h2 class="flex items-center gap-2 text-sm font-semibold text-[var(--color-text)]"><Users size={14} strokeWidth={2} /> Import contacts</h2>
 
       {#if data.importError}
         <p class="rounded-[var(--radius-sm)] border border-[var(--color-danger-border)] bg-[var(--color-danger-bg)] px-3 py-2 text-sm text-[var(--color-danger)]">
@@ -1254,8 +1296,8 @@
     </section>
   {/if}
 
-  <section class="flex flex-col gap-4 rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)] p-5">
-    <h2 class="flex items-center gap-2 text-sm font-medium"><User size={14} strokeWidth={2} /> Account</h2>
+  <section id="account" style="scroll-margin-top:1rem" class="flex flex-col gap-4 rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)] p-5">
+    <h2 class="flex items-center gap-2 text-sm font-semibold text-[var(--color-text)]"><User size={14} strokeWidth={2} /> Account</h2>
 
     <div class="flex flex-col gap-2">
       <label class="flex flex-col gap-1 text-sm">
@@ -1355,7 +1397,7 @@
     </div>
   </section>
 
-  <section class="flex flex-col gap-3 rounded-[var(--radius-md)] border border-[var(--color-danger-border)] bg-[var(--color-danger-bg)] p-5">
+  <section id="danger" style="scroll-margin-top:1rem" class="flex flex-col gap-3 rounded-[var(--radius-md)] border border-[var(--color-danger-border)] bg-[var(--color-danger-bg)] p-5">
     <h2 class="flex items-center gap-2 text-sm font-medium text-[var(--color-danger)]">
       <ShieldAlert size={14} strokeWidth={2} /> Danger zone
     </h2>
