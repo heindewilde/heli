@@ -45,9 +45,12 @@ Edit `/srv/heli/.env`, then `cd /srv/heli && docker compose up -d`. Knobs:
 | Variable               | What it does                                                                       |
 | ---------------------- | ---------------------------------------------------------------------------------- |
 | `PUBLIC_LOGODEV_KEY`   | Pretty company logos via [logo.dev](https://logo.dev) (free tier exists).          |
-| `DISABLE_REGISTRATION` | Set to `1` after creating your admin account to block further sign-ups.            |
+| `ENABLE_REGISTRATION`  | Sign-ups close automatically once the first account exists. Set to `1` to reopen them. |
+| `DISABLE_REGISTRATION` | Hard kill switch for sign-ups. Wins over `ENABLE_REGISTRATION`.                    |
 | `SQLITE_CACHE_MB`      | SQLite page cache, MB. Default `16`.                                                |
 | `SQLITE_MMAP_MB`       | SQLite mmap window, MB. Default `64`.                                               |
+| `SCHEDULER_DISABLED`   | Set to `1` to stop the background calendar poller. See [Calendars](#calendars).    |
+| `EXTENSION_ORIGINS`    | Origins allowed to call `/api/v1` cross-origin. See [Browser extension](#browser-extension). |
 
 ## Performance tuning
 
@@ -156,6 +159,45 @@ docker compose up -d
 ```
 
 Test the restore on a throwaway box at least once before you need it.
+
+## Calendars
+
+Heli can subscribe to a calendar feed and turn meetings into interactions,
+linked to people you already have. There is no account to connect — every
+calendar app exposes a private `.ics` URL:
+
+- **Google** — Settings → click the calendar → *Secret address in iCal format*
+- **Apple** — right-click the calendar → Share Calendar → Public Calendar
+- **Fastmail** — Calendar → ⋯ → Export / Subscribe
+- **Outlook** — Settings → Shared calendars → Publish, then copy the ICS link
+
+Paste it under **Settings → Calendars**. That URL is a password: anyone holding
+it can read your calendar. Heli stores it, never shows it again, and keeps it
+out of exports.
+
+A background scheduler polls each feed at most every 15 minutes. It runs inside
+the app — no extra container, no cron. To turn it off and drive syncs yourself:
+
+```bash
+SCHEDULER_DISABLED=1
+```
+
+## Browser extension
+
+The extension saves the page you're on — including pages the server can't fetch
+itself, like LinkedIn profiles behind a sign-up wall. It authenticates with a
+personal access token (**Settings → Personal access tokens**, `capture` scope),
+because the session cookie is `SameSite=Lax` and is never sent from an
+extension.
+
+If you build and load it yourself, allow its origin:
+
+```bash
+EXTENSION_ORIGINS=chrome-extension://<your-extension-id>
+```
+
+Heli never sends `Access-Control-Allow-Credentials`, so an entry here cannot be
+used to ride someone's session — the only way in is a token they created.
 
 ## Email (password resets, invites)
 

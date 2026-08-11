@@ -40,10 +40,22 @@ ${body}
 }
 
 cpSync(resolve(root, 'manifest.json'), resolve(out, 'manifest.json'));
-try {
-  cpSync(resolve(root, 'icons'), resolve(out, 'icons'), { recursive: true });
-} catch {
-  // Icons are optional during development.
+
+/* Icons come from the app's own static/ directory rather than a second copy
+   living here — same reasoning as tokens.css above. A rebranding then reaches
+   the extension on the next build instead of leaving it showing the old mark.
+
+   The sizes declared in manifest.json must match these files' real pixel
+   dimensions; Chrome scales from the nearest, and a mismatched key renders
+   blurry. There is no exact 128, so 96/192/512 are declared and Chrome picks. */
+const ICONS = {
+  'icon96.png': 'favicon-96x96.png',
+  'icon192.png': 'web-app-manifest-192x192.png',
+  'icon512.png': 'web-app-manifest-512x512.png'
+};
+mkdirSync(resolve(out, 'icons'), { recursive: true });
+for (const [dest, src] of Object.entries(ICONS)) {
+  cpSync(resolve(repo, 'static', src), resolve(out, 'icons', dest));
 }
 
 const common = {
