@@ -207,10 +207,10 @@ export async function createCollection(
   const d = db(s.region);
   const name = sanitizePlainText(input.name, 200);
   if (!name) throw new Error('missing_name');
-  // `sanitize`, not `sanitizePlainText`: descriptions are rendered with
-  // `{@html}` by NotesEditor, and sanitizePlainText only strips control
-  // characters — it neither escapes nor removes markup. Same invariant as
-  // `people.notes` and `companies.description`.
+  // `sanitize`, not `sanitizePlainText`: this column is rendered with `{@html}`
+  // by NotesEditor, and sanitizePlainText only strips control characters — it
+  // neither escapes nor removes markup. Same invariant as `people.notes` and
+  // `companies.description`, which already used the allowlist sanitizer.
   const description = input.description ? sanitize(input.description) : null;
   const icon = input.icon ? sanitizePlainText(input.icon, 50) : null;
   const id = createId();

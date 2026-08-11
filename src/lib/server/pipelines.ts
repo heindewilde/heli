@@ -269,8 +269,8 @@ export async function createPipeline(
   const d = db(s.region);
   const name = sanitizePlainText(input.name, 200);
   if (!name) throw new Error('missing_name');
-  // See the note in collections.ts: this column is rendered with `{@html}`,
-  // so it needs the allowlist sanitizer, not the control-character stripper.
+  // See the note in collections.ts: rendered with `{@html}`, so it needs the
+  // allowlist sanitizer rather than the control-character stripper.
   const description = input.description ? sanitize(input.description) : null;
   const defaultView: PipelineView = input.defaultView && isPipelineView(input.defaultView) ? input.defaultView : 'kanban';
   const id = createId();
