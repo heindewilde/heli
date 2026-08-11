@@ -37,7 +37,14 @@ const ALLOW_FILES = new Set([
   // A calendar feed's URL is a bearer credential for one person's calendar, so
   // ownership is (workspace_id, user_id) — see PERSONAL_TABLES in migrate.ts.
   'src/routes/api/calendar/[id]/+server.ts',
-  'src/routes/api/user/+server.ts' // account settings act on the user
+  'src/routes/api/user/+server.ts', // account settings act on the user
+  // Outreach templates are the one table where user_id means two different
+  // things per row: attribution on a shared template, real ownership on a
+  // private one. So listing is (workspace_id AND (shared OR user_id)) — see
+  // ROW_PERSONAL in migrate.ts. Every template query lives in this one module
+  // precisely so this exemption stays one file wide; don't inline that
+  // predicate into a route or a +page.server.ts.
+  'src/lib/server/outreach.ts'
 ]);
 
 // Columns that name a user but are attribution/ownership, not tenancy.
@@ -192,6 +199,9 @@ const MEMBER_ALLOWED = new Map<string, string>([
   ['projects/[id]/interactions/+server.ts', 'linking records'],
   ['projects/[id]/links/+server.ts', 'linking records'],
   ['projects/[id]/people/+server.ts', 'linking records'],
+  ['outreach/+server.ts', 'writing a message template is routine CRM work'],
+  ['outreach/[id]/+server.ts', 'editing a template you can see; private ones are only ever your own'],
+  ['outreach/sent/+server.ts', 'logging outreach you sent yourself'],
   ['reminders/+server.ts', 'reminders are personal'],
   ['reminders/[id]/+server.ts', 'reminders are personal'],
   ['save/+server.ts', 'the bookmarklet entry point; rate-limited instead'],

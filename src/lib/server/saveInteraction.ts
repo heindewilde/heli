@@ -22,7 +22,16 @@ export type InteractionInput = {
   companyId?: string | null;
   personIds?: string[];
   projectIds?: string[];
+  /** Set when this was sent from an outreach template. Provenance only. */
+  outreachTemplateId?: string | null;
 };
+
+/**
+ * `title` has always been capped at 200; `body` was not capped at all.
+ * Outreach makes that reachable — an X DM budget alone is 10k characters, and
+ * a paste can be far larger — and every interaction body is indexed by FTS5.
+ */
+const MAX_BODY_LEN = 50_000;
 
 async function validatePeopleIds(s: Scope, ids: string[]): Promise<string[]> {
   if (ids.length === 0) return [];
@@ -61,7 +70,9 @@ export async function createInteraction(
   if (!title) throw new Error('missing_title');
   if (!isInteractionType(input.type)) throw new Error('invalid_type');
   const occurredAt = Number.isFinite(input.occurredAt) ? Math.floor(input.occurredAt) : now;
-  const body = input.body ? sanitize(input.body) : null;
+  // Truncate before sanitizing, so a cut mid-tag is repaired rather than
+  // stored: the column is rendered with `{@html}`.
+  const body = input.body ? sanitize(input.body.slice(0, MAX_BODY_LEN)) : null;
   const companyId = input.companyId
     ? await validateCompanyId(s, input.companyId)
     : null;
@@ -82,6 +93,7 @@ export async function createInteraction(
     title,
     body,
     companyId,
+    outreachTemplateId: input.outreachTemplateId ?? null,
     createdAt: now,
     updatedAt: now
   });
