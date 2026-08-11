@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { X, GripVertical } from 'lucide-svelte';
+  import { X, GripVertical, Send } from 'lucide-svelte';
   import CompanyLogo from './CompanyLogo.svelte';
   import type { PipelineItemRow } from '$lib/server/pipelines';
 
@@ -11,6 +11,11 @@
     onDragStart?: (e: DragEvent) => void;
     onDragEnd?: (e: DragEvent) => void;
     onClick?: () => void;
+    /**
+     * Templates this card's stage offers. Rendered as direct actions — the
+     * whole point of attaching them to a stage.
+     */
+    templates?: { id: string; name: string }[];
   };
 
   let {
@@ -20,8 +25,18 @@
     onRemove,
     onDragStart,
     onDragEnd,
-    onClick
+    onClick,
+    templates = []
   }: Props = $props();
+
+  /**
+   * Templates address a person, so a company card has nothing to offer.
+   * The link opens the person's page with the composer already on that
+   * template: the dialog needs an email, a LinkedIn URL and a company name,
+   * none of which the board query carries — and the person's page is where you
+   * want to be before writing to them anyway.
+   */
+  const cardTemplates = $derived(item.kind === 'person' ? templates.slice(0, 3) : []);
 
   const href = $derived(
     item.kind === 'person' ? `/people/${item.refId}` : `/companies/${item.refId}`
@@ -118,5 +133,19 @@
   {/if}
   {#if valueLabel}
     <span class="tabular self-start rounded-full border border-[var(--color-border)] bg-[var(--color-surface-2)] px-2 py-0.5 text-xs font-medium text-[var(--color-text)]">{valueLabel}</span>
+  {/if}
+  {#if cardTemplates.length > 0}
+    <div class="flex flex-wrap gap-1">
+      {#each cardTemplates as t (t.id)}
+        <a
+          href={`/people/${item.refId}?outreach=${t.id}`}
+          title={`Write "${t.name}" to ${item.member?.name ?? 'this person'}`}
+          class="inline-flex max-w-full items-center gap-1 rounded-full border border-[var(--color-border)] bg-[var(--color-surface)] px-2 py-0.5 text-[11px] text-[var(--color-muted)] hover:border-[var(--color-border-strong)] hover:text-[var(--color-text)]"
+        >
+          <Send size={10} strokeWidth={2} class="shrink-0" />
+          <span class="truncate">{t.name}</span>
+        </a>
+      {/each}
+    </div>
   {/if}
 </div>

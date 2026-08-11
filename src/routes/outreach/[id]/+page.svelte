@@ -2,7 +2,7 @@
   import { APP_NAME } from '$lib/branding';
   import { goto, invalidateAll } from '$app/navigation';
   import { onMount } from 'svelte';
-  import { ArrowLeft, Trash2 } from 'lucide-svelte';
+  import { ArrowLeft, Trash2, Play } from 'lucide-svelte';
   import TemplateEditor from '$lib/components/TemplateEditor.svelte';
   import { registerCommands } from '$lib/commands/registry.svelte';
   import { toast } from '$lib/toasts.svelte';
@@ -112,6 +112,28 @@
       <Trash2 size={16} strokeWidth={2} />
     </button>
   </header>
+
+  {#if data.collections.length > 0}
+    <section
+      class="flex flex-wrap items-center gap-2 rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2"
+    >
+      <span class="text-xs font-medium uppercase tracking-wide text-[var(--color-subtle)]"
+        >Run against</span
+      >
+      {#each data.collections as c (c.id)}
+        <a
+          href={`/outreach/${template.id}/run?collection=${c.id}`}
+          class="inline-flex items-center gap-1 rounded-full border border-[var(--color-border)] px-2.5 py-1 text-xs text-[var(--color-muted)] hover:border-[var(--color-border-strong)] hover:text-[var(--color-text)]"
+        >
+          <Play size={11} strokeWidth={2} />
+          {c.name}
+        </a>
+      {/each}
+      <span class="text-xs text-[var(--color-subtle)]"
+        >— step through everyone, one at a time.</span
+      >
+    </section>
+  {/if}
 
   <TemplateEditor
     bind:name

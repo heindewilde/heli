@@ -242,7 +242,7 @@ async function patch(body: Record<string, unknown>): Promise<boolean> {
   {/if}
 
   {#if stageEditorOpen}
-    <StageEditor pipelineId={pipeline.id} stages={pipeline.stages} {canManage} onClose={() => (stageEditorOpen = false)} />
+    <StageEditor pipelineId={pipeline.id} stages={pipeline.stages} {canManage} stageTemplates={data.stageTemplates} onClose={() => (stageEditorOpen = false)} />
   {/if}
 
   {#if pipeline.stages.length === 0}
@@ -254,7 +254,7 @@ async function patch(body: Record<string, unknown>): Promise<boolean> {
       <PipelineAddPicker onAdd={addItem} />
     </div>
     {#if view === 'kanban'}
-      <PipelineBoard {pipeline} onRemoveItem={removeItem} />
+      <PipelineBoard {pipeline} stageTemplates={data.stageTemplates} onRemoveItem={removeItem} />
     {:else}
       <PipelineList {pipeline} onRemoveItem={removeItem} />
     {/if}

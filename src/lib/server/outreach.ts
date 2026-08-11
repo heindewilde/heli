@@ -243,6 +243,44 @@ export async function listStageTemplates(s: Scope, stageId: string): Promise<Out
 }
 
 /**
+ * Every stage's attached template ids for one pipeline, keyed by stage.
+ *
+ * One query for the whole board rather than one per stage — the pipeline page
+ * renders every stage at once, and the cloud runs against remote libSQL where
+ * the metric that matters is the round-trip count.
+ */
+export type StageTemplate = { id: string; name: string; platform: OutreachPlatform };
+
+export async function stageTemplateMap(
+  s: Scope,
+  pipelineId: string
+): Promise<Record<string, StageTemplate[]>> {
+  const rows = await db(s.region)
+    .select({
+      stageId: pipelineStageTemplates.stageId,
+      id: outreachTemplates.id,
+      name: outreachTemplates.name,
+      platform: outreachTemplates.platform
+    })
+    .from(pipelineStageTemplates)
+    .innerJoin(pipelineStages, eq(pipelineStages.id, pipelineStageTemplates.stageId))
+    .innerJoin(pipelines, eq(pipelines.id, pipelineStages.pipelineId))
+    .innerJoin(outreachTemplates, eq(outreachTemplates.id, pipelineStageTemplates.templateId))
+    .where(and(eq(pipelines.id, pipelineId), eq(pipelines.workspaceId, s.workspaceId), visibleTo(s)))
+    .orderBy(asc(pipelineStageTemplates.position));
+
+  const out: Record<string, StageTemplate[]> = {};
+  for (const r of rows) {
+    (out[r.stageId] ??= []).push({
+      id: r.id,
+      name: r.name,
+      platform: r.platform as OutreachPlatform
+    });
+  }
+  return out;
+}
+
+/**
  * Replace a stage's template list. Order is the array order.
  *
  * Ids are filtered against what the caller can actually see first, so attaching

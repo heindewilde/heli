@@ -3,6 +3,7 @@
   import { invalidateAll } from '$app/navigation';
   import { ArrowUp, ArrowDown, Trash2, X } from 'lucide-svelte';
   import { toast } from '$lib/toasts.svelte';
+  import StageTemplatePicker from './StageTemplatePicker.svelte';
   import { type StageColor } from '$lib/stageColors';
   import type { PipelineStage } from '$lib/server/schema';
 
@@ -13,9 +14,11 @@
     /** Reordering and deleting stages are admin-only server-side; renaming and
         recolouring stay open to members. */
     canManage?: boolean;
+    /** Attached outreach templates, keyed by stage id. */
+    stageTemplates?: Record<string, { id: string; name: string }[]>;
   };
 
-  let { pipelineId, stages, onClose, canManage = true }: Props = $props();
+  let { pipelineId, stages, onClose, canManage = true, stageTemplates = {} }: Props = $props();
 
   let newName = $state('');
   let newColor = $state<StageColor>('gray');
@@ -136,6 +139,14 @@
         />
         <StageColorPicker value={stageColor} onChange={(c) => setColor(stage.id, c)} />
         {#if canManage}
+          <!-- Attaching templates is board configuration the whole workspace
+               then sees, so it sits behind the same gate as reorder and delete. -->
+          <StageTemplatePicker
+            {pipelineId}
+            stageId={stage.id}
+            stageName={stage.name}
+            attached={stageTemplates[stage.id] ?? []}
+          />
           <button
             type="button"
             onclick={() => deleteStage(stage.id, stage.name)}

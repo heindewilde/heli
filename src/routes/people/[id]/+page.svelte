@@ -1,6 +1,7 @@
 <script lang="ts">
   import { APP_NAME } from '$lib/branding';
-  import { goto, invalidateAll } from '$app/navigation';
+  import { goto, invalidateAll, replaceState } from '$app/navigation';
+  import { page } from '$app/state';
   import { Star, Archive, Trash2, Loader2, Mail, Phone, MapPin, Building2, Sparkles, Linkedin, Twitter } from 'lucide-svelte';
   import NotesEditor from '$lib/components/NotesEditor.svelte';
   import FieldRow from '$lib/components/FieldRow.svelte';
@@ -27,7 +28,25 @@
   let { data } = $props();
   const person = $derived(data.person);
 
+  /**
+   * `?outreach=<templateId>` opens the composer straight onto that template.
+   * That is how a pipeline card hands off: the composer needs an email, a
+   * LinkedIn URL and a company name, none of which the board query carries.
+   */
+  const outreachParam = $derived(page.url.searchParams.get('outreach'));
   let outreachOpen = $state(false);
+  let handedOffTemplate = $state<string | null>(null);
+
+  $effect(() => {
+    if (!outreachParam) return;
+    handedOffTemplate = outreachParam;
+    outreachOpen = true;
+    // Drop the parameter so a refresh, or a back-navigation, does not reopen
+    // a composer the user has already closed.
+    const url = new URL(page.url);
+    url.searchParams.delete('outreach');
+    replaceState(url, {});
+  });
 
   /** What the renderer needs, flattened out of the person row and its company. */
   const outreachTarget = $derived({
@@ -477,6 +496,7 @@
     open={outreachOpen}
     person={outreachTarget}
     sender={{ name: data.user.username ?? '', email: data.user.email }}
+    templateId={handedOffTemplate}
     onclose={() => (outreachOpen = false)}
     onSent={() => invalidateAll()}
   />

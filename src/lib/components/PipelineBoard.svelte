@@ -10,9 +10,11 @@
   type Props = {
     pipeline: PipelineDetail;
     onRemoveItem?: (itemId: string) => void;
+    /** Outreach templates offered per stage, keyed by stage id. */
+    stageTemplates?: Record<string, { id: string; name: string }[]>;
   };
 
-  let { pipeline, onRemoveItem }: Props = $props();
+  let { pipeline, onRemoveItem, stageTemplates = {} }: Props = $props();
 
   let dragItemId = $state<string | null>(null);
   let dragOverStage = $state<string | null>(null);
@@ -190,6 +192,7 @@
             <PipelineItemCard
               {item}
               draggable={true}
+              templates={stageTemplates[stage.id] ?? []}
               onDragStart={() => onDragStart(item.id)}
               onDragEnd={onDragEnd}
               onRemove={onRemoveItem ? () => onRemoveItem!(item.id) : undefined}
