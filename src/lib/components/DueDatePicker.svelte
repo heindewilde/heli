@@ -154,7 +154,7 @@
       type="button"
       {...attrs}
       aria-label="Set due date"
-      class="shrink-0 text-[var(--color-subtle)] opacity-60 transition-opacity group-hover:opacity-100"
+      class="flex size-6 shrink-0 items-center justify-center rounded-[var(--radius-sm)] text-[var(--color-subtle)] opacity-60 transition-opacity group-hover:opacity-100 [@media(hover:none)]:opacity-100"
     >
       <Calendar size={12} strokeWidth={2} />
     </button>

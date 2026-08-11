@@ -373,7 +373,7 @@
         <X size={10} strokeWidth={2} />
       </a>
     {:else if data.allTags.length > 0}
-      <span class="text-[var(--color-subtle)]">—</span>
+      <span aria-hidden="true" class="mx-1 h-4 w-px shrink-0 self-center bg-[var(--color-border)]"></span>
       {#each data.allTags.slice(0, 6) as t (t.id)}
         <a
           href={buildUrl({ tag: t.slug })}

@@ -87,14 +87,14 @@
     </span>
     {#each tags as t (t.id)}
       <span
-        class="inline-flex items-center gap-1 rounded-full bg-[var(--color-highlight-bg)] py-0.5 pl-2 pr-0.5 text-xs text-[var(--color-text)]"
+        class="inline-flex min-h-7 items-center gap-1 rounded-full bg-[var(--color-highlight-bg)] py-0.5 pl-2.5 pr-1 text-xs text-[var(--color-text)]"
       >
         <span class="font-medium">{t.name}</span>
         <button
           type="button"
           onclick={() => remove(t.id)}
           aria-label="Remove {t.name}"
-          class="rounded-full p-0.5 hover:bg-[var(--color-highlight-border)]"><X size={10} strokeWidth={2} /></button
+          class="flex size-6 shrink-0 items-center justify-center rounded-full hover:bg-[var(--color-highlight-border)]"><X size={10} strokeWidth={2} /></button
         >
       </span>
     {/each}

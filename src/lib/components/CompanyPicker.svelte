@@ -49,7 +49,7 @@
 
 {#if selected}
   <div
-    class="flex items-center gap-2 rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-surface)] px-2 py-1.5 text-sm"
+    class="flex min-h-9 items-center gap-2 rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-surface)] px-2 py-1.5 text-sm"
   >
     <CompanyLogo
       domain={selected.domain}
@@ -63,7 +63,7 @@
       type="button"
       onclick={() => onPick(null)}
       aria-label="Remove company"
-      class="rounded-full p-1 text-[var(--color-subtle)] hover:bg-[var(--color-bg)]"
+      class="flex size-6 shrink-0 items-center justify-center rounded-full text-[var(--color-subtle)] hover:bg-[var(--color-bg)]"
       ><X size={12} strokeWidth={2} /></button
     >
   </div>

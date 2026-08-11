@@ -68,8 +68,8 @@
   };
 
   const SIZES: Record<Size, string> = {
-    xs: 'gap-1 px-2 py-0.5 text-2xs',
-    sm: 'gap-1.5 px-2.5 py-1 text-xs',
+    xs: 'min-h-6 gap-1 px-2 py-0.5 text-2xs',
+    sm: 'min-h-6 gap-1.5 px-2.5 py-1 text-xs',
     md: 'gap-2 px-3 py-1.5 text-sm',
     lg: 'gap-2 px-4 py-2 text-sm',
     icon: 'size-8',

@@ -155,7 +155,7 @@
     <button
       type="button"
       onclick={beginEdit}
-      class="group/editable flex w-full items-center justify-between gap-2 rounded-[var(--radius-sm)] -mx-1 px-1 text-left text-sm hover:bg-[var(--color-surface)] {displayClass}"
+      class="group/editable flex min-h-6 w-full items-center justify-between gap-2 rounded-[var(--radius-sm)] -mx-1 px-1 text-left text-sm hover:bg-[var(--color-surface)] {displayClass}"
     >
       {#if display}
         {@render display(shown)}
