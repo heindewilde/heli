@@ -7,6 +7,8 @@
  * in the options page.
  */
 
+import type { CaptureBody } from './capture-body';
+
 export type Settings = { origin: string; token: string };
 
 export async function getSettings(): Promise<Settings | null> {
@@ -45,7 +47,7 @@ export const lookup = (s: Settings, url: string) =>
 export const listTags = (s: Settings, scope: 'person' | 'company') =>
   call<{ id: string; name: string }[]>(s, `/tags?scope=${scope}`);
 
-export const capture = (s: Settings, body: Record<string, unknown>) =>
+export const capture = (s: Settings, body: CaptureBody) =>
   call<{ id: string; kind: string; dedup: boolean; href: string }>(s, '/capture', {
     method: 'POST',
     body: JSON.stringify(body)

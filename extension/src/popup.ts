@@ -1,5 +1,5 @@
 import { capture, getSettings, listTags, lookup, type LookupResult, type Settings } from './api';
-import type { Capture } from './adapters';
+import { captureBody, type FormValues, type Parsed } from './capture-body';
 
 /**
  * The popup.
@@ -13,8 +13,6 @@ import type { Capture } from './adapters';
  * `POST /capture` carries the record, its tags and the note together — no fan
  * out, no partial failures to reconcile.
  */
-
-type Parsed = Capture & { url: string; adapter: string };
 
 const app = document.getElementById('app')!;
 
@@ -89,16 +87,64 @@ async function main() {
   // Parse and lookup concurrently — the lookup does not depend on the parse,
   // and waiting for both in series is the difference between the popup feeling
   // instant and feeling like a network call.
-  let parsed: Parsed;
-  let existing: LookupResult;
-  try {
-    [parsed, existing] = await Promise.all([parsePage(tab.id), lookup(settings, tab.url)]);
-  } catch (err) {
-    fail((err as Error).message);
+  //
+  // `allSettled`, not `all`: only the parse is load-bearing. A lookup that
+  // fails — server down, token without the scope, a hiccup — costs the "already
+  // saved" banner and nothing else, so it must not take the save form down with
+  // it. Same principle the adapters follow one level down: degrade, don't break.
+  const [parseResult, lookupResult] = await Promise.allSettled([
+    parsePage(tab.id),
+    lookup(settings, tab.url)
+  ]);
+
+  if (parseResult.status === 'rejected') {
+    fail((parseResult.reason as Error).message);
     return;
   }
+  const existing: LookupResult =
+    lookupResult.status === 'fulfilled' ? lookupResult.value : { found: false, url: tab.url };
 
-  render(settings, parsed, existing);
+  render(settings, parseResult.value, existing);
+}
+
+/**
+ * Tag suggestions, cached in `chrome.storage.session` — a popup is a fresh
+ * document every time it opens, so without this every open refetched them.
+ * Session storage dies with the browser, which is the right lifetime for a
+ * convenience list; `options.ts` clears it when the token changes, because the
+ * tags belong to whichever workspace that token authenticates as.
+ */
+const TAG_TTL_MS = 5 * 60_000;
+
+async function cachedTags(s: Settings, kind: 'person' | 'company') {
+  const key = `tags:${kind}`;
+  const cached = (await chrome.storage.session.get(key))[key] as
+    | { at: number; tags: { id: string; name: string }[] }
+    | undefined;
+  if (cached && Date.now() - cached.at < TAG_TTL_MS) return cached.tags;
+
+  const tags = await listTags(s, kind);
+  await chrome.storage.session.set({ [key]: { at: Date.now(), tags } });
+  return tags;
+}
+
+const textarea = (id: string) =>
+  (document.getElementById(id) as HTMLTextAreaElement | null)?.value.trim() ?? '';
+
+function readForm(): FormValues {
+  return {
+    name: val('name'),
+    role: val('role'),
+    company: val('company'),
+    email: val('email'),
+    phone: val('phone'),
+    location: val('location'),
+    bio: textarea('bio'),
+    industry: val('industry'),
+    description: val('description'),
+    tags: val('tags'),
+    note: textarea('note')
+  };
 }
 
 function render(settings: Settings, parsed: Parsed, existing: LookupResult) {
@@ -116,15 +162,43 @@ function render(settings: Settings, parsed: Parsed, existing: LookupResult) {
     );
   }
 
+  // The profile photo, shown rather than made editable: seeing what is about to
+  // be saved is the useful part, and nobody retypes an image URL.
+  if (parsed.avatarUrl) {
+    nodes.push(
+      el('img', {
+        src: parsed.avatarUrl,
+        alt: '',
+        class: 'avatar',
+        width: 40,
+        height: 40,
+        referrerPolicy: 'no-referrer'
+      })
+    );
+  }
+
+  // Every parsed *text* field is editable before saving — that is the promise
+  // that lets a rotted selector degrade to "type it in" instead of to a broken
+  // extension. So a field the adapters fill must be rendered *and* sent;
+  // `company` was rendered and dropped, and `description` was neither.
   nodes.push(field('Name', existing.found ? existing.name : parsed.name, 'name'));
   if (isPerson) {
     nodes.push(field('Role', parsed.role, 'role'));
     nodes.push(field('Company', parsed.company, 'company'));
     nodes.push(field('Email', parsed.email, 'email'));
+    nodes.push(field('Phone', parsed.phone, 'phone'));
   } else {
     nodes.push(field('Industry', parsed.industry, 'industry'));
+    nodes.push(field('Description', parsed.description, 'description'));
   }
   nodes.push(field('Location', parsed.location, 'location'));
+
+  if (isPerson) {
+    const bio = el('textarea', { id: 'bio', rows: 2 });
+    bio.value = parsed.bio ?? '';
+    nodes.push(el('label', {}, el('span', {}, 'Bio'), bio));
+  }
+
   nodes.push(field('Tags', '', 'tags'));
 
   const note = el('textarea', { id: 'note', rows: 3, placeholder: 'Add a note…' });
@@ -136,9 +210,7 @@ function render(settings: Settings, parsed: Parsed, existing: LookupResult) {
 
   show(...nodes);
 
-  // Tag suggestions, cached for the session so opening the popup repeatedly on
-  // a page does not re-fetch them.
-  listTags(settings, parsed.kind)
+  cachedTags(settings, parsed.kind)
     .then((tags) => {
       const list = el('datalist', { id: 'tag-options' });
       for (const t of tags) list.append(el('option', { value: t.name }));
@@ -153,20 +225,7 @@ function render(settings: Settings, parsed: Parsed, existing: LookupResult) {
     save.disabled = true;
     status.textContent = 'Saving…';
     try {
-      const result = await capture(settings, {
-        url: parsed.url,
-        kind: parsed.kind,
-        name: val('name'),
-        role: val('role') || null,
-        email: val('email') || null,
-        location: val('location') || null,
-        industry: val('industry') || null,
-        tags: val('tags')
-          .split(',')
-          .map((t) => t.trim())
-          .filter(Boolean),
-        note: (document.getElementById('note') as HTMLTextAreaElement).value.trim() || null
-      });
+      const result = await capture(settings, captureBody(parsed, readForm()));
       status.textContent = 'Saved ✓';
       const open = el('a', {
         href: `${settings.origin}${result.href}`,

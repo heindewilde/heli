@@ -4,7 +4,7 @@ import { apiOk } from '$lib/server/api-v1';
 
 /** Who this token acts as, and what it may do. The first call any client makes. */
 export const GET: RequestHandler = async ({ locals }) => {
-  const s = requireApiScope(locals, 'read');
+  const s = requireApiScope(locals, 'read', 'me');
   return apiOk({
     user: { id: s.userId, email: locals.user?.email ?? null, username: locals.user?.username ?? null },
     workspace: { id: s.workspaceId, name: locals.user?.workspaceName ?? null, region: s.region },

@@ -50,8 +50,13 @@ export async function saveCompany(
           name: manual.name,
           industry: manual.industry ?? null,
           location: manual.location ?? null,
-          description: manual.description ?? null,
-          notes: manual.notes ?? null
+          // Both sanitized here rather than at the call sites, matching the
+          // no-url branch below. `notes` is rendered with `{@html}`, so storing
+          // raw markup breaks an invariant the renderer depends on; the
+          // extension's `description` comes from a page's `og:description`,
+          // which is attacker-controlled markup by definition.
+          description: manual.description ? sanitize(manual.description) : null,
+          notes: manual.notes ? sanitize(manual.notes) : null
         }
       : null;
 

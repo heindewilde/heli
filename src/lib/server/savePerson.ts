@@ -26,16 +26,51 @@ export type ManualPersonInput = {
   url?: string | null;
   role?: string | null;
   companyId?: string | null;
+  /**
+   * An employer *name* with no company row behind it yet — what the browser
+   * extension scrapes off a profile. It lands in `suggested_company_name`, the
+   * same column `enrichPerson` and the Google import write, so `/people/[id]`
+   * offers to link it against a matching company. Resolving a name to a row
+   * here instead would mean owning a name-matching rule at write time and
+   * risking a junk company for every "Freelance" and "Self-employed".
+   */
+  suggestedCompanyName?: string | null;
   email?: string | null;
   phone?: string | null;
   location?: string | null;
   notes?: string | null;
+  /**
+   * A remote image URL. Cached locally before it is stored, so a record does not
+   * depend on a third party keeping a hotlink alive — `enrichPerson` does the
+   * same with what it finds in `og:image`.
+   */
+  avatarUrl?: string | null;
+  linkedinUrl?: string | null;
+  xUrl?: string | null;
 };
 
 const LINKEDIN_BOILERPLATE_RE = /view\s+[^.]+'s\s+(full\s+)?profile\s+on\s+linkedin/i;
 
 function fallbackName(u: URL): string {
   return humanizeHandle(deriveHandle(u)) ?? u.hostname.replace(/^www\./, '');
+}
+
+/**
+ * Hosts that serve a signed-out fetch a sign-up wall rather than the page.
+ * `og.ts` keeps `AUTHWALL_PATTERNS` to *detect* one after the fact; this is the
+ * cheaper front door — don't make the request at all when we already know.
+ */
+function servesAuthwall(u: URL): boolean {
+  return /(^|\.)linkedin\.com$/.test(u.hostname.replace(/^www\./, ''));
+}
+
+/** The field names a caller actually supplied, so enrichment leaves them alone. */
+function suppliedKeys(enriched: Record<string, unknown>): Set<string> {
+  return new Set(
+    Object.entries(enriched)
+      .filter(([, v]) => v !== null && v !== '')
+      .map(([k]) => k)
+  );
 }
 
 export async function savePerson(
@@ -57,17 +92,30 @@ export async function savePerson(
     // A caller supplying `manual` alongside a URL has already read the page —
     // that is the browser extension, looking at the rendered, authenticated DOM
     // the server cannot fetch. Apply what it found instead of discarding it,
-    // and skip the enrichment that would hit an authwall and overwrite good
-    // data with a fallback name.
+    // and don't let enrichment overwrite it (see `enrichPerson`'s `preserve`).
+    const cachedAvatar = manual?.avatarUrl
+      ? ((await cacheRemoteImage(manual.avatarUrl)) ?? manual.avatarUrl)
+      : null;
     const enriched = manual
       ? {
           name: manual.name,
           role: manual.role ?? null,
           companyId: manual.companyId ?? null,
+          suggestedCompanyName: manual.suggestedCompanyName ?? null,
           email: manual.email ?? null,
           phone: manual.phone ?? null,
           location: manual.location ?? null,
-          notes: manual.notes ?? null
+          avatarUrl: cachedAvatar,
+          linkedinUrl: manual.linkedinUrl ?? null,
+          xUrl: manual.xUrl ?? null,
+          // Sanitized *here*, not at the call sites. `notes` is rendered with
+          // `{@html}` (NotesEditor.svelte), so already-sanitized HTML is an
+          // invariant the renderer depends on — and this branch was the one
+          // place that skipped it, while the no-url branch below and
+          // `enrichPerson` both sanitize. One authenticated `write` call with a
+          // url was enough to store markup that ran for everyone in the
+          // workspace.
+          notes: manual.notes ? sanitize(manual.notes) : null
         }
       : null;
 
@@ -107,7 +155,17 @@ export async function savePerson(
       createdAt: now,
       updatedAt: now
     });
-    if (!enriched) void enrichPerson(id, s, u);
+    if (!enriched) {
+      void enrichPerson(id, s, u);
+    } else if (!servesAuthwall(u)) {
+      // Enrichment still runs when the extension supplied data — it adds the
+      // favicon, the social links and the postal address that a profile DOM does
+      // not carry — but it must not touch what the extension already read, hence
+      // `preserve`. Skipped entirely for hosts that serve *the server* an
+      // authwall: there, everything it "finds" is sign-up chrome, and writing
+      // that into the blank fields is worse than leaving them blank.
+      void enrichPerson(id, s, u, suppliedKeys(enriched));
+    }
     bumpSearchEpoch(s.workspaceId);
     return { id, kind: 'person', dedup: false };
   }
@@ -121,6 +179,7 @@ export async function savePerson(
     name: manual.name.trim(),
     role: manual.role ?? null,
     companyId: manual.companyId ?? null,
+    suggestedCompanyName: manual.suggestedCompanyName ?? null,
     email: manual.email ?? null,
     phone: manual.phone ?? null,
     location: manual.location ?? null,
@@ -144,7 +203,17 @@ function cleanDescription(raw: string | undefined): string | null {
   return sanitize(capped);
 }
 
-export async function enrichPerson(id: string, s: Scope, url: URL): Promise<void> {
+export async function enrichPerson(
+  id: string,
+  s: Scope,
+  url: URL,
+  /**
+   * Fields the caller already filled from a source better than an OG fetch —
+   * the extension reading the rendered, authenticated DOM. Enrichment adds what
+   * it can around them and never overwrites them.
+   */
+  preserve?: Set<string>
+): Promise<void> {
   const d = db(s.region);
   try {
     const og = await fetchOg(url);
@@ -193,6 +262,14 @@ export async function enrichPerson(id: string, s: Scope, url: URL): Promise<void
       updatedAt: Date.now()
     };
     if (finalName) updates.name = finalName;
+
+    // Drop anything the caller already knew better. `source` and `updatedAt` are
+    // this function's own bookkeeping and are never preserved away.
+    if (preserve) {
+      for (const key of preserve) {
+        if (key !== 'source' && key !== 'updatedAt') delete updates[key as keyof typeof updates];
+      }
+    }
 
     await d.update(people).set(updates).where(and(eq(people.id, id), eq(people.workspaceId, s.workspaceId)));
 

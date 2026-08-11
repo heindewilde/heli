@@ -1,0 +1,55 @@
+name: CI
+
+# Nothing verified either half of this repo before it deployed. `fly-deploy.yml`
+# pushes straight from `main` and `docker.yml` only fires on a tag, so a broken
+# `npm run check` reached production and the extension was never type-checked at
+# all — esbuild strips types without looking at them, the root tsconfig excludes
+# `extension/`, and svelte-check runs off `.svelte-kit/tsconfig.json`, which only
+# sees `src/` and `tests/`.
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  app:
+    name: App
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          # Matches the Dockerfile's node:22-alpine and package.json engines.
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      # svelte-check, check-tenancy, check-overlays and vitest, in one command.
+      - run: npm run check
+
+  extension:
+    name: Extension
+    runs-on: ubuntu-latest
+    # A separate job with its own install, because the extension is deliberately
+    # not an npm workspace: making the app's `npm ci` pull these dependencies is
+    # exactly what the three isolation guards (.dockerignore, tsconfig exclude,
+    # svelte-check's include) exist to prevent.
+    defaults:
+      run:
+        working-directory: extension
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: extension/package-lock.json
+      - run: npm ci
+      - run: npm run typecheck
+      # The build reaches outside extension/ for the app's icon source and
+      # app.css palette, so it also proves those paths still resolve.
+      - run: npm run build

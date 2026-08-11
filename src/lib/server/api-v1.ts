@@ -29,15 +29,35 @@ export function apiError(code: ApiErrorCode, message: string, status: number): R
 }
 
 /**
+ * The published extension's own origins, allowed without configuration.
+ *
+ * Without this every self-hoster had to set `EXTENSION_ORIGINS` before the
+ * extension worked at all, and the failure was a bare `Failed to fetch` with
+ * nothing pointing at CORS. A first-party id is not a loosening: the entry is a
+ * fixed string we ship, and `Access-Control-Allow-Credentials` is still never
+ * sent, so nothing here can ride a session cookie.
+ *
+ * Empty until the Web Store assigns an id — that is the one line to add at
+ * launch. Unpacked builds have a per-install id and keep using the env var.
+ */
+const OFFICIAL_EXTENSION_ORIGINS: string[] = [
+  // 'chrome-extension://<chrome web store id>',
+  // 'moz-extension://<amo id>',
+];
+
+/**
  * Origins allowed to call /api/v1 cross-origin — in practice the browser
  * extension, which cannot use the session cookie at all (it is SameSite=Lax).
- * Comma-separated, e.g. `chrome-extension://abc…,moz-extension://…`.
+ * `EXTENSION_ORIGINS` *adds* to the official list rather than replacing it:
+ * comma-separated, e.g. `chrome-extension://abc…,moz-extension://…`, which is
+ * what a fork or a locally-loaded unpacked build uses.
  */
 function allowedOrigins(): string[] {
-  return (process.env.EXTENSION_ORIGINS ?? '')
+  const configured = (process.env.EXTENSION_ORIGINS ?? '')
     .split(',')
     .map((s) => s.trim())
     .filter(Boolean);
+  return [...OFFICIAL_EXTENSION_ORIGINS, ...configured];
 }
 
 /**

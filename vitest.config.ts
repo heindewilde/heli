@@ -20,10 +20,13 @@ export default defineConfig({
     // saveInteraction.ts -> $lib/interactions), which only SvelteKit resolves.
     alias: {
       $lib: fileURLToPath(new URL('./src/lib', import.meta.url)),
-      // A SvelteKit virtual module; see the stub for why the shim is faithful
+      // SvelteKit virtual modules; see each stub for why the shim is faithful
       // rather than empty.
       '$env/dynamic/private': fileURLToPath(
         new URL('./tests/helpers/env-stub.ts', import.meta.url)
+      ),
+      '$app/environment': fileURLToPath(
+        new URL('./tests/helpers/app-environment-stub.ts', import.meta.url)
       )
     }
   },

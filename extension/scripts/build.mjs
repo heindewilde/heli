@@ -1,7 +1,8 @@
 import { context, build as esbuild } from 'esbuild';
-import { cpSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { cpSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { execFileSync } from 'node:child_process';
 import { extractTokens } from './tokens.mjs';
 import { decodePng, encodePng, resize } from './resize.mjs';
 
@@ -11,6 +12,9 @@ const repo = resolve(root, '..');
 const out = resolve(root, 'dist');
 
 const watch = process.argv.includes('--watch');
+const pack = process.argv.includes('--package');
+
+const pkg = JSON.parse(readFileSync(resolve(root, 'package.json'), 'utf8'));
 
 mkdirSync(out, { recursive: true });
 
@@ -40,7 +44,13 @@ ${body}
   );
 }
 
-cpSync(resolve(root, 'manifest.json'), resolve(out, 'manifest.json'));
+/* The manifest, with its version taken from package.json rather than kept in
+   step by hand. Same reasoning as the icons and tokens.css below and above:
+   one source, so the two files cannot disagree. The app auto-bumps its patch
+   version on every deploy; this is the extension's equivalent single point. */
+const manifest = JSON.parse(readFileSync(resolve(root, 'manifest.json'), 'utf8'));
+manifest.version = pkg.version;
+writeFileSync(resolve(out, 'manifest.json'), JSON.stringify(manifest, null, 2) + '\n');
 
 /* Icons come from the app's own static/ directory rather than a second copy
    living here — same reasoning as tokens.css above. A rebranding then reaches
@@ -100,4 +110,27 @@ if (watch) {
 } else {
   await Promise.all(jobs.map((job) => esbuild({ ...common, ...job })));
   console.log('extension built → dist/');
+  if (pack) packageZip();
+}
+
+/* A store upload is a zip of dist/. Shelling out to `zip` rather than taking a
+   dependency for a dev-only script — the same call this repo already makes for
+   PNG resizing (see resize.mjs), where a hundred lines beat a package. */
+function packageZip() {
+  const zipPath = resolve(root, `heli-extension-${pkg.version}.zip`);
+  rmSync(zipPath, { force: true });
+  try {
+    // `-r .` from inside dist/ so paths are relative to the extension root —
+    // Chrome rejects a zip whose manifest.json sits inside a directory.
+    execFileSync('zip', ['-r', '-q', zipPath, '.'], { cwd: out, stdio: 'inherit' });
+  } catch (err) {
+    if (err.code === 'ENOENT') {
+      throw new Error(
+        'Packaging needs the `zip` command, which is not on PATH. ' +
+          'macOS and most Linux images ship it; otherwise zip dist/ yourself.'
+      );
+    }
+    throw err;
+  }
+  console.log(`packaged → ${zipPath.replace(root + '/', '')}`);
 }

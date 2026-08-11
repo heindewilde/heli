@@ -68,3 +68,22 @@ button:disabled { opacity: 0.5; cursor: default; }
   border-radius: var(--radius-sm);
 }
 code { font-size: 11px; }
+
+/* The profile photo about to be saved. Sized to match what the app renders. */
+.avatar {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 1px solid var(--color-border);
+  background: var(--color-bg);
+}
+
+/* The self-hosting origin hint: present when needed, quiet when not. */
+.origin-note {
+  margin-top: 4px;
+  padding-top: 8px;
+  border-top: 1px solid var(--color-border);
+  line-height: 1.5;
+}
+.origin-note code { word-break: break-all; }

@@ -16,7 +16,7 @@ import { cleanUrl, UrlError } from '$lib/server/url';
  * answer here and the behaviour on save cannot disagree.
  */
 export const GET: RequestHandler = async ({ url, locals }) => {
-  const s = requireApiScope(locals, 'read');
+  const s = requireApiScope(locals, 'read', 'lookup');
   const raw = url.searchParams.get('url');
   if (!raw) return apiError('invalid_request', 'A `url` parameter is required.', 400);
 

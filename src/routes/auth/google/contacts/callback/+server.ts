@@ -86,7 +86,7 @@ export const GET: RequestHandler = async ({ url, cookies, locals }) => {
     }
   }
 
-  const importId = storePendingImport(locals.user.id, toImport, duplicateCount);
+  const importId = storePendingImport(locals.user.id, toImport, duplicateCount, 'google_contacts');
 
   cookies.set(CONTACTS_IMPORT_COOKIE, importId, {
     path: '/',

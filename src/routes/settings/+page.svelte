@@ -287,6 +287,54 @@
     await goto('/settings', { replaceState: true });
   }
 
+  let csvBusy = $state(false);
+  let csvError = $state<string | null>(null);
+
+  const CSV_ERRORS: Record<string, string> = {
+    no_file: 'No file was selected.',
+    empty_file: 'That file is empty.',
+    file_too_large: 'That file is too large to read.',
+    // By far the likeliest mistake: the archive LinkedIn sends holds a dozen
+    // CSVs and only one of them is the connections list.
+    not_a_connections_export:
+      'That does not look like a LinkedIn connections export. Look for Connections.csv inside the archive.'
+  };
+
+  /**
+   * Uploads the CSV, which *stages* the import, then navigates to the URL the
+   * staged-preview block is gated on so it renders — the same landing the Google
+   * OAuth callback redirects to.
+   */
+  async function uploadLinkedInCsv(event: Event) {
+    const input = event.currentTarget as HTMLInputElement;
+    const file = input.files?.[0];
+    if (!file) return;
+
+    csvBusy = true;
+    csvError = null;
+    try {
+      const body = new FormData();
+      body.set('file', file);
+      const res = await fetch('/api/import/linkedin', { method: 'POST', body });
+      if (!res.ok) {
+        const code = await readErrorCode(res);
+        csvError = CSV_ERRORS[code] ?? 'Could not read that file.';
+        return;
+      }
+      const { skipped } = (await res.json()) as { skipped: number };
+      if (skipped > 0) {
+        toast.info(`${skipped} row${skipped === 1 ? '' : 's'} had no name and were ignored.`);
+      }
+      await goto('/settings?import=contacts', { invalidateAll: true });
+    } catch {
+      csvError = 'Could not read that file.';
+    } finally {
+      csvBusy = false;
+      // Cleared so re-picking the same file fires `change` again.
+      input.value = '';
+    }
+  }
+
   let copied = $state(false);
   /* ── Calendar feeds ──────────────────────────────────────────────────── */
 
@@ -1132,14 +1180,23 @@
   {/if}
 
   <!-- Importing bulk-inserts into the shared people table, so POST /api/import
-       is admin-only; don't show members a flow that ends in a 403. -->
-  {#if data.googleAuthEnabled && teamAdmin}
+       is admin-only; don't show members a flow that ends in a 403.
+
+       One section, one staged preview, two sources. Both stage into the same
+       pending import and commit through the same POST /api/import, so the
+       preview and confirm markup below must not be duplicated per source. -->
+  {#if teamAdmin}
     <section class="flex flex-col gap-3 rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)] p-5">
-      <h2 class="flex items-center gap-2 text-sm font-medium"><Users size={14} strokeWidth={2} /> Google Contacts</h2>
+      <h2 class="flex items-center gap-2 text-sm font-medium"><Users size={14} strokeWidth={2} /> Import contacts</h2>
 
       {#if data.importError}
         <p class="rounded-[var(--radius-sm)] border border-[var(--color-danger-border)] bg-[var(--color-danger-bg)] px-3 py-2 text-sm text-[var(--color-danger)]">
           Could not connect to Google. Please try again.
+        </p>
+      {/if}
+      {#if csvError}
+        <p class="rounded-[var(--radius-sm)] border border-[var(--color-danger-border)] bg-[var(--color-danger-bg)] px-3 py-2 text-sm text-[var(--color-danger)]">
+          {csvError}
         </p>
       {/if}
 
@@ -1189,20 +1246,54 @@
         </div>
       {:else}
         <p class="text-sm text-[var(--color-muted)]">
-          Import your Google Contacts directly into {APP_NAME}. Contacts already in your account are automatically skipped.
+          Bring an existing address book into {APP_NAME}. You'll see what's about to be
+          added before anything is written, and people already here are skipped.
         </p>
-        <a
-          href="/auth/google/contacts"
-          class="self-start inline-flex items-center gap-2 rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-bg)] px-3 py-2 text-sm font-medium hover:bg-[var(--color-surface)]"
-        >
-          <svg width="14" height="14" viewBox="0 0 24 24" aria-hidden="true">
-            <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
-            <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
-            <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l3.66-2.84z"/>
-            <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
-          </svg>
-          Import from Google Contacts
-        </a>
+        <div class="flex flex-wrap items-center gap-2">
+          {#if data.googleAuthEnabled}
+            <a
+              href="/auth/google/contacts"
+              class="inline-flex items-center gap-2 rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-bg)] px-3 py-2 text-sm font-medium hover:bg-[var(--color-surface)]"
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" aria-hidden="true">
+                <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
+                <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
+                <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l3.66-2.84z"/>
+                <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
+              </svg>
+              Google Contacts
+            </a>
+          {/if}
+          <label
+            class="inline-flex cursor-pointer items-center gap-2 rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-bg)] px-3 py-2 text-sm font-medium hover:bg-[var(--color-surface)]"
+            class:opacity-60={csvBusy}
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" aria-hidden="true">
+              <path fill="#0A66C2" d="M20.45 20.45h-3.55v-5.57c0-1.33-.03-3.04-1.85-3.04-1.85 0-2.14 1.45-2.14 2.94v5.67H9.35V9h3.41v1.56h.05a3.74 3.74 0 0 1 3.37-1.85c3.6 0 4.27 2.37 4.27 5.45v6.29zM5.34 7.43a2.06 2.06 0 1 1 0-4.12 2.06 2.06 0 0 1 0 4.12zm1.78 13.02H3.55V9h3.57v11.45zM22.22 0H1.77C.79 0 0 .77 0 1.73v20.54C0 23.22.79 24 1.77 24h20.45c.98 0 1.78-.78 1.78-1.73V1.73C24 .77 23.2 0 22.22 0z"/>
+            </svg>
+            {csvBusy ? 'Reading…' : 'LinkedIn connections (.csv)'}
+            <input
+              type="file"
+              accept=".csv,text/csv"
+              class="hidden"
+              disabled={csvBusy}
+              onchange={uploadLinkedInCsv}
+            />
+          </label>
+        </div>
+        <p class="text-xs text-[var(--color-subtle)]">
+          LinkedIn has no API for other people's profiles, so the export is the reliable
+          route in. Get it from
+          <a
+            href="https://www.linkedin.com/mypreferences/d/download-my-data"
+            target="_blank"
+            rel="noopener"
+            class="underline"
+          >Settings → Get a copy of your data → Connections</a>,
+          then upload the <code>Connections.csv</code> from the archive. It carries name,
+          profile URL, company and position — and an email only for connections who chose
+          to share it, which is most often nobody.
+        </p>
       {/if}
     </section>
   {/if}

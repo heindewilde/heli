@@ -36,9 +36,16 @@ Only a SHA-256 hash is stored. If you lose a token, revoke it and make another.
 |---|---|
 | `read` | Every `GET`. |
 | `write` | Create, update and delete records. |
-| `capture` | `POST /capture` only — what the browser extension uses. |
+| `capture` | `POST /capture`, plus `GET` on `/me`, `/lookup` and `/tags` — exactly what the browser extension needs, and nothing else. |
 
-A token missing the scope for a call gets `403` with `missing_scope:<scope>`.
+`write` implies `capture`. `capture` implies `read` on those three endpoints
+only: the extension has to verify its token, ask whether a page is already
+saved, and offer tag suggestions, so a scope that could not do those would be
+narrower than its own purpose. It does not reach `/people`, `/companies` or
+`/search`.
+
+A token missing the scope for a call gets `403` with
+`{ "error": { "code": "forbidden", "message": "Token is missing the \"read\" scope." } }`.
 
 ### Rate limits
 

@@ -49,6 +49,21 @@ export function requireRole(s: Scope, ...allowed: WorkspaceRole[]): void {
 }
 
 /**
+ * The reads a `capture` token may perform, named one by one.
+ *
+ * `capture` exists so the browser extension can hold something narrower than
+ * write access — but the extension does not only write. It verifies the token
+ * against `/me`, asks `/lookup` whether the page is already saved, and fetches
+ * `/tags` for suggestions. Without these three it could not connect at all, and
+ * the scope would be narrower than its own purpose.
+ *
+ * This union *is* the allowlist. There is no `Set` beside it to drift out of
+ * sync, and widening it to `/people` or `/search` would be a compile error at
+ * the call site rather than something a reviewer has to notice.
+ */
+export type CaptureRead = 'me' | 'lookup' | 'tags';
+
+/**
  * Narrow a token's authority to a required scope.
  *
  * Scopes only ever *narrow*. The role on the Scope comes from the membership
@@ -57,16 +72,24 @@ export function requireRole(s: Scope, ...allowed: WorkspaceRole[]): void {
  * cookie session `locals.token` is null and this is a plain `requireScope` —
  * the UI is trusted and is not scope-limited.
  */
-export function requireApiScope(locals: App.Locals, need: TokenScope): Scope {
+export function requireApiScope(
+  locals: App.Locals,
+  need: TokenScope,
+  /** Pass this only on the three endpoints a `capture` token must read. */
+  surface?: CaptureRead
+): Scope {
   const s = requireScope(locals);
   const token = locals.token;
   if (!token) return s;
 
-  // `capture` exists so the browser extension can hold something *narrower*
-  // than full write access — not so that a full-write token is mysteriously
-  // unable to save a page. Implication runs one way only.
+  // Implication runs one way only, and only where it is spelled out: `write`
+  // covers `capture`, and `capture` covers `read` on the three surfaces above.
+  // A full-write token is never mysteriously unable to save a page, and a
+  // capture token never gains a read it was not granted by name.
   const satisfied =
-    token.scopes.includes(need) || (need === 'capture' && token.scopes.includes('write'));
+    token.scopes.includes(need) ||
+    (need === 'capture' && token.scopes.includes('write')) ||
+    (need === 'read' && surface !== undefined && token.scopes.includes('capture'));
   if (!satisfied) {
     throw error(403, { code: 'forbidden', message: `Token is missing the "${need}" scope.` });
   }

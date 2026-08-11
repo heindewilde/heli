@@ -50,7 +50,7 @@ Edit `/srv/heli/.env`, then `cd /srv/heli && docker compose up -d`. Knobs:
 | `SQLITE_CACHE_MB`      | SQLite page cache, MB. Default `16`.                                                |
 | `SQLITE_MMAP_MB`       | SQLite mmap window, MB. Default `64`.                                               |
 | `SCHEDULER_DISABLED`   | Set to `1` to stop the background calendar poller. See [Calendars](#calendars).    |
-| `EXTENSION_ORIGINS`    | Origins allowed to call `/api/v1` cross-origin. See [Browser extension](#browser-extension). |
+| `EXTENSION_ORIGINS`    | *Extra* origins allowed to call `/api/v1` cross-origin. Only needed for an unpacked build. See [Browser extension](#browser-extension). |
 
 ## Performance tuning
 
@@ -190,11 +190,16 @@ personal access token (**Settings → Personal access tokens**, `capture` scope)
 because the session cookie is `SameSite=Lax` and is never sent from an
 extension.
 
-If you build and load it yourself, allow its origin:
+The published extension's origin is allowed out of the box — nothing to
+configure. If you **build and load it yourself** its id is per-install, so add it:
 
 ```bash
 EXTENSION_ORIGINS=chrome-extension://<your-extension-id>
 ```
+
+The extension's options page prints the exact string at the bottom. Without it
+every request fails as `Failed to fetch`, which is all a browser will say about a
+blocked cross-origin request.
 
 Heli never sends `Access-Control-Allow-Credentials`, so an entry here cannot be
 used to ride someone's session — the only way in is a token they created.

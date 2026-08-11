@@ -195,6 +195,40 @@ describe('scopes', () => {
     expect(() => requireApiScope(session as never, 'write')).not.toThrow();
   });
 
+  /**
+   * The extension is handed a `capture` token and immediately performs three
+   * reads: `/me` to verify it, `/lookup` to ask whether the page is already
+   * saved, `/tags` for suggestions. Before this matrix existed the documented
+   * setup produced a token that 403'd on all three, so the extension could not
+   * connect at all — and nothing failed except the user.
+   */
+  test('a capture token reads exactly its three surfaces and no others', async () => {
+    const { requireApiScope } = await import('../src/lib/server/scope');
+    const captureOnly = {
+      user: alice.user,
+      sessionId: null,
+      token: { id: 't', scopes: ['capture'] }
+    };
+
+    expect(() => requireApiScope(captureOnly as never, 'capture')).not.toThrow();
+    for (const surface of ['me', 'lookup', 'tags'] as const) {
+      expect(() => requireApiScope(captureOnly as never, 'read', surface)).not.toThrow();
+    }
+
+    // No surface named means a general read — /people, /companies, /search.
+    expect(() => requireApiScope(captureOnly as never, 'read')).toThrow();
+    expect(() => requireApiScope(captureOnly as never, 'write')).toThrow();
+  });
+
+  test('the surface argument does not conjure a read out of nothing', async () => {
+    const { requireApiScope } = await import('../src/lib/server/scope');
+    // A write-only token still cannot read: only `capture` opens those three.
+    const writeOnly = { user: alice.user, sessionId: null, token: { id: 't', scopes: ['write'] } };
+    expect(() => requireApiScope(writeOnly as never, 'read', 'lookup')).toThrow();
+    // And `write` still implies `capture`, which is the other direction.
+    expect(() => requireApiScope(writeOnly as never, 'capture')).not.toThrow();
+  });
+
   test('a scope cannot grant more than the role allows', async () => {
     const { requireApiScope, requireRole } = await import('../src/lib/server/scope');
     const { db } = await import('../src/lib/server/db');

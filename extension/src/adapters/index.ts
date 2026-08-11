@@ -18,7 +18,18 @@ export type Capture = {
   role?: string | null;
   company?: string | null;
   email?: string | null;
+  phone?: string | null;
   location?: string | null;
+  /**
+   * A person's self-description. **Not** `role` — a job title and a bio are
+   * different things, and the X and GitHub adapters used to resolve `role` from
+   * the bio element, which stored "AI is cool i guess" as somebody's job title.
+   */
+  bio?: string | null;
+  /** Remote profile photo. The server caches it via `cacheRemoteImage`. */
+  avatarUrl?: string | null;
+  linkedinUrl?: string | null;
+  xUrl?: string | null;
   description?: string | null;
   industry?: string | null;
   /** Which strategy produced each field — surfaced by the `__heli_debug` flag. */
@@ -54,13 +65,25 @@ export function resolve(
 
 export const meta = (name: string): Strategy => ({
   name: `meta:${name}`,
+  // `getAttribute('content')` rather than `.content`. Identical in a real DOM,
+  // and it is what lets these strategies also run against HTML parsed by
+  // node-html-parser — which is how the tests exercise them against markup a
+  // site actually served, instead of against a stub built to match them.
   get: (doc) =>
-    doc.querySelector<HTMLMetaElement>(`meta[property="${name}"], meta[name="${name}"]`)?.content
+    doc
+      .querySelector(`meta[property="${name}"], meta[name="${name}"]`)
+      ?.getAttribute('content')
 });
 
 export const css = (selector: string): Strategy => ({
   name: `css:${selector}`,
   get: (doc) => doc.querySelector<HTMLElement>(selector)?.textContent
+});
+
+/** An attribute rather than the text — image sources, mostly. */
+export const cssAttr = (selector: string, attribute: string): Strategy => ({
+  name: `css:${selector}@${attribute}`,
+  get: (doc) => doc.querySelector(selector)?.getAttribute(attribute)
 });
 
 /** Pull a value out of any JSON-LD block on the page. */

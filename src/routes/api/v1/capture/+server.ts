@@ -57,8 +57,21 @@ export const POST: RequestHandler = async ({ request, locals }) => {
           name,
           role: body.role ? sanitizePlainText(String(body.role), 200) : null,
           companyId: body.companyId ? String(body.companyId) : null,
+          // An employer name, not an id — the extension reads it off the page and
+          // has no way to know our company ids. It lands as a suggestion that
+          // `/people/[id]` offers to link, rather than creating a company here.
+          suggestedCompanyName: body.company
+            ? sanitizePlainText(String(body.company), 200)
+            : null,
           email: body.email ? sanitizePlainText(String(body.email), 254) : null,
-          location: body.location ? sanitizePlainText(String(body.location), 200) : null
+          phone: body.phone ? sanitizePlainText(String(body.phone), 64) : null,
+          location: body.location ? sanitizePlainText(String(body.location), 200) : null,
+          // A bio is the person's own prose; it becomes their notes. Sanitized
+          // inside savePerson, along with every other write to that column.
+          notes: body.bio ? String(body.bio) : null,
+          avatarUrl: body.avatarUrl ? String(body.avatarUrl) : null,
+          linkedinUrl: body.linkedinUrl ? String(body.linkedinUrl) : null,
+          xUrl: body.xUrl ? String(body.xUrl) : null
         })
       : await saveCompany(s, url, {
           name,

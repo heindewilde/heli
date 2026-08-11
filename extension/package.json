@@ -6,7 +6,9 @@
   "description": "One-click capture into Heli. Built separately from the app — see README.md.",
   "scripts": {
     "build": "node scripts/build.mjs",
-    "watch": "node scripts/build.mjs --watch"
+    "watch": "node scripts/build.mjs --watch",
+    "package": "node scripts/build.mjs --package",
+    "typecheck": "tsc --noEmit"
   },
   "devDependencies": {
     "@types/chrome": "^0.0.287",

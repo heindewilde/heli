@@ -461,7 +461,7 @@ All configuration is via environment variables (or a `.env` file).
 | `PUBLIC_LOGODEV_KEY` | — | No | [logo.dev](https://logo.dev) publishable token for live company brand logos. Leave blank to fall back to initials. |
 | `RESEND_API_KEY` | — | No | Required for password-reset email delivery. Without it, reset links print to the container logs. |
 | `EMAIL_FROM` | `Heli <noreply@heli.so>` | No | Override the From address used for outbound mail. |
-| `EXTENSION_ORIGINS` | — | No | Comma-separated origins allowed to call `/api/v1` cross-origin, e.g. `chrome-extension://<id>`. Needed only for the browser extension. Credentials are never sent, so an entry here cannot expose a session cookie. |
+| `EXTENSION_ORIGINS` | — | No | **Additional** origins allowed to call `/api/v1` cross-origin, e.g. `chrome-extension://<id>`. The published extension's own origin is built in, so this is only for a build you loaded unpacked or a fork. Credentials are never sent, so an entry here cannot expose a session cookie. |
 | `SCHEDULER_DISABLED` | — | No | Set to `1` to stop the background scheduler that polls subscribed calendars. Use if you'd rather drive syncs from your own cron. |
 
 ---

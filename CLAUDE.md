@@ -173,6 +173,14 @@ endpoint public.
   session. A token can never outrank its owner, and a demotion takes effect
   without touching their tokens. Scopes only ever *narrow* — `requireApiScope`
   after `requireRole`, never instead of it. `write` implies `capture`.
+- **`capture` also grants `read` on exactly three endpoints**, named as a union
+  type in `requireApiScope`'s optional `surface` parameter: `me`, `lookup`,
+  `tags`. The extension performs all three before it can capture anything, so a
+  `capture` token that could not would be narrower than its own purpose — the
+  documented setup produced a token that 403'd at the options page. The union
+  *is* the allowlist: widening it to `/people` or `/search` is a compile error at
+  the call site, not something a reviewer has to catch. Pass a surface only on
+  those three handlers.
 - **Tokens cannot manage tokens.** `/api/v1/tokens*` is cookie-session only, so
   a leaked token cannot mint its own replacement.
 - **Validated tokens are cached in-process for 30 s** (LRU 512, same shape as
@@ -184,6 +192,13 @@ endpoint public.
   ride a session cookie. It is also why this is not a loosening of the
   bookmarklet's same-origin rule — that path is cookie-authenticated, this one
   cannot be.
+  - **`OFFICIAL_EXTENSION_ORIGINS` in `api-v1.ts` is the built-in allowlist and
+    `EXTENSION_ORIGINS` *adds* to it.** Env-only meant every self-hoster had to
+    configure CORS before the extension worked at all, and the failure mode is a
+    bare `TypeError: Failed to fetch` — all a browser ever tells a page about a
+    blocked request. The constant is empty until the Web Store assigns an id;
+    filling it in is the one line to change at launch. The options page prints
+    `chrome-extension://<runtime.id>` so an unpacked build is self-service.
 - **Every `/api/v1` response goes through `reshapeApiError`** in
   `hooks.server.ts`, so a thrown `error()` still matches the documented
   `{ error: { code, message } }` envelope. Return `apiOk`/`apiError` from
@@ -302,6 +317,12 @@ tables is *created-by attribution only and must never be used as a filter*.
 - **Registration has two flags, and the docs must name both.** `ENABLE_REGISTRATION=1` reopens public sign-ups, which self-host closes automatically once one account exists; `DISABLE_REGISTRATION=1` is the hard kill switch and wins. Bootstrap escape hatch: registration is always allowed while `users` is empty, and a live invite admits its addressee even when public signup is closed.
 - **Janitor**: at startup, clear `source='parsing'` rows where `updatedAt < now-10min` — covers crashed enrichments mid-fetch, and retire expired invites. It runs once per regional DB at boot (last step of `migrateOne`), not on a timer, so it is hygiene rather than a correctness mechanism.
 - **Sanitize on write**, not on read. Stored notes are already-sanitized HTML.
+  - The sanitize lives **inside** `savePerson`/`saveCompany`, not at the call
+    sites. Their manual-with-url branch used to skip it while the no-url branch
+    and the enrichment path both applied it, so one `POST /api/v1/people` with a
+    url stored raw markup straight into the column `NotesEditor` renders with
+    `{@html}`. Company `description` goes the same way: it comes from a page's
+    `og:description`, i.e. markup controlled by whoever owns that page.
 - **`PRIMARY_REGION`** defaults to `'local'` on single-host setups and only falls back to `'EU'` when a `DATABASE_URL_EU/US/APAC` is configured. Don't reintroduce a hardcoded `'EU'` default.
 - **CSP heads-up**: `hooks.server.ts` sets `script-src 'self' 'unsafe-inline'` which does **not** explicitly allow `scripts.simpleanalyticscdn.com`. Either SvelteKit's `kit.csp.directives` merges the host in via the auto-mode, or analytics is silently blocked. Worth confirming in browser devtools next time the analytics script is in scope.
 
@@ -358,6 +379,49 @@ deploy doesn't thunder.
 - `snapshotIfStale` and token/session expiry sweeps could ride on this later.
   The seam is free; don't take it in the same change as something else.
 
+## Contact import (Google Contacts, LinkedIn CSV)
+
+Two sources, **one staged shape and one commit path**. `src/lib/server/contactImport.ts`
+owns `MappedPerson`, the pending-import map and `ImportSource`; the source-specific
+part is only the mapping into `MappedPerson`. `POST /api/import` commits either.
+The staging primitives used to live in `google.ts` and are re-exported from there.
+
+- **`source` belongs to the import, not the person.** The commit hardcoded
+  `'google_contacts'`, which became a lie the moment a second source shared the
+  path. It is a field on the pending record now.
+- **The commit writes `url`, `domain` and `handle`.** This is what makes an
+  imported connection and a later browser capture *one* person: the extension
+  resolves identity through `/api/v1/lookup`, which matches the unique
+  `(workspace_id, url)`. Dropping the URL meant importing 800 connections and
+  then capturing one produced a duplicate. `tests/import-linkedin.test.ts` pins it.
+- **The commit bumps the search epoch.** Several hundred inserts is exactly the
+  case that cache exists for.
+
+### Why the LinkedIn CSV, and not an API
+
+There is no API for other people's LinkedIn profiles. Sales Navigator's platform
+is closed to new partners; every other LinkedIn product returns only the
+authenticated member's own profile. The scraping vendors are not a safe
+substitute — Proxycurl, the best-known "URL in, JSON out" API, was sued by
+LinkedIn/Microsoft in January 2025 and shut down that July. In both that case and
+hiQ, the fatal pattern was **fake accounts plus a central resold index of scraped
+data**, which is worth knowing precisely because the extension does neither: it
+reads a page the user already opened, in their own session, into their own CRM.
+The member's own export is the only source that is official, complete for
+first-degree connections, and cannot rot.
+
+- **The file has a preamble.** A "Notes:" paragraph and a blank line sit above the
+  header, and the line count has changed before — so `findHeader` *searches* for
+  the header row and maps **columns by name**, never by position.
+- **`parseCsv` in `csvParse.ts` is the reader half** of `csv.ts`, hand-rolled for
+  the same footprint reason. It strips the UTF-8 BOM `csv.ts` writes, or a blank
+  first header silently fails to match.
+- **A blank email is the normal case.** The column is populated only for
+  connections who opted in, and it is off by default. Identity here is the profile
+  URL, not the email.
+- **The URL goes through `cleanUrl`** at parse time, so it is byte-identical to
+  what a capture from the browser produces.
+
 ## Browser extension (`extension/`)
 
 A separate build artifact: its own `package.json`, its own `node_modules`,
@@ -371,6 +435,12 @@ Three guards keep it out of the app, and all three matter:
 - `svelte-check` runs off `.svelte-kit/tsconfig.json`, which only includes
   `src/` and `tests/`, so it never sees it anyway.
 
+The cost of that isolation is that **`npm run check` cannot type-check the
+extension** — it would need `extension/node_modules`, which is the thing the
+guards exist to keep out. `esbuild` strips types without checking them, so for a
+while nothing checked them at all. `.github/workflows/ci.yml` runs
+`npm run typecheck` (plain `tsc --noEmit`) as a separate job; keep it there.
+
 - **Tokens, not cookies.** The session cookie is `SameSite=Lax`, so a fetch from
   `chrome-extension://…` will never carry it. That is a browser guarantee, not
   an obstacle — the extension pastes a `capture`-scoped personal access token
@@ -383,15 +453,90 @@ Three guards keep it out of the app, and all three matter:
   wins, and every parsed field is editable in the popup before save. Site markup
   rots; an empty editable field is a fine outcome, a thrown parser is not.
   `localStorage.__heli_debug = 1` logs which strategy fired.
-- **`cleanUrl` is imported from `src/lib/cleanUrl.ts`, never copied.** Those
-  rules decide whether two spellings of a LinkedIn URL are the same record, so
-  the extension and the server must agree exactly — `tests/extension-adapters.test.ts`
-  asserts they do. The server-only half (`assertPublicUrl`, which needs
-  `node:dns`) stays in `src/lib/server/url.ts`.
+  - A field the adapters fill must be **rendered *and* sent**. `company` was
+    parsed by two adapters, shown as an editable input, and then absent from the
+    request body — invisible to the type checker (a missing key is not an error)
+    and to the server (`unknown` off the wire). `captureBody` in
+    `extension/src/capture-body.ts` is the single place the body is built, and
+    `tests/extension-capture.test.ts` asserts every key it emits is one the
+    endpoint reads. Add a popup field → add it there.
+  - **`bio` is not `role`.** A job title and a self-description are different
+    columns; the X and GitHub adapters both resolved `role` from the bio element,
+    which stored "AI is cool i guess" as somebody's job title. `bio` becomes
+    `people.notes`. GitHub and X profiles have no job title at all — `role` stays
+    unset there.
+  - **`avatarUrl`, `linkedinUrl` and `xUrl` are sent but not editable**, and
+    that is the one deliberate exception to "every parsed field is editable".
+    Nobody retypes an image URL, and a rotted selector there costs an avatar
+    rather than a record. The avatar goes through `cacheRemoteImage` in
+    `savePerson`, so a record never depends on a third-party hotlink.
+  - **Enrichment now runs *alongside* a capture instead of being skipped**, with
+    two guards. `enrichPerson`'s `preserve` set drops every field the extension
+    already supplied, so an OG fetch cannot overwrite what was read from the
+    rendered DOM; and `servesAuthwall()` skips the fetch entirely for
+    `linkedin.com`, where the server gets a sign-up wall and anything it
+    "extracts" is chrome. That is what makes it safe to fill the *blank* fields
+    (favicon, socials, postal address) that a profile DOM doesn't carry.
+  - **`meta()` reads `getAttribute('content')`, not `.content`.** Identical in a
+    real DOM, and it is what lets the strategies run against `node-html-parser`
+    so the tests can use real saved markup instead of a stub built to match the
+    selectors.
+  - **Fixtures are pre-hydration.** `tests/fixtures/*.html` is fetched HTML, so a
+    selector aimed at client-rendered content looks dead in a test and may still
+    work in the browser — and the reverse also happens: GitHub's repo name is
+    `<strong itemprop=name><a>` in served HTML and `<div itemprop=name>` once
+    hydrated, so only the attribute is portable. Verify against a live page —
+    `extension/README.md` has the checklist.
+  - **LinkedIn person pages have no metadata left.** Checked live: no `og:` tags,
+    no JSON-LD, no `<h1>`, and every class is a per-build hash (`_20e55808 …`).
+    What survives is **accessibility markup**, because LinkedIn has to keep that
+    correct. All of it is in `linkedin.ts`:
+    - `a[href*="/in/<slug>"] [aria-label]` → the name. The slug comes from the
+      URL we are already on, so it cannot match someone else in the feed.
+    - The *other* `<p>` in that same block → the headline, which serves as `role`.
+      "The one that isn't the name", not "paragraph two" — reordering the block
+      or adding a badge does not move it.
+    - The headline's ` at ` tail → the employer. A heuristic, and still better
+      than the `/company/` links in the top card, which on a live profile
+      resolved to BlackRock, Carhartt and Ford — promoted content in the same
+      container. A wrong company is worse than none.
+    - `[aria-label="Profile photo"] img` → the avatar.
+    - `document.title` as `"<Name> | LinkedIn"`, minus the `"(3) "` unread
+      prefix, as the last-resort name.
+    - **`location` is deliberately `null`.** It sits in an unlabelled `<p>` with
+      no anchor, and counting paragraphs is the same shape of guess that put a
+      follower count into a company's location. Blank and editable beats
+      confidently wrong.
+    Company/school pages are still on the old DOM and fully functional.
+  - **There is no JSON to intercept on LinkedIn — don't build an observer.**
+    Checked directly: a profile load makes *no* API calls (only `/preload/` and a
+    telemetry POST), and the document is 1.2 MB of server-rendered markup
+    carrying the data inline. It is a server-driven UI —
+    `data-sdui-screen="com.linkedin.sdui.flagshipnav.profile.Profile"`,
+    `data-sdui-component`, `componentkey` GUIDs. So patching `fetch` at
+    `document_start` to capture Voyager payloads, which would otherwise be the
+    obvious way to get structured data, finds nothing. The DOM is the only source.
+  - **Positional selectors need match order, not `:nth-child`.** A live company
+    page resolved "29M followers" as its location, because those summary items
+    are not a flat run of siblings. `orgInfoItem(n)` indexes
+    `querySelectorAll` and rejects follower/employee counts outright.
+- **`cleanUrl` is imported from `src/lib/cleanUrl.ts`, never copied**, and
+  `content.ts` actually calls it. For a while the import existed only in
+  `extension/tsconfig.json` while the content script sent `location.href` raw;
+  the docs claimed otherwise and a test now asserts the call site. Those rules
+  decide whether two spellings of a LinkedIn URL are the same record, so the
+  extension and the server must agree exactly —
+  `tests/extension-adapters.test.ts` asserts they do. The server-only half
+  (`assertPublicUrl`, which needs `node:dns`) stays in `src/lib/server/url.ts`.
 - **The popup's palette is generated from `src/app.css`** by
   `extension/scripts/tokens.mjs` at build time, so it cannot drift from the app.
   Don't hand-copy colours into `popup.css` — that file is layout only.
 - **`extension/dist/` is what you load unpacked**, and it is gitignored.
+- **The manifest's version comes from `extension/package.json` at build time.**
+  `scripts/build.mjs` writes it into the copy it emits, so the two files cannot
+  drift — same reasoning as the icons and `tokens.css`. Bump `package.json` only.
+  `npm run package` zips `dist/` into `heli-extension-<version>.zip` for a store
+  upload, shelling out to `zip` rather than taking a dependency.
 
 ## Versioning
 

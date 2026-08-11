@@ -1,55 +1,17 @@
-import { createId } from '@paralleldrive/cuid2';
+import type { MappedPerson } from './contactImport';
 
 export const GOOGLE_PENDING_COOKIE = 'google_pending';
-export const CONTACTS_IMPORT_COOKIE = 'google_contacts_import';
 
-export type MappedPerson = {
-  name: string;
-  email: string | null;
-  phone: string | null;
-  role: string | null;
-  location: string | null;
-  notes: string | null;
-  suggestedCompanyName: string | null;
-};
-
-type PendingImportRecord = {
-  userId: string;
-  toImport: MappedPerson[];
-  duplicateCount: number;
-  expiresAt: number;
-};
-
-const IMPORT_TTL_MS = 15 * 60 * 1000;
-const pendingImports = new Map<string, PendingImportRecord>();
-
-export function storePendingImport(
-  userId: string,
-  toImport: MappedPerson[],
-  duplicateCount: number
-): string {
-  const id = createId();
-  pendingImports.set(id, { userId, toImport, duplicateCount, expiresAt: Date.now() + IMPORT_TTL_MS });
-  return id;
-}
-
-export function getPendingImport(
-  id: string,
-  userId: string
-): { toImport: MappedPerson[]; duplicateCount: number } | null {
-  const record = pendingImports.get(id);
-  if (!record) return null;
-  if (record.userId !== userId) return null;
-  if (record.expiresAt < Date.now()) {
-    pendingImports.delete(id);
-    return null;
-  }
-  return { toImport: record.toImport, duplicateCount: record.duplicateCount };
-}
-
-export function deletePendingImport(id: string): void {
-  pendingImports.delete(id);
-}
+// The staging primitives moved to `contactImport.ts` when the LinkedIn CSV
+// import began sharing them. Re-exported here so existing importers of this
+// module keep working, and because the Google flow is still their main caller.
+export {
+  CONTACTS_IMPORT_COOKIE,
+  storePendingImport,
+  getPendingImport,
+  deletePendingImport,
+  type MappedPerson
+} from './contactImport';
 
 type GooglePerson = {
   names?: Array<{ displayName?: string }>;
