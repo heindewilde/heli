@@ -1,4 +1,7 @@
 <script lang="ts">
+  import EmptyState from '$lib/ui/EmptyState.svelte';
+  import Button from '$lib/ui/Button.svelte';
+  import { Briefcase } from 'lucide-svelte';
   import { APP_NAME } from '$lib/branding';
   import { goto } from '$app/navigation';
   import { page } from '$app/state';
@@ -137,19 +140,20 @@
   </div>
 
   {#if rows.length === 0}
-    <div class="rounded-[var(--radius-md)] border border-dashed border-[var(--color-border)] bg-[var(--color-surface)] p-10 text-center">
-      {#if data.q}
-        <p class="text-sm text-[var(--color-muted)]">No projects match &ldquo;{data.q}&rdquo;.</p>
-      {:else if data.status !== 'active'}
-        <p class="text-sm text-[var(--color-muted)]">No {data.status} projects.</p>
-      {:else}
-        <p class="text-sm text-[var(--color-muted)]">No projects yet — track a fundraise, a launch, or a consulting engagement.</p>
-        <a
-          href="/projects/new"
-          class="mt-3 inline-flex items-center gap-1 rounded-[var(--radius-sm)] bg-[var(--color-accent)] transition-colors hover:bg-[var(--color-accent-hover)] px-3 py-1.5 text-sm font-medium text-[var(--color-accent-fg)]"
-        ><Plus size={14} strokeWidth={2} /> New project</a>
-      {/if}
-    </div>
+    <!-- Copy still branches by cause; EmptyState supplies the form. -->
+    {#if data.q}
+      <EmptyState icon={Search} title="No matches" description={`Nothing here matches “${data.q}”.`}>
+        {#snippet actions()}<Button href="/projects" variant="secondary">Clear search</Button>{/snippet}
+      </EmptyState>
+    {:else if data.status !== 'active'}
+      <EmptyState icon={Briefcase} title="Nothing here" description={`No ${data.status} projects.`}>
+        {#snippet actions()}<Button href="/projects" variant="secondary">Show active</Button>{/snippet}
+      </EmptyState>
+    {:else}
+      <EmptyState icon={Briefcase} title="No projects yet" description={"Track a fundraise, a launch or a consulting engagement, with the people and companies attached."}>
+        {#snippet actions()}<Button href="/projects/new" variant="primary" size="md">New project</Button>{/snippet}
+      </EmptyState>
+    {/if}
   {:else}
     <ul class="grid grid-cols-2 gap-3 sm:grid-cols-3">
       {#each rows as p, i (p.id)}

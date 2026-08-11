@@ -90,7 +90,7 @@
 {#if open}
   <div class="fixed inset-0 z-[var(--z-dialog)] flex {wrapper}">
     <!-- Inert on purpose: dismissal is layerStack's job. -->
-    <div class="absolute inset-0 {backdropClass}" aria-hidden="true"></div>
+    <div class="backdrop absolute inset-0 {backdropClass}" aria-hidden="true"></div>
     <div
       bind:this={panelEl}
       role="dialog"
@@ -99,9 +99,51 @@
       aria-labelledby={labelledBy}
       tabindex="-1"
       use:trapFocus
-      class="relative {panelBase} focus:outline-none {panelClass}"
+      class="panel relative {variant} {panelBase} focus:outline-none {panelClass}"
     >
       {@render children({ close })}
     </div>
   </div>
 {/if}
+
+<style>
+  /*
+   * Entry only, and that is a deliberate limit rather than an omission. An exit
+   * animation would mean holding `open` true past the caller setting it false —
+   * a second source of truth for "is this dialog showing", which is exactly the
+   * kind of state layerStack exists to keep singular. Appearing softly is most
+   * of the perceived quality; disappearing instantly is what a dismissal should
+   * feel like anyway.
+   *
+   * The global prefers-reduced-motion rule in app.css collapses all three of
+   * these to ~0ms, so there is no per-component media query here.
+   */
+  .backdrop {
+    animation: fade-in var(--duration-base) var(--ease-out);
+  }
+  .panel {
+    animation: panel-in var(--duration-base) var(--ease-out);
+  }
+  .panel.drawer {
+    animation: drawer-in var(--duration-base) var(--ease-out);
+  }
+
+  @keyframes fade-in {
+    from {
+      opacity: 0;
+    }
+  }
+  /* Scale from 98%, not from 90%: this is a surface arriving, not a thing
+     popping. Paired with a few px of rise so it reads as coming forward. */
+  @keyframes panel-in {
+    from {
+      opacity: 0;
+      transform: translateY(4px) scale(0.98);
+    }
+  }
+  @keyframes drawer-in {
+    from {
+      transform: translateX(-100%);
+    }
+  }
+</style>

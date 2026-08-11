@@ -1,5 +1,6 @@
 <script lang="ts">
-  import { goto } from '$app/navigation';
+  import { goto, replaceState } from '$app/navigation';
+  import { page } from '$app/state';
   import { Sparkles, Repeat, Undo2, X } from 'lucide-svelte';
   import { toast } from '$lib/toasts.svelte';
 
@@ -66,13 +67,24 @@
     }
   }
 
+  /**
+   * Strip ?just / ?dedup so refreshing doesn't redisplay the banner.
+   *
+   * `replaceState` from `$app/navigation`, never `window.history.replaceState`.
+   * The raw call changes the address bar without telling SvelteKit, so
+   * `page.url` keeps the flag for the rest of the session — every later reader
+   * of `page.url.search` then sees a `?just=1` that is no longer true, and any
+   * link built from it inherits the flag.
+   *
+   * `[id]/+page.svelte` already does exactly this for `?outreach`, so this is a
+   * consistency fix as much as a bug fix. It re-runs no loads.
+   */
   function dropFlagFromUrl() {
-    // Strip ?just / ?dedup so refreshing doesn't redisplay the banner.
     if (typeof window === 'undefined') return;
-    const u = new URL(window.location.href);
+    const u = new URL(page.url);
     u.searchParams.delete('just');
     u.searchParams.delete('dedup');
-    window.history.replaceState({}, '', u.toString());
+    replaceState(u, page.state);
   }
 
   function dismiss() {

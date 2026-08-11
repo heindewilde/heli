@@ -1,6 +1,24 @@
 @import 'tailwindcss';
 @plugin "@tailwindcss/typography";
 
+/*
+ * Teach Tailwind that dark mode is our `[data-theme]` attribute, not the OS.
+ *
+ * Theming is driven by an inline script in app.html writing
+ * `data-theme` from localStorage / prefers-color-scheme. Without this line the
+ * `dark:` variant compiled against `prefers-color-scheme` instead, so the
+ * handful of `dark:` utilities in PipelineRow/PipelineStageChip rendered wrong
+ * whenever the in-app toggle disagreed with the OS.
+ *
+ * Keep the double quotes. extension/scripts/tokens.mjs finds the dark palette
+ * by searching for the single-quoted spelling of this attribute selector, and
+ * a single-quoted match here would sit above the real block and hand the
+ * extension the light palette as its dark theme. The parser now strips
+ * comments, skips non-block matches and brace-counts, so this is belt and
+ * braces — but there is no reason to lean on that.
+ */
+@custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
+
 @font-face {
   font-family: 'Geist';
   src: url('/fonts/Geist-Variable.woff2') format('woff2-variations');
@@ -19,7 +37,12 @@
 
 @theme {
   --font-sans: 'Geist', ui-sans-serif, system-ui, sans-serif;
-  --font-mono: 'Geist Mono', ui-monospace, monospace;
+  /* No Geist Mono is shipped — static/fonts/ holds Geist Variable and Patrick
+     Hand only — so naming it here just cost a failed lookup before falling
+     through. The nine `font-mono` call sites are all small inline chips
+     (⌘K hints, {{variable}} tokens, env-var names); a whole extra face is not
+     worth the footprint for that. This stack is what those chips actually get. */
+  --font-mono: ui-monospace, 'SF Mono', SFMono-Regular, Menlo, Consolas, monospace;
 
   /* Neutrals — cool, paper-grade with a faint blue cast. Light mode. */
   --color-bg: #f6f8fc;
@@ -39,6 +62,20 @@
   --color-accent-soft: #ebeef4;
   --color-accent-soft-border: #cdd2dc;
   --color-accent-soft-text: #282a30;
+
+  /* Interactive — the blue. Navigation, links, selection, focus, info.
+     NOT primary buttons: those stay --color-accent (ink). Splitting the two is
+     the point. Accent was doing both jobs, and because accent is the same
+     near-black as body text, nothing in the product ever read as interactive.
+     Rationed deliberately: it belongs on the active nav item, a link, a
+     selected row edge and an info surface — never as a large fill. */
+  --color-interactive: #2563eb;
+  --color-interactive-hover: #1d4ed8;
+  --color-interactive-fg: #ffffff;
+  --color-interactive-soft: #eff4ff;
+  --color-interactive-soft-border: #c7d7fe;
+  --color-interactive-soft-text: #1d4ed8;
+  --color-interactive-ring: rgb(37 99 235 / 0.40);
 
   /* Highlight — a quiet neutral wash for "selected/active" states.
      Distinct from accent (which is for emphasis), so users don't confuse
@@ -61,7 +98,9 @@
   --color-warning: #b54708;
   --color-warning-bg: #fef6ee;
   --color-warning-border: #f9dbaf;
-  --color-info: #175cd3;
+  /* Info shares the interactive blue on purpose — two blues four percent apart
+     is not a distinction anyone can see, it's just drift waiting to happen. */
+  --color-info: #2563eb;
   --color-info-bg: #eff4ff;
   --color-info-border: #c7d7fe;
 
@@ -113,6 +152,73 @@
   --shadow-md: 0 4px 12px -2px rgb(15 15 20 / 0.06), 0 1px 2px 0 rgb(15 15 20 / 0.04);
   --shadow-lg: 0 12px 32px -4px rgb(15 15 20 / 0.10), 0 4px 8px -2px rgb(15 15 20 / 0.05);
   --shadow-ring: inset 0 0 0 1px rgb(15 15 20 / 0.04);
+
+  /* Elevation, named by role rather than by size, so a surface is chosen for
+     what it is and the whole app moves together when a value is tuned. The
+     five raw steps above stay — these are the vocabulary on top of them.
+     `panel` carries the inset ring as well: a hairline plus a soft shadow is
+     what makes a floating panel read as lifted rather than as outlined. */
+  --shadow-panel: 0 1px 2px 0 rgb(15 15 20 / 0.04), 0 8px 24px -6px rgb(15 15 20 / 0.06),
+    inset 0 0 0 1px rgb(15 15 20 / 0.035);
+  --shadow-raised: 0 1px 2px 0 rgb(15 15 20 / 0.05), 0 2px 6px -1px rgb(15 15 20 / 0.05);
+  --shadow-overlay: 0 12px 32px -4px rgb(15 15 20 / 0.10), 0 4px 8px -2px rgb(15 15 20 / 0.05);
+
+  /*
+   * Type scale.
+   *
+   * There wasn't one. `text-sm` was used 350 times and `text-xs` 272, against 6
+   * uses of `text-base` — two sizes doing the work of a hierarchy, which is
+   * precisely why headings never looked like headings.
+   *
+   * xs and sm are redefined rather than added: 13px and 15px instead of 12 and
+   * 14. That single pair of lines moves 622 existing call sites onto the new
+   * scale at once, which is the whole point of doing tokens before screens.
+   * Everything above sm gains real line-height and negative tracking, so a
+   * page title reads as set rather than as scaled-up body text.
+   *
+   * Geist Variable is already self-hosted across the full 100–900 axis and the
+   * app has only ever used 400/500/600 of it, so the weight headroom this
+   * assumes is paid for.
+   */
+  --text-2xs: 0.6875rem;
+  --text-2xs--line-height: 1rem;
+  --text-2xs--letter-spacing: 0.01em;
+  --text-xs: 0.8125rem;
+  --text-xs--line-height: 1.125rem;
+  --text-sm: 0.9375rem;
+  --text-sm--line-height: 1.375rem;
+  --text-base: 1rem;
+  --text-base--line-height: 1.5rem;
+  --text-lg: 1.125rem;
+  --text-lg--line-height: 1.625rem;
+  --text-lg--letter-spacing: -0.011em;
+  --text-xl: 1.375rem;
+  --text-xl--line-height: 1.75rem;
+  --text-xl--letter-spacing: -0.015em;
+  --text-2xl: 1.75rem;
+  --text-2xl--line-height: 2.125rem;
+  --text-2xl--letter-spacing: -0.019em;
+  --text-3xl: 2rem;
+  --text-3xl--line-height: 2.375rem;
+  --text-3xl--letter-spacing: -0.021em;
+  --text-4xl: 2.5rem;
+  --text-4xl--line-height: 2.875rem;
+  --text-4xl--letter-spacing: -0.023em;
+
+  /*
+   * Motion. There was none — no enter or exit on Dialog, Popover or Toast.
+   * Adding it is safe because the global prefers-reduced-motion rule at the
+   * end of this file already collapses every duration, including these.
+   *
+   * Tailwind has no `duration-*` theme namespace, so these are consumed as
+   * `duration-[var(--duration-fast)]` or from a component's own CSS. `--ease-*`
+   * IS a namespace, so `ease-out` and `ease-spring` are real utilities.
+   */
+  --duration-fast: 120ms;
+  --duration-base: 180ms;
+  --duration-slow: 260ms;
+  --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-spring: cubic-bezier(0.34, 1.36, 0.64, 1);
 }
 
 [data-theme='dark'] {
@@ -131,6 +237,18 @@
   --color-accent-soft: #1c1e24;
   --color-accent-soft-border: #383a43;
   --color-accent-soft-text: #eef1f7;
+
+  /* Interactive, dark. The light blue (#2563eb) fails against #15161b, so the
+     hue lifts rather than the surface darkening around it — the same move the
+     semantic pairs below make. Soft/border reuse the info tints so there is
+     still exactly one blue per theme. */
+  --color-interactive: #84adff;
+  --color-interactive-hover: #a9c8ff;
+  --color-interactive-fg: #0c0d11;
+  --color-interactive-soft: #101a30;
+  --color-interactive-soft-border: #1e3a7a;
+  --color-interactive-soft-text: #b9d0ff;
+  --color-interactive-ring: rgb(132 173 255 / 0.40);
 
   --color-highlight-bg: #1c1e24;
   --color-highlight-border: #2c2e36;
@@ -183,6 +301,14 @@
   --shadow-md: 0 4px 12px -2px rgb(0 0 0 / 0.40), 0 1px 2px 0 rgb(0 0 0 / 0.25);
   --shadow-lg: 0 12px 32px -4px rgb(0 0 0 / 0.55), 0 4px 8px -2px rgb(0 0 0 / 0.30);
   --shadow-ring: inset 0 0 0 1px rgb(255 255 255 / 0.04);
+
+  /* Elevation, dark. A drop shadow does almost no work on a near-black ground,
+     so the inset highlight does most of it: a 1px light edge is what separates
+     a lifted panel from the page here. */
+  --shadow-panel: 0 1px 2px 0 rgb(0 0 0 / 0.30), 0 8px 24px -6px rgb(0 0 0 / 0.45),
+    inset 0 0 0 1px rgb(255 255 255 / 0.06);
+  --shadow-raised: 0 1px 2px 0 rgb(0 0 0 / 0.35), 0 2px 6px -1px rgb(0 0 0 / 0.30);
+  --shadow-overlay: 0 12px 32px -4px rgb(0 0 0 / 0.55), 0 4px 8px -2px rgb(0 0 0 / 0.30);
 }
 
 html, body {

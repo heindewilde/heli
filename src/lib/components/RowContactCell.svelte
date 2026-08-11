@@ -36,7 +36,7 @@
 </script>
 
 {#if items.length === 0}
-  <span class="text-[var(--color-subtle)]">·</span>
+  <span class="text-[var(--color-subtle)]">—</span>
 {:else}
   <div class="flex items-center gap-1">
     {#each items as item (item.kind)}

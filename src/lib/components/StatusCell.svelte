@@ -85,7 +85,7 @@
       {#if current}
         <StatusPill status={current} />
       {:else}
-        <span class="text-xs text-[var(--color-subtle)]">·</span>
+        <span class="text-xs text-[var(--color-subtle)]">—</span>
       {/if}
     </button>
   {/snippet}

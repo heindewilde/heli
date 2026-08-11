@@ -1,6 +1,6 @@
 <script lang="ts">
   import { APP_NAME } from '$lib/branding';
-  import { goto, invalidateAll, replaceState } from '$app/navigation';
+  import { goto, invalidate, replaceState } from '$app/navigation';
   import { page } from '$app/state';
   import { Star, Archive, Trash2, Loader2, Mail, Phone, MapPin, Building2, Sparkles, Linkedin, Twitter } from 'lucide-svelte';
   import NotesEditor from '$lib/components/NotesEditor.svelte';
@@ -19,7 +19,10 @@
   import CompanyPicker from '$lib/components/CompanyPicker.svelte';
   import SocialLinks from '$lib/components/SocialLinks.svelte';
   import OutreachDialog from '$lib/components/OutreachDialog.svelte';
-  import { Plus, MessageSquarePlus, Send } from 'lucide-svelte';
+  import { Plus, MessageSquarePlus, Send, MessagesSquare } from 'lucide-svelte';
+  import Card from '$lib/ui/Card.svelte';
+  import Button from '$lib/ui/Button.svelte';
+  import EmptyState from '$lib/ui/EmptyState.svelte';
   import { toast } from '$lib/toasts.svelte';
   import { registerCommands } from '$lib/commands/registry.svelte';
   import { onMount } from 'svelte';
@@ -114,6 +117,7 @@
   let nameCommitInFlight: Promise<void> | null = $state(null);
   let deleting = $state(false);
 
+
   let tagSuggestions = $state<{ id: string; name: string; slug: string; count: number }[]>([]);
 
   onMount(() => {
@@ -129,10 +133,25 @@
   $effect(() => {
     return pollWhile(
       () => person.source === 'parsing',
-      () => invalidateAll()
+      () => invalidate('heli:person')
     );
   });
 
+  /**
+   * `invalidate('heli:person')`, never `invalidateAll()`.
+   *
+   * This ran on every field edit, every favourite, every archive and every
+   * note save, and it re-ran *every* load in the tree — the root layout
+   * included, which is why the reminders popover flashed empty each time.
+   * Under master–detail it is worse than wasteful: `invalidateAll` sets
+   * `force_invalidation`, which short-circuits SvelteKit's change detection
+   * before it can skip the list layout, so a single rename would re-run the
+   * list query and drop every page pulled in by Load more.
+   *
+   * The list row is repainted from the shared cache instead. Only the detail's
+   * own load is re-run, and only because enrichment and the company suggestion
+   * are recomputed server-side.
+   */
   async function patch(patch: Record<string, unknown>) {
     if (nameCommitInFlight) await nameCommitInFlight;
     const res = await fetch(`/api/people/${person.id}`, {
@@ -146,7 +165,7 @@
       if (!deleting) toast.danger('Update failed');
       return;
     }
-    if (!deleting) await invalidateAll();
+    if (!deleting) await invalidate('heli:person');
   }
 
   // Editable exits edit mode synchronously before awaiting, so a blur during
@@ -220,7 +239,7 @@
       toast.danger('Could not dismiss');
       return;
     }
-    await invalidateAll();
+    await invalidate('heli:person');
   }
 
   const initials = $derived(
@@ -237,6 +256,12 @@
 <svelte:head>
   <title>{person.name} — {APP_NAME}</title>
 </svelte:head>
+
+{#snippet cardSkeleton(lines: number)}
+  <div class="rounded-[var(--radius-lg)] border border-[var(--color-border)] bg-[var(--color-surface)] p-4">
+    <Skeleton {lines} />
+  </div>
+{/snippet}
 
 <article class="flex flex-col gap-6">
   {#if data.justSaved}
@@ -367,42 +392,40 @@
   <div class="grid gap-6 md:grid-cols-[minmax(0,1fr)_260px]">
     <section class="flex min-w-0 flex-col gap-6">
       <div class="grid gap-6 md:grid-cols-2 [&>*]:min-w-0">
-        <div class="flex flex-col gap-2 rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)] p-3">
-          <h3 class="text-xs font-medium uppercase tracking-wide text-[var(--color-subtle)]">Notes</h3>
-          <NotesEditor
-            value={person.notes}
-            onSave={(next) => patch({ notes: next })}
-          />
-        </div>
+        <Card title="Notes">
+          <NotesEditor value={person.notes} onSave={(next) => patch({ notes: next })} />
+        </Card>
         {#await data.tasks}
-          <div
-            class="rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)] p-3"
-          >
-            <Skeleton lines={3} />
-          </div>
+          {@render cardSkeleton(3)}
         {:then tasks}
           <TasksCard kind="person" refId={person.id} {tasks} />
         {/await}
       </div>
 
-      <div class="flex flex-col gap-2 rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)] p-3">
-        <div class="flex items-center justify-between">
-          <h3 class="text-xs font-medium uppercase tracking-wide text-[var(--color-subtle)]">Interactions</h3>
-          <a
-            href={`/interactions/new?person=${person.id}`}
-            class="inline-flex items-center gap-1 rounded-[var(--radius-sm)] border border-[var(--color-border)] px-2 py-0.5 text-xs hover:bg-[var(--color-bg)]"
-          >
+      <Card title="Interactions">
+        {#snippet actions()}
+          <Button href={`/interactions/new?person=${person.id}`} size="xs" variant="secondary">
             <Plus size={12} strokeWidth={2} />
             Log
-          </a>
-        </div>
+          </Button>
+        {/snippet}
         {#await data.interactions}
-          <Skeleton lines={4} class="px-1 py-2" />
+          <Skeleton variant="rows" lines={3} />
         {:then interactions}
           {#if interactions.length === 0}
-            <p class="px-1 py-2 text-xs text-[var(--color-muted)]">
-              No interactions logged with {person.name} yet.
-            </p>
+            <EmptyState
+              icon={MessagesSquare}
+              title="Nothing logged yet"
+              description={`No calls, emails or meetings recorded with ${person.name}.`}
+              bordered={false}
+              compact
+            >
+              {#snippet actions()}
+                <Button href={`/interactions/new?person=${person.id}`} size="sm" variant="secondary">
+                  Log the first one
+                </Button>
+              {/snippet}
+            </EmptyState>
           {:else}
             <ul class="flex flex-col gap-0.5">
               {#each interactions as i (i.id)}
@@ -417,33 +440,23 @@
             </ul>
           {/if}
         {/await}
-      </div>
+      </Card>
 
-      <div class="grid gap-6 md:grid-cols-3 [&>*]:min-w-0">
+      <section class="flex flex-col gap-2">
+        <h2 class="cap-label">Appears in</h2>
+        <div class="grid gap-4 md:grid-cols-3 [&>*]:min-w-0">
         {#await data.collections}
-          <div
-            class="rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)] p-3"
-          >
-            <Skeleton lines={2} />
-          </div>
+          {@render cardSkeleton(2)}
         {:then collections}
           <CollectionsCard kind="person" refId={person.id} {collections} />
         {/await}
         {#await data.pipelines}
-          <div
-            class="rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)] p-3"
-          >
-            <Skeleton lines={2} />
-          </div>
+          {@render cardSkeleton(2)}
         {:then pipelines}
           <PipelinesCard kind="person" refId={person.id} {pipelines} />
         {/await}
         {#await data.projects}
-          <div
-            class="rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)] p-3"
-          >
-            <Skeleton lines={2} />
-          </div>
+          {@render cardSkeleton(2)}
         {:then projects}
           <ProjectsCard
             kind="person"
@@ -453,7 +466,8 @@
             sharedLabel={company?.name ?? ''}
           />
         {/await}
-      </div>
+        </div>
+      </section>
     </section>
 
     <aside class="flex flex-col gap-3">
@@ -498,6 +512,6 @@
     sender={{ name: data.user.username ?? '', email: data.user.email }}
     templateId={handedOffTemplate}
     onclose={() => (outreachOpen = false)}
-    onSent={() => invalidateAll()}
+    onSent={() => invalidate('heli:person')}
   />
 {/if}

@@ -1,4 +1,5 @@
 <script lang="ts">
+  import Avatar from '$lib/ui/Avatar.svelte';
   import Landing from '$lib/components/Landing.svelte';
   import EmptyDashboard from '$lib/components/EmptyDashboard.svelte';
   import InteractionRow from '$lib/components/InteractionRow.svelte';
@@ -60,7 +61,7 @@
   {:else}
   <section class="flex flex-col gap-6">
     <header class="flex flex-col gap-1">
-      <h1 class="text-2xl font-semibold tracking-tight">{greeting}.</h1>
+      <h1 class="text-3xl font-bold">{greeting}.</h1>
       <p class="text-sm text-[var(--color-muted)]">{summaryLine}</p>
     </header>
 
@@ -73,13 +74,13 @@
       ] as card (card.href)}
         <a
           href={card.href}
-          class="group flex items-center gap-3 rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)] p-4 shadow-[var(--shadow-xs)] transition-all hover:-translate-y-px hover:border-[var(--color-border-strong)] hover:shadow-[var(--shadow-sm)]"
+          class="group flex items-center gap-3 rounded-[var(--radius-lg)] border border-[var(--color-border)] bg-[var(--color-surface)] p-4 shadow-xs transition-all hover:-translate-y-px hover:border-[var(--color-interactive-ring)] hover:shadow-raised"
         >
           <span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-[var(--radius-sm)] bg-[var(--color-surface-2)] text-[var(--color-muted)] transition-colors group-hover:bg-[var(--color-accent)] group-hover:text-[var(--color-accent-fg)]">
             <card.icon size={16} strokeWidth={2} />
           </span>
           <div class="min-w-0">
-            <div class="tabular text-2xl font-semibold tracking-tight">{card.value}</div>
+            <div class="tabular text-3xl font-bold">{card.value}</div>
             <div class="truncate text-xs text-[var(--color-muted)]">{card.label}</div>
           </div>
         </a>
@@ -88,7 +89,7 @@
 
     {#if data.endingSoon && data.endingSoon.length > 0}
       <section class="flex flex-col gap-2">
-        <h2 class="text-sm font-medium text-[var(--color-muted)]">Ending soon</h2>
+        <h2 class="text-sm font-semibold text-[var(--color-text)]">Ending soon</h2>
         <ul class="flex flex-col gap-1">
           {#each data.endingSoon as p (p.id)}
             {@const overdue = p.endDate != null && p.endDate < Date.now()}
@@ -120,8 +121,8 @@
       <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
         <!-- Recently saved -->
         {#if data.recent && data.recent.length > 0}
-          <section class="flex flex-col gap-1 rounded-[var(--radius-lg)] border border-[var(--color-border)] bg-[var(--color-bg)] p-4">
-            <h2 class="mb-2 text-sm font-medium text-[var(--color-muted)]">Recently saved</h2>
+          <section class="flex flex-col gap-1 rounded-[var(--radius-lg)] border border-[var(--color-border)] bg-[var(--color-surface)] p-4">
+            <h2 class="mb-2 text-sm font-semibold text-[var(--color-text)]">Recently saved</h2>
             <ul class="flex flex-col">
               {#each data.recent as r (r.kind + r.id)}
                 <li>
@@ -132,13 +133,7 @@
                     {#if r.kind === 'company'}
                       <CompanyLogo domain={r.domain} name={r.name} size={32} rounded="sm" />
                     {:else}
-                      <span class="flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-full border border-[var(--color-border)] bg-[var(--color-surface)] text-xs text-[var(--color-muted)]">
-                        {#if r.avatarUrl}
-                          <img src={r.avatarUrl} alt="" class="h-full w-full object-cover" />
-                        {:else}
-                          {(r.name[0] ?? '·').toUpperCase()}
-                        {/if}
-                      </span>
+                      <Avatar name={r.name} src={r.avatarUrl} size="md" />
                     {/if}
                     <span class="min-w-0 flex-1">
                       <span class="flex items-center gap-2">
@@ -148,7 +143,7 @@
                         {/if}
                       </span>
                       <span class="block truncate text-xs text-[var(--color-muted)]">
-                        {r.kind === 'person' ? 'Person' : 'Company'} · {r.sub ?? ''}
+                        {r.kind === 'person' ? 'Person' : 'Company'}{r.sub ? ` · ${r.sub}` : ''}
                       </span>
                     </span>
                   </a>
@@ -160,8 +155,8 @@
 
         <!-- Recent interactions -->
         {#if data.recentInteractions && data.recentInteractions.length > 0}
-          <section class="flex flex-col gap-1 rounded-[var(--radius-lg)] border border-[var(--color-border)] bg-[var(--color-bg)] p-4">
-            <h2 class="mb-2 text-sm font-medium text-[var(--color-muted)]">Recent interactions</h2>
+          <section class="flex flex-col gap-1 rounded-[var(--radius-lg)] border border-[var(--color-border)] bg-[var(--color-surface)] p-4">
+            <h2 class="mb-2 text-sm font-semibold text-[var(--color-text)]">Recent interactions</h2>
             <ul class="flex flex-col gap-0.5">
               {#each data.recentInteractions as i (i.id)}
                 <li>

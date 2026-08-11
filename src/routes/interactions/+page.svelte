@@ -1,4 +1,7 @@
 <script lang="ts">
+  import EmptyState from '$lib/ui/EmptyState.svelte';
+  import Button from '$lib/ui/Button.svelte';
+  import { MessagesSquare } from 'lucide-svelte';
   import { APP_NAME } from '$lib/branding';
   import { goto } from '$app/navigation';
   import { page } from '$app/state';
@@ -166,18 +169,16 @@
   </div>
 
   {#if groups.length === 0}
-    <div class="rounded-[var(--radius-md)] border border-dashed border-[var(--color-border)] bg-[var(--color-surface)] p-10 text-center">
-      {#if hasFilters}
-        <p class="text-sm text-[var(--color-muted)]">No interactions match those filters.</p>
-        <a href="/interactions" class="mt-3 inline-flex items-center gap-1 rounded-[var(--radius-sm)] border border-[var(--color-border)] px-3 py-1.5 text-sm">Clear filters</a>
-      {:else}
-        <p class="text-sm text-[var(--color-muted)]">Log your first call, meeting, or note to start the timeline.</p>
-        <a
-          href="/interactions/new"
-          class="mt-3 inline-flex items-center gap-1 rounded-[var(--radius-sm)] bg-[var(--color-accent)] transition-colors hover:bg-[var(--color-accent-hover)] px-3 py-1.5 text-sm font-medium text-[var(--color-accent-fg)]"
-        ><Plus size={14} strokeWidth={2} /> Log interaction</a>
-      {/if}
-    </div>
+    <!-- Copy still branches by cause; EmptyState supplies the form. -->
+    {#if hasFilters}
+      <EmptyState icon={Search} title="No matches" description={"Nothing matches those filters."}>
+        {#snippet actions()}<Button href="/interactions" variant="secondary">Clear filters</Button>{/snippet}
+      </EmptyState>
+    {:else}
+      <EmptyState icon={MessagesSquare} title="No interactions yet" description={"Log a call, a meeting or a note and it starts building a timeline against the people involved."}>
+        {#snippet actions()}<Button href="/interactions/new" variant="primary" size="md">Log interaction</Button>{/snippet}
+      </EmptyState>
+    {/if}
   {:else}
     <div class="flex flex-col gap-6">
       {#each groups as [key, g] (key)}

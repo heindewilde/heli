@@ -1,4 +1,7 @@
 <script lang="ts">
+  import EmptyState from '$lib/ui/EmptyState.svelte';
+  import Button from '$lib/ui/Button.svelte';
+  import { Funnel } from 'lucide-svelte';
   import { APP_NAME } from '$lib/branding';
   import { goto, invalidateAll } from '$app/navigation';
   import { page } from '$app/state';
@@ -162,19 +165,20 @@
   </div>
 
   {#if rows.length === 0}
-    <div class="rounded-[var(--radius-md)] border border-dashed border-[var(--color-border)] bg-[var(--color-surface)] p-10 text-center">
-      {#if data.q}
-        <p class="text-sm text-[var(--color-muted)]">No pipelines match &ldquo;{data.q}&rdquo;.</p>
-      {:else if data.archived !== 'active'}
-        <p class="text-sm text-[var(--color-muted)]">No {data.archived} pipelines.</p>
-      {:else}
-        <p class="text-sm text-[var(--color-muted)]">No pipelines yet — track sales deals, hiring funnels, or partnership outreach with custom stages.</p>
-        <a
-          href="/pipelines/new"
-          class="mt-3 inline-flex items-center gap-1 rounded-[var(--radius-sm)] bg-[var(--color-accent)] transition-colors hover:bg-[var(--color-accent-hover)] px-3 py-1.5 text-sm font-medium text-[var(--color-accent-fg)]"
-        ><Plus size={14} strokeWidth={2} /> New pipeline</a>
-      {/if}
-    </div>
+    <!-- Copy still branches by cause; EmptyState supplies the form. -->
+    {#if data.q}
+      <EmptyState icon={Search} title="No matches" description={`Nothing here matches “${data.q}”.`}>
+        {#snippet actions()}<Button href="/pipelines" variant="secondary">Clear search</Button>{/snippet}
+      </EmptyState>
+    {:else if data.archived !== 'active'}
+      <EmptyState icon={Funnel} title="Nothing here" description={`No ${data.archived} pipelines.`}>
+        {#snippet actions()}<Button href="/pipelines" variant="secondary">Show active</Button>{/snippet}
+      </EmptyState>
+    {:else}
+      <EmptyState icon={Funnel} title="No pipelines yet" description={"Track sales deals, a hiring funnel or partnership outreach with stages you define."}>
+        {#snippet actions()}<Button href="/pipelines/new" variant="primary" size="md">New pipeline</Button>{/snippet}
+      </EmptyState>
+    {/if}
   {:else}
     <ul class="flex flex-col gap-1">
       {#each rows as p, i (p.id)}

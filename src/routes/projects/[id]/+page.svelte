@@ -220,7 +220,7 @@
     <!-- Main content -->
     <section class="flex flex-col gap-6">
       <div class="flex flex-col gap-2">
-        <h2 class="text-sm font-medium text-[var(--color-muted)]">Description</h2>
+        <h2 class="text-sm font-semibold text-[var(--color-text)]">Description</h2>
         <NotesEditor
           value={project.description}
           placeholder="What is this project about?"
@@ -229,12 +229,12 @@
       </div>
 
       <div class="flex flex-col gap-2">
-        <h2 class="text-sm font-medium text-[var(--color-muted)]">Links</h2>
+        <h2 class="text-sm font-semibold text-[var(--color-text)]">Links</h2>
         <LinksEditor projectId={project.id} links={project.links} />
       </div>
 
       <div class="flex flex-col gap-2">
-        <h2 class="text-sm font-medium text-[var(--color-muted)]">People</h2>
+        <h2 class="text-sm font-semibold text-[var(--color-text)]">People</h2>
         {#if project.people.length > 0}
           <ul class="flex flex-col gap-0.5">
             {#each project.people as p (p.id)}
@@ -270,7 +270,7 @@
       </div>
 
       <div class="flex flex-col gap-2">
-        <h2 class="text-sm font-medium text-[var(--color-muted)]">Companies</h2>
+        <h2 class="text-sm font-semibold text-[var(--color-text)]">Companies</h2>
         {#if project.companies.length > 0}
           <ul class="flex flex-col gap-0.5">
             {#each project.companies as c (c.id)}
@@ -305,7 +305,7 @@
 
       <div class="flex flex-col gap-2">
         <div class="flex items-center justify-between">
-          <h2 class="text-sm font-medium text-[var(--color-muted)]">Interactions</h2>
+          <h2 class="text-sm font-semibold text-[var(--color-text)]">Interactions</h2>
           <a
             href={`/interactions/new?project=${project.id}`}
             class="inline-flex items-center gap-1 rounded-[var(--radius-sm)] border border-[var(--color-border)] px-2.5 py-1 text-xs hover:bg-[var(--color-surface)]"

@@ -94,7 +94,7 @@
         aria-label="Set company"
         class="inline-flex min-h-[24px] items-center rounded-[var(--radius-sm)] px-1 py-0.5 transition-colors hover:bg-[var(--color-surface-2)]"
       >
-        <span class="text-xs text-[var(--color-subtle)]">·</span>
+        <span class="text-xs text-[var(--color-subtle)]">—</span>
       </button>
     {/if}
   {/snippet}

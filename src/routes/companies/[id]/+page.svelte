@@ -1,7 +1,7 @@
 <script lang="ts">
   import Editable from '$lib/ui/Editable.svelte';
   import { APP_NAME } from '$lib/branding';
-  import { goto, invalidateAll } from '$app/navigation';
+  import { goto, invalidate } from '$app/navigation';
   import { Star, Archive, Trash2, Loader2, MapPin, Building2, Linkedin, Twitter, X } from 'lucide-svelte';
   import PersonPicker from '$lib/components/PersonPicker.svelte';
   import NotesEditor from '$lib/components/NotesEditor.svelte';
@@ -69,7 +69,7 @@
   $effect(() => {
     return pollWhile(
       () => company.source === 'parsing',
-      () => invalidateAll()
+      () => invalidate('heli:company')
     );
   });
 
@@ -88,8 +88,9 @@
       if (!deleting) toast.danger('Update failed');
       return;
     }
-    if (!deleting) await invalidateAll();
+    if (!deleting) await invalidate('heli:company');
   }
+
 
   let pickerPeople = $state<{ id: string; name: string; avatarUrl: string | null; role: string | null; companyId?: string | null }[]>([]);
 
@@ -100,7 +101,7 @@
       body: JSON.stringify(updates)
     });
     if (!res.ok) { toast.danger('Could not update person'); return; }
-    await invalidateAll();
+    await invalidate('heli:company');
   }
 
   async function linkPerson(p: { id: string; name: string; companyId?: string | null }) {
@@ -213,7 +214,7 @@
           companyName={company.name}
           people={data.linkedPeople}
           sender={{ name: data.user.username ?? '', email: data.user.email }}
-          onSent={() => invalidateAll()}
+          onSent={() => invalidate('heli:company')}
         />
       {/if}
       <AddReminder iconOnly kind="company" refId={company.id} />
@@ -252,7 +253,7 @@
     <section class="flex min-w-0 flex-col gap-6">
       <div class="grid gap-6 md:grid-cols-2 [&>*]:min-w-0">
         <div class="flex flex-col gap-2 rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)] p-3">
-          <h3 class="text-xs font-medium uppercase tracking-wide text-[var(--color-subtle)]">Notes</h3>
+          <h3 class="text-sm font-semibold text-[var(--color-text)]">Notes</h3>
           <NotesEditor
             value={company.notes}
             onSave={(next) => patch({ notes: next })}
@@ -271,7 +272,7 @@
 
       <div class="flex flex-col gap-2 rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)] p-3">
         <div class="flex items-center justify-between">
-          <h3 class="text-xs font-medium uppercase tracking-wide text-[var(--color-subtle)]">Interactions</h3>
+          <h3 class="text-sm font-semibold text-[var(--color-text)]">Interactions</h3>
           <a
             href={`/interactions/new?company=${company.id}`}
             class="inline-flex items-center gap-1 rounded-[var(--radius-sm)] border border-[var(--color-border)] px-2 py-0.5 text-xs hover:bg-[var(--color-bg)]"
@@ -338,7 +339,7 @@
         <FieldRow label="X" icon={Twitter} value={company.xUrl} field="xUrl" id={company.id} endpoint="companies" />
       </div>
       <div class="flex flex-col gap-2 rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)] p-3">
-        <h3 class="text-xs font-medium uppercase tracking-wide text-[var(--color-subtle)]">Tags</h3>
+        <h3 class="text-sm font-semibold text-[var(--color-text)]">Tags</h3>
         {#await data.tags}
           <Skeleton lines={1} class="px-1 py-1" />
         {:then tags}
@@ -347,7 +348,7 @@
       </div>
       <div class="flex flex-col gap-2 rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)] p-3">
         <div class="flex items-center gap-1.5">
-          <h3 class="text-xs font-medium uppercase tracking-wide text-[var(--color-subtle)]">People</h3>
+          <h3 class="text-sm font-semibold text-[var(--color-text)]">People</h3>
           {#if linkedPeople.length > 0}
             <span class="rounded-full bg-[var(--color-bg)] px-1.5 py-0.5 text-[10px] text-[var(--color-muted)]">{linkedPeople.length}</span>
           {/if}

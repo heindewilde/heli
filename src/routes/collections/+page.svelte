@@ -1,4 +1,7 @@
 <script lang="ts">
+  import EmptyState from '$lib/ui/EmptyState.svelte';
+  import Button from '$lib/ui/Button.svelte';
+  import { Folder } from 'lucide-svelte';
   import { APP_NAME } from '$lib/branding';
   import { goto, invalidateAll } from '$app/navigation';
   import { page } from '$app/state';
@@ -145,19 +148,20 @@
   </div>
 
   {#if rows.length === 0}
-    <div class="rounded-[var(--radius-md)] border border-dashed border-[var(--color-border)] bg-[var(--color-surface)] p-10 text-center">
-      {#if data.q}
-        <p class="text-sm text-[var(--color-muted)]">No collections match &ldquo;{data.q}&rdquo;.</p>
-      {:else if data.archived !== 'active'}
-        <p class="text-sm text-[var(--color-muted)]">No {data.archived} collections.</p>
-      {:else}
-        <p class="text-sm text-[var(--color-muted)]">No collections yet — group people and companies into named lists.</p>
-        <a
-          href="/collections/new"
-          class="mt-3 inline-flex items-center gap-1 rounded-[var(--radius-sm)] bg-[var(--color-accent)] transition-colors hover:bg-[var(--color-accent-hover)] px-3 py-1.5 text-sm font-medium text-[var(--color-accent-fg)]"
-        ><Plus size={14} strokeWidth={2} /> New collection</a>
-      {/if}
-    </div>
+    <!-- Copy still branches by cause; EmptyState supplies the form. -->
+    {#if data.q}
+      <EmptyState icon={Search} title="No matches" description={`Nothing here matches “${data.q}”.`}>
+        {#snippet actions()}<Button href="/collections" variant="secondary">Clear search</Button>{/snippet}
+      </EmptyState>
+    {:else if data.archived !== 'active'}
+      <EmptyState icon={Folder} title="Nothing here" description={`No ${data.archived} collections.`}>
+        {#snippet actions()}<Button href="/collections" variant="secondary">Show active</Button>{/snippet}
+      </EmptyState>
+    {:else}
+      <EmptyState icon={Folder} title="No collections yet" description={"Group people and companies into named lists — a client roster, a conference, a shortlist."}>
+        {#snippet actions()}<Button href="/collections/new" variant="primary" size="md">New collection</Button>{/snippet}
+      </EmptyState>
+    {/if}
   {:else}
     <ul class="grid grid-cols-2 gap-3 sm:grid-cols-3">
       {#each rows as c, i (c.id)}

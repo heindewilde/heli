@@ -11,8 +11,12 @@ import { listCollectionsForEntity } from '$lib/server/collections';
 import { listPipelinesForEntity } from '$lib/server/pipelines';
 import { listTasksForEntity } from '$lib/server/tasks';
 
-export const load: PageServerLoad = async ({ locals, params, url }) => {
+export const load: PageServerLoad = async ({ locals, params, url, depends }) => {
   if (!locals.user) throw redirect(303, '/auth');
+  // Refresh this record without invalidateAll(). See people/[id] for the full
+  // reasoning; the short version is that invalidateAll bypasses per-node
+  // change detection and would re-run the sibling list query too.
+  depends('heli:company');
   const s = requireScope(locals);
   const d = db(locals.user.region);
   const company = await d

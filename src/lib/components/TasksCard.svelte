@@ -143,7 +143,7 @@
 </script>
 
 <div class="flex flex-col gap-2 rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)] p-3">
-  <h3 class="text-xs font-medium uppercase tracking-wide text-[var(--color-subtle)]">Tasks</h3>
+  <h3 class="text-sm font-semibold text-[var(--color-text)]">Tasks</h3>
 
   <form
     onsubmit={(e) => {

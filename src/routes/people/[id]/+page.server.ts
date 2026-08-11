@@ -24,8 +24,21 @@ import { domainOf } from '$lib/server/url';
  * The header still needs `person`, `company` and `suggestion` (which renders a
  * banner beside the name), so those three stay awaited.
  */
-export const load: PageServerLoad = async ({ locals, params, url }) => {
+export const load: PageServerLoad = async ({ locals, params, url, depends }) => {
   if (!locals.user) throw redirect(303, '/auth');
+  /**
+   * A handle so the page can refresh *itself* without `invalidateAll()`.
+   *
+   * The detail page re-ran every load in the tree on every field edit. Under
+   * master–detail that would also re-run the sibling list query and discard
+   * its pagination, because `invalidateAll` bypasses SvelteKit's per-node
+   * change detection entirely.
+   *
+   * Note this load never calls `await parent()`, so `uses.parent` stays false
+   * and invalidating the list layout can never cascade into here either. The
+   * two nodes refresh independently, which is the whole point.
+   */
+  depends('heli:person');
   const s = requireScope(locals);
   const d = db(locals.user.region);
   const person = await d

@@ -1,4 +1,7 @@
 <script lang="ts">
+  import EmptyState from '$lib/ui/EmptyState.svelte';
+  import Button from '$lib/ui/Button.svelte';
+  import { Send } from 'lucide-svelte';
   import { APP_NAME } from '$lib/branding';
   import { goto, invalidateAll } from '$app/navigation';
   import { page } from '$app/state';
@@ -190,28 +193,24 @@
   </div>
 
   {#if rows.length === 0}
-    <div
-      class="rounded-[var(--radius-md)] border border-dashed border-[var(--color-border)] bg-[var(--color-surface)] p-10 text-center"
-    >
-      {#if data.q}
-        <p class="text-sm text-[var(--color-muted)]">No templates match &ldquo;{data.q}&rdquo;.</p>
-      {:else if data.platform}
-        <p class="text-sm text-[var(--color-muted)]">
-          No {PLATFORMS[data.platform as OutreachPlatform].label} templates yet.
-        </p>
-      {:else if data.archived !== 'active'}
-        <p class="text-sm text-[var(--color-muted)]">No {data.archived} templates.</p>
-      {:else}
-        <p class="text-sm text-[var(--color-muted)]">
-          No templates yet — write the messages you send often, once.
-        </p>
-        <a
-          href="/outreach/new"
-          class="mt-3 inline-flex items-center gap-1 rounded-[var(--radius-sm)] bg-[var(--color-accent)] px-3 py-1.5 text-sm font-medium text-[var(--color-accent-fg)] transition-colors hover:bg-[var(--color-accent-hover)]"
-          ><Plus size={14} strokeWidth={2} /> New template</a
-        >
-      {/if}
-    </div>
+    <!-- Copy still branches by cause; EmptyState supplies the form. -->
+    {#if data.q}
+      <EmptyState icon={Search} title="No matches" description={`Nothing here matches “${data.q}”.`}>
+        {#snippet actions()}<Button href="/outreach" variant="secondary">Clear search</Button>{/snippet}
+      </EmptyState>
+    {:else if data.platform}
+      <EmptyState icon={Send} title="Nothing for that platform" description={`No ${PLATFORMS[data.platform as OutreachPlatform].label} templates yet.`}>
+        {#snippet actions()}<Button href="/outreach" variant="secondary">All platforms</Button>{/snippet}
+      </EmptyState>
+    {:else if data.archived !== 'active'}
+      <EmptyState icon={Send} title="Nothing here" description={`No ${data.archived} templates.`}>
+        {#snippet actions()}<Button href="/outreach" variant="secondary">Show active</Button>{/snippet}
+      </EmptyState>
+    {:else}
+      <EmptyState icon={Send} title="No templates yet" description={"Write the messages you send often, once. Heli renders them against a person and you copy the result."}>
+        {#snippet actions()}<Button href="/outreach/new" variant="primary" size="md">New template</Button>{/snippet}
+      </EmptyState>
+    {/if}
   {:else}
     <ul class="flex flex-col gap-2">
       {#each rows as t, i (t.id)}

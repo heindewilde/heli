@@ -5,6 +5,14 @@
   import { saveErrorMessage } from '$lib/save-errors';
   import { readErrorCode } from '$lib/api-error';
 
+  /**
+   * The placeholder is a prop because this moved out of the topbar and into the
+   * sidebar, where "Paste a link anywhere to save a person or company…" does
+   * not fit in 240px and truncates to nonsense.
+   */
+  type Props = { placeholder?: string };
+  let { placeholder = 'Paste a link anywhere to save a person or company…' }: Props = $props();
+
   let value = $state('');
   let busy = $state(false);
   let inputEl = $state<HTMLInputElement | undefined>(undefined);
@@ -56,9 +64,9 @@
       inputmode="url"
       autocomplete="off"
       spellcheck="false"
-      placeholder="Paste a link anywhere to save a person or company…"
+      {placeholder}
       disabled={busy}
-      class="h-9 w-full rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)] pl-9 pr-9 text-sm shadow-[var(--shadow-xs)] placeholder:text-[var(--color-subtle)] transition-[border-color,box-shadow] focus:border-[var(--color-border-strong)] focus:shadow-[var(--shadow-sm)] focus:outline-none"
+      class="h-9 w-full rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)] pl-9 pr-9 text-xs shadow-xs placeholder:text-[var(--color-subtle)] transition-[border-color,box-shadow] focus:border-[var(--color-border-strong)] focus:shadow-raised focus:outline-none"
     />
     {#if busy}
       <span class="absolute inset-y-0 right-3 flex items-center text-[var(--color-muted)]">

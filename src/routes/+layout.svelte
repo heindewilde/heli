@@ -7,12 +7,17 @@
   import ShortcutHelp from '$lib/components/ShortcutHelp.svelte';
   import RemindersPopover from '$lib/components/RemindersPopover.svelte';
   import ThemeToggle from '$lib/components/ThemeToggle.svelte';
+  import Tooltip from '$lib/ui/Tooltip.svelte';
   import UpdateBanner from '$lib/components/UpdateBanner.svelte';
   import { watchServiceWorker } from '$lib/client/sw.svelte';
   import { LayoutDashboard, Users, Building2, MessagesSquare, Briefcase, Folder, Funnel, Send, LogOut, Search, HelpCircle, Settings, Menu, X } from 'lucide-svelte';
-  import { page } from '$app/state';
+  import { page, navigating } from '$app/state';
+  import Popover from '$lib/ui/Popover.svelte';
+  import MenuItem from '$lib/ui/MenuItem.svelte';
+  import Avatar from '$lib/ui/Avatar.svelte';
+  import { EllipsisVertical } from 'lucide-svelte';
   import { onMount } from 'svelte';
-  import { invalidateAll, goto } from '$app/navigation';
+  import { invalidate, goto } from '$app/navigation';
   import { isTypingTarget } from '$lib/keyboard.svelte';
   import {
     registerCommands,
@@ -61,6 +66,28 @@
     { href: '/projects', label: 'Projects', icon: Briefcase },
     { href: '/outreach', label: 'Outreach', icon: Send }
   ];
+
+  /**
+   * The same eight destinations, grouped. `tabs` stays flat because the command
+   * registry and the `g <letter>` shortcuts index it by href and don't care
+   * about presentation.
+   *
+   * Eight equally-weighted links with no grouping is a list, not a navigation —
+   * nothing tells you that Collections and Pipelines are two ways of arranging
+   * the same records while Interactions is a log of them. The labels are the
+   * cheapest possible fix and the reference leans on them heavily.
+   */
+  const navSections: { label?: string; hrefs: string[] }[] = [
+    { hrefs: ['/'] },
+    { label: 'Records', hrefs: ['/people', '/companies', '/interactions'] },
+    { label: 'Organise', hrefs: ['/collections', '/pipelines', '/projects'] },
+    { label: 'Engage', hrefs: ['/outreach'] }
+  ];
+  const byHref = $derived(new Map(tabs.map((t) => [t.href, t])));
+
+  function isActive(href: string, pathname: string) {
+    return href === '/' ? pathname === '/' : pathname === href || pathname.startsWith(href + '/');
+  }
 
   // Close the mobile drawer whenever the route changes (clicking a tab inside
   // the drawer triggers SvelteKit navigation, which updates page.url).
@@ -293,8 +320,19 @@
         }
         const data = (await res.json()) as { id: string; kind: 'person' | 'company'; dedup: boolean };
         const path = data.kind === 'person' ? `/people/${data.id}` : `/companies/${data.id}`;
-        await invalidateAll();
+        // Navigate first, then refresh only the list that gained a row.
+        //
+        // This was `invalidateAll()` *before* the goto, which was both wasteful
+        // and — once the list moved into a layout — wrong. Coming from another
+        // section the layout mounts fresh and the pre-emptive invalidation is
+        // pure cost; already on `/people`, the layout is reused and neither
+        // `just` nor `params.id` is a tracked dependency, so the newly saved
+        // person would never appear in the list at all.
+        //
+        // A create is the documented exception to trusting the local cache: it
+        // moves the total and the tag counts, which no cache owns.
         await goto(path + (data.dedup ? '?dedup=1' : '?just=1'));
+        await invalidate(data.kind === 'person' ? 'heli:people-list' : 'heli:companies-list');
       } catch (err) {
         toast.danger(saveErrorMessage(null, (err as Error).message || 'Save failed'));
       } finally {
@@ -336,140 +374,238 @@
 <div class="bg-[var(--color-bg)] text-[var(--color-text)] {user ? 'h-screen overflow-hidden' : ''}">
   {#if user}
 
-    <!-- Topbar: sticky, in flow, full width. Pushes everything below it down naturally. -->
-    <!-- Header padding removed on desktop; each section handles its own padding
-         to structurally mirror the page layout (sidebar width + main padding). -->
-    <header class="sticky top-0 z-50 flex h-14 items-center border-b border-[var(--color-border)] bg-[var(--color-bg)] px-4 md:gap-0 md:px-0">
-      <!-- Logo: same width as sidebar (md:w-48), same left padding (md:pl-4) -->
-      <div class="flex shrink-0 items-center gap-2 md:w-48 md:shrink-0 md:pl-4">
-        <button
-          type="button"
-          onclick={() => (sidebarOpen = !sidebarOpen)}
-          aria-label={sidebarOpen ? 'Close menu' : 'Open menu'}
-          aria-expanded={sidebarOpen}
-          class="-ml-1 inline-flex items-center justify-center rounded-[var(--radius-sm)] p-1.5 text-[var(--color-subtle)] hover:bg-[var(--color-surface)] md:hidden"
-        >
-          {#if sidebarOpen}<X size={18} strokeWidth={2} />{:else}<Menu size={18} strokeWidth={2} />{/if}
-        </button>
-        <a href="/" class="flex shrink-0 items-center gap-2 text-[var(--color-text)]">
-          <span class="text-lg leading-none" aria-hidden="true">🚁</span>
-          <span class="hidden text-xl font-bold tracking-[-0.04em] sm:inline">heli</span>
-        </a>
-      </div>
-      <!-- SaveBar: same left padding as main content (md:pl-6) -->
-      <div class="min-w-0 flex-1 md:pl-6">
-        <SaveBar bind:this={saveBar} />
-      </div>
-      <div class="ml-auto flex items-center gap-0.5">
-        <button
-          type="button"
-          onclick={() => (paletteOpen = true)}
-          title="Search (⌘K)"
-          aria-label="Search"
-          class="hidden items-center gap-1.5 rounded-[var(--radius-sm)] border border-[var(--color-border)] px-2 py-1.5 text-[var(--color-subtle)] transition-colors hover:border-[var(--color-border-strong)] hover:text-[var(--color-text)] sm:inline-flex"
-        >
-          <Search size={14} strokeWidth={2} />
-          <kbd class="rounded border border-[var(--color-border)] bg-[var(--color-bg)] px-1 font-sans text-[10px] leading-none text-[var(--color-subtle)]">⌘K</kbd>
-        </button>
-        <button
-          type="button"
-          onclick={() => (helpOpen = true)}
-          title="Keyboard shortcuts (?)"
-          aria-label="Keyboard shortcuts"
-          class="hidden rounded-[var(--radius-sm)] p-1.5 text-[var(--color-subtle)] transition-colors hover:bg-[var(--color-surface)] hover:text-[var(--color-text)] sm:inline-flex"
-        ><HelpCircle size={14} strokeWidth={2} /></button>
-        <ThemeToggle />
-        <a
-          href="/settings"
-          title="Settings"
-          aria-label="Settings"
-          class="rounded-[var(--radius-sm)] p-1.5 text-[var(--color-subtle)] transition-colors hover:bg-[var(--color-surface)] hover:text-[var(--color-text)]"
-        ><Settings size={14} strokeWidth={2} /></a>
-        <span aria-hidden="true" class="mx-1 hidden h-4 w-px bg-[var(--color-border)] sm:inline-block"></span>
-        <!-- Drop cached /api/* responses on the way out so the next person to
-             sign in on this device can't be served the previous workspace's
-             lists from the service worker. -->
-        <form
-          method="POST"
-          action="/auth/logout"
-          class="contents"
-          onsubmit={() => {
-            navigator.serviceWorker?.controller?.postMessage('PURGE_API');
-            // Recents name this workspace's records; they must not outlive the
-            // session on a shared machine.
-            clearRecents();
-          }}
-        >
-          <button
-            type="submit"
-            title="Sign out"
-            aria-label="Sign out"
-            class="group flex items-center gap-1.5 rounded-[var(--radius-sm)] border border-transparent px-2 py-1.5 text-[var(--color-subtle)] transition-colors hover:border-[var(--color-border)] hover:bg-[var(--color-surface)] hover:text-[var(--color-text)]"
-          >
-            <span class="hidden max-w-[8rem] truncate text-xs group-hover:text-[var(--color-text)] md:inline">{user.username ?? user.email}</span>
-            <LogOut size={14} strokeWidth={2} />
-          </button>
-        </form>
-      </div>
-    </header>
+    <!--
+      Route-change feedback. `navigating` was unused, so every SSR navigation
+      and every `invalidateAll()` produced a silent stall of a few hundred
+      milliseconds with nothing on screen acknowledging the click.
 
-    <!-- Mobile backdrop -->
-    {#if sidebarOpen}
-      <button
-        type="button"
-        aria-label="Close menu"
-        onclick={() => (sidebarOpen = false)}
-        class="fixed inset-0 top-14 z-30 bg-black/40 md:hidden"
-      ></button>
+      Indeterminate on purpose: there is no progress to report, only the fact
+      that something is happening. It eases toward 90% and stops, so it never
+      claims to be nearly done.
+    -->
+    {#if navigating.to}
+      <div
+        class="route-progress fixed inset-x-0 top-0 z-[var(--z-toast)] h-0.5 bg-[var(--color-interactive)]"
+        role="presentation"
+      ></div>
     {/if}
 
-    <!-- Sidebar: fixed below topbar, never moves. On mobile it slides in as a drawer. -->
-    <aside
-      class="fixed bottom-0 left-0 top-14 z-40 w-64 transform border-r border-[var(--color-border)] bg-[var(--color-bg)] p-4 transition-transform duration-200 ease-out md:w-48 md:border-r-0 md:px-4 md:py-4 md:translate-x-0 {sidebarOpen ? 'translate-x-0 shadow-[var(--shadow-lg)]' : '-translate-x-full md:translate-x-0'}"
-      aria-label="Primary navigation"
-    >
-      <!-- Above the nav, and styled as a control rather than a link: it changes
-           which workspace every link below points into. Renders nothing (divider
-           included) unless the user belongs to more than one workspace. -->
-      <WorkspaceSwitcher
-        memberships={data.memberships ?? []}
-        activeId={data.user?.workspaceId ?? ''}
-      />
-      <nav class="flex flex-col gap-0.5" data-sveltekit-preload-code="viewport">
-        {#each tabs as tab (tab.href)}
-          {@const active = tab.href === '/' ? page.url.pathname === '/' : page.url.pathname === tab.href || page.url.pathname.startsWith(tab.href + '/')}
-          <a
-            href={tab.href}
-            aria-current={active ? 'page' : undefined}
-            class="group relative flex items-center gap-2.5 rounded-[var(--radius-sm)] px-2.5 py-1.5 text-sm transition-colors {active
-              ? 'font-medium text-[var(--color-text)]'
-              : 'text-[var(--color-muted)] hover:bg-[var(--color-surface)] hover:text-[var(--color-text)]'}"
-          >
-            <span
-              aria-hidden="true"
-              class="absolute inset-y-1 left-0 w-0.5 rounded-full bg-[var(--color-accent)] transition-opacity {active ? 'opacity-100' : 'opacity-0'}"
-            ></span>
-            <tab.icon size={14} strokeWidth={active ? 2.25 : 2} class={active ? 'text-[var(--color-text)]' : 'text-[var(--color-subtle)] group-hover:text-[var(--color-muted)]'} />
-            <span>{tab.label}</span>
-          </a>
-        {/each}
-      </nav>
-      <div class="mt-4 border-t border-[var(--color-border)] pt-3">
-        {#await data.reminders ?? []}
-          <RemindersPopover items={[]} />
-        {:then reminders}
-          <RemindersPopover items={reminders ?? []} />
-        {/await}
-      </div>
-      <div class="absolute bottom-3 left-4 right-4 text-[10px] text-[var(--color-subtle)]">
-        <span title="Heli version">Version: {VERSION.replace(/^v/, '')}</span>
-      </div>
-    </aside>
+    <div class="flex h-screen">
+      <!-- Mobile drawer backdrop -->
+      {#if sidebarOpen}
+        <button
+          type="button"
+          aria-label="Close menu"
+          onclick={() => (sidebarOpen = false)}
+          class="fixed inset-0 z-30 bg-black/40 md:hidden"
+        ></button>
+      {/if}
 
-    <!-- Main: offset past the sidebar on desktop. Scrolls independently. -->
-    <main class="h-[calc(100vh-3.5rem)] overflow-y-auto px-4 py-6 md:ml-48 md:px-6 md:pr-8">
-      {@render children()}
-    </main>
+      <!--
+        The sidebar sits directly on the page background with no border and no
+        surface of its own. That is what makes the content read as a panel
+        floating above the app rather than as one half of a split — the single
+        biggest structural move in the reference, and it costs nothing but a
+        gutter.
+      -->
+      <aside
+        class="fixed inset-y-0 left-0 z-40 flex w-64 shrink-0 transform flex-col gap-4 bg-[var(--color-bg)] p-3 transition-transform duration-200 ease-out md:static md:w-60 md:translate-x-0 {sidebarOpen
+          ? 'translate-x-0 shadow-[var(--shadow-lg)] md:shadow-none'
+          : '-translate-x-full md:translate-x-0'}"
+        aria-label="Primary navigation"
+      >
+        <div class="flex items-center gap-1 px-1">
+          <a href="/" class="flex min-w-0 shrink-0 items-center gap-2 text-[var(--color-text)]">
+            <span class="text-lg leading-none" aria-hidden="true">🚁</span>
+            <span class="text-xl font-bold tracking-[-0.04em]">heli</span>
+          </a>
+          <div class="ml-auto flex items-center gap-0.5">
+            <Tooltip label="Search (⌘K)">
+              {#snippet trigger(attrs)}
+                <button
+                  {...attrs}
+                  type="button"
+                  onclick={() => (paletteOpen = true)}
+                  aria-label="Search"
+                  class="rounded-[var(--radius-md)] p-1.5 text-[var(--color-subtle)] transition-colors hover:bg-[var(--color-surface)] hover:text-[var(--color-text)]"
+                ><Search size={15} strokeWidth={2} /></button>
+              {/snippet}
+            </Tooltip>
+            <!-- `title=` replaced by Tooltip: the native one is ~500ms late,
+                 unstyleable, and these are icon-only controls whose whole
+                 discoverability rested on it. `aria-label` stays — the tooltip
+                 describes, it does not name. -->
+            <Tooltip label="Keyboard shortcuts (?)">
+              {#snippet trigger(attrs)}
+                <button
+                  {...attrs}
+                  type="button"
+                  onclick={() => (helpOpen = true)}
+                  aria-label="Keyboard shortcuts"
+                  class="hidden rounded-[var(--radius-md)] p-1.5 text-[var(--color-subtle)] transition-colors hover:bg-[var(--color-surface)] hover:text-[var(--color-text)] sm:inline-flex"
+                ><HelpCircle size={15} strokeWidth={2} /></button>
+              {/snippet}
+            </Tooltip>
+            <ThemeToggle />
+            <button
+              type="button"
+              onclick={() => (sidebarOpen = false)}
+              aria-label="Close menu"
+              class="rounded-[var(--radius-md)] p-1.5 text-[var(--color-subtle)] hover:bg-[var(--color-surface)] md:hidden"
+            ><X size={16} strokeWidth={2} /></button>
+          </div>
+        </div>
+
+        <!-- Above the nav, and styled as a control rather than a link: it changes
+             which workspace every link below points into. Renders nothing (divider
+             included) unless the user belongs to more than one workspace. -->
+        <WorkspaceSwitcher
+          memberships={data.memberships ?? []}
+          activeId={data.user?.workspaceId ?? ''}
+        />
+
+        <!-- Demoted from the centre of the topbar, where it occupied the most
+             valuable strip in the app to serve one action. Paste-to-save already
+             works anywhere via the window paste listener, so this input is the
+             discoverable affordance for it, not the mechanism. -->
+        <SaveBar bind:this={saveBar} placeholder="Paste a link to save…" />
+
+        <nav
+          class="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto"
+          data-sveltekit-preload-code="viewport"
+        >
+          {#each navSections as section (section.label ?? 'top')}
+            <div class="flex flex-col gap-0.5">
+              {#if section.label}
+                <p class="cap-label px-2.5 pb-1">{section.label}</p>
+              {/if}
+              {#each section.hrefs as href (href)}
+                {@const tab = byHref.get(href)}
+                {@const active = isActive(href, page.url.pathname)}
+                {#if tab}
+                  <a
+                    {href}
+                    aria-current={active ? 'page' : undefined}
+                    class="group flex items-center gap-2.5 rounded-[var(--radius-md)] border px-2.5 py-1.5 text-sm transition-colors {active
+                      ? 'border-[var(--color-interactive-ring)] bg-[var(--color-surface)] font-semibold text-[var(--color-text)] shadow-xs'
+                      : 'border-transparent text-[var(--color-muted)] hover:bg-[var(--color-surface)] hover:text-[var(--color-text)]'}"
+                  >
+                    <tab.icon
+                      size={16}
+                      strokeWidth={active ? 2.25 : 2}
+                      class={active
+                        ? 'text-[var(--color-interactive)]'
+                        : 'text-[var(--color-subtle)] group-hover:text-[var(--color-muted)]'}
+                    />
+                    <span class="min-w-0 truncate">{tab.label}</span>
+                  </a>
+                {/if}
+              {/each}
+            </div>
+          {/each}
+        </nav>
+
+        <div class="flex flex-col gap-1 border-t border-[var(--color-border)] pt-3">
+          {#await data.reminders ?? []}
+            <RemindersPopover items={[]} />
+          {:then reminders}
+            <RemindersPopover items={reminders ?? []} />
+          {/await}
+
+          <!-- Identity was a bare sign-out button in the topbar, so the only
+               thing you could do with your own account was leave it. -->
+          <Popover label="Account" placement="top-start" panelRole="menu">
+            {#snippet trigger(attrs)}
+              <button
+                {...attrs}
+                type="button"
+                class="flex w-full items-center gap-2 rounded-[var(--radius-md)] px-1.5 py-1.5 text-left transition-colors hover:bg-[var(--color-surface)]"
+              >
+                <Avatar name={user.username ?? user.email} size="sm" />
+                <span class="min-w-0 flex-1 truncate text-xs text-[var(--color-text)]"
+                  >{user.username ?? user.email}</span
+                >
+                <EllipsisVertical size={14} strokeWidth={2} class="shrink-0 text-[var(--color-subtle)]" />
+              </button>
+            {/snippet}
+            {#snippet content({ close })}
+              <div class="w-56 p-1">
+                <MenuItem href="/settings" onclick={close}>
+                  {#snippet icon()}<Settings size={14} strokeWidth={2} />{/snippet}
+                  Settings
+                </MenuItem>
+                <div class="my-1 h-px bg-[var(--color-border)]"></div>
+                <!-- Drop cached /api/* responses on the way out so the next person
+                     to sign in on this device can't be served the previous
+                     workspace's lists from the service worker. -->
+                <form
+                  method="POST"
+                  action="/auth/logout"
+                  onsubmit={() => {
+                    navigator.serviceWorker?.controller?.postMessage('PURGE_API');
+                    // Recents name this workspace's records; they must not
+                    // outlive the session on a shared machine.
+                    clearRecents();
+                  }}
+                >
+                  <button
+                    type="submit"
+                    class="flex w-full items-center gap-2 rounded-[var(--radius-sm)] px-2 py-1.5 text-left text-xs text-[var(--color-text)] transition-colors hover:bg-[var(--color-surface-2)]"
+                  >
+                    <span class="flex size-4 shrink-0 items-center justify-center text-[var(--color-subtle)]">
+                      <LogOut size={14} strokeWidth={2} />
+                    </span>
+                    <span class="min-w-0 flex-1 truncate">Sign out</span>
+                  </button>
+                </form>
+                <p class="px-2 pt-2 pb-1 text-2xs text-[var(--color-subtle)]">
+                  Version {VERSION.replace(/^v/, '')}
+                </p>
+              </div>
+            {/snippet}
+          </Popover>
+        </div>
+      </aside>
+
+      <div class="flex min-w-0 flex-1 flex-col md:py-3 md:pr-3">
+        <!-- Mobile-only strip. The hamburger lived in the topbar that this
+             layout no longer has, and the drawer needs a way in. -->
+        <div class="flex h-12 shrink-0 items-center gap-2 px-3 md:hidden">
+          <button
+            type="button"
+            onclick={() => (sidebarOpen = true)}
+            aria-label="Open menu"
+            aria-expanded={sidebarOpen}
+            class="-ml-1 rounded-[var(--radius-md)] p-1.5 text-[var(--color-subtle)] hover:bg-[var(--color-surface)]"
+          ><Menu size={18} strokeWidth={2} /></button>
+          <a href="/" class="flex items-center gap-2 text-[var(--color-text)]">
+            <span class="text-base leading-none" aria-hidden="true">🚁</span>
+            <span class="text-lg font-bold tracking-[-0.04em]">heli</span>
+          </a>
+          <button
+            type="button"
+            onclick={() => (paletteOpen = true)}
+            aria-label="Search"
+            class="ml-auto rounded-[var(--radius-md)] p-1.5 text-[var(--color-subtle)] hover:bg-[var(--color-surface)]"
+          ><Search size={17} strokeWidth={2} /></button>
+        </div>
+
+        <!--
+          The panel. Square and borderless on mobile, where a rounded card
+          inside a 390px viewport just wastes both edges.
+        -->
+        <main
+          class="min-h-0 flex-1 overflow-y-auto border-[var(--color-border)] bg-[var(--color-surface)] md:rounded-[var(--radius-xl)] md:border md:shadow-panel"
+        >
+          <!-- A max-width at last. Without one, `/pipelines` rendered a single
+               40px row inside a 1300px card and the people table spread five
+               mostly-empty columns across the full screen. -->
+          <div class="mx-auto w-full max-w-[1600px] px-4 py-6 md:px-8 md:py-8">
+            {@render children()}
+          </div>
+        </main>
+      </div>
+    </div>
 
   {:else if page.url.pathname === '/' || page.url.pathname.startsWith('/auth')}
     {@render children()}
@@ -499,3 +635,28 @@
 {/if}
 <Toaster />
 <UpdateBanner />
+
+<style>
+  /*
+   * Indeterminate progress. Eases out toward 90% over ~2s and holds there —
+   * the bar is unmounted the moment navigation finishes, so it never needs to
+   * reach 100%, and never claims to know how long is left.
+   *
+   * `transform` rather than `width` so it composites rather than triggering
+   * layout on every frame of a navigation that is already busy. The global
+   * reduced-motion rule collapses this to a near-instant full bar, which is
+   * the right degradation: still visible, no travel.
+   */
+  .route-progress {
+    transform-origin: 0 50%;
+    animation: route-progress 2s var(--ease-out) forwards;
+  }
+  @keyframes route-progress {
+    from {
+      transform: scaleX(0.02);
+    }
+    to {
+      transform: scaleX(0.9);
+    }
+  }
+</style>

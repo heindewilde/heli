@@ -21,6 +21,10 @@
   import { formatLastSeen } from '$lib/interactions';
   import { createListCache } from '$lib/client/listCache.svelte';
   import { onIntersect } from '$lib/actions';
+  import Avatar from '$lib/ui/Avatar.svelte';
+  import EmptyState from '$lib/ui/EmptyState.svelte';
+  import Button from '$lib/ui/Button.svelte';
+  import { Users } from 'lucide-svelte';
 
   let { data } = $props();
 
@@ -261,15 +265,6 @@
     }, 0);
   }
 
-  function initials(name: string): string {
-    return name
-      .split(/\s+/)
-      .map((s) => s[0])
-      .filter(Boolean)
-      .slice(0, 2)
-      .join('')
-      .toUpperCase();
-  }
 
   // Clicking the active sort key clears it (reverts to default).
   function sortHref(key: string): string {
@@ -386,7 +381,7 @@
         <X size={10} strokeWidth={2} />
       </a>
     {:else if data.allTags.length > 0}
-      <span class="text-[var(--color-subtle)]">·</span>
+      <span class="text-[var(--color-subtle)]">—</span>
       {#each data.allTags.slice(0, 6) as t (t.id)}
         <a
           href={buildUrl({ tag: t.slug })}
@@ -401,18 +396,41 @@
   </div>
 
   {#if rows.length === 0}
-    <div class="rounded-[var(--radius-md)] border border-dashed border-[var(--color-border)] bg-[var(--color-surface)] p-10 text-center">
-      {#if data.q}
-        <p class="text-sm text-[var(--color-muted)]">No people match &ldquo;{data.q}&rdquo;.</p>
-      {:else if data.tag}
-        <p class="text-sm text-[var(--color-muted)]">No people tagged <strong>{data.tag.name}</strong> yet.</p>
-        <a href="/people" class="mt-3 inline-flex items-center gap-1 rounded-[var(--radius-sm)] border border-[var(--color-border)] px-3 py-1.5 text-sm">Clear tag filter</a>
-      {:else if data.favorite || data.archived || data.priorityFilter || data.statusFilter}
-        <p class="text-sm text-[var(--color-muted)]">No people in this filter.</p>
-      {:else}
-        <p class="text-sm text-[var(--color-muted)]">Paste a link anywhere, or use <strong>Add person</strong> above to add someone.</p>
-      {/if}
-    </div>
+    <!--
+      The copy already branched by cause, which is more care than most empty
+      states get; what it lacked was form — one muted sentence in a dashed box.
+      EmptyState supplies the icon, headline and action slot. The branching
+      stays here, where it belongs.
+    -->
+    {#if data.q}
+      <EmptyState icon={Search} title="No matches" description={`Nothing here matches “${data.q}”.`}>
+        {#snippet actions()}
+          <Button variant="secondary" onclick={() => { q = ''; navTo({ q: null }); }}>Clear search</Button>
+        {/snippet}
+      </EmptyState>
+    {:else if data.tag}
+      <EmptyState icon={Tag} title="Nothing tagged yet" description={`No one is tagged ${data.tag.name}.`}>
+        {#snippet actions()}
+          <Button href="/people" variant="secondary">Clear tag filter</Button>
+        {/snippet}
+      </EmptyState>
+    {:else if data.favorite || data.archived || data.priorityFilter || data.statusFilter}
+      <EmptyState icon={Users} title="Nothing in this filter" description="Try widening it, or clear the filters to see everyone.">
+        {#snippet actions()}
+          <Button href="/people" variant="secondary">Clear filters</Button>
+        {/snippet}
+      </EmptyState>
+    {:else}
+      <EmptyState
+        icon={Users}
+        title="No people yet"
+        description="Paste a link to anyone's profile in the sidebar and Heli will fill in the rest — or add someone by hand."
+      >
+        {#snippet actions()}
+          <Button variant="primary" size="md" onclick={openAdd}>Add person</Button>
+        {/snippet}
+      </EmptyState>
+    {/if}
   {:else}
     <!-- CSS grid rather than a real <table> so each cell can host a button/
          popover for inline editing without table-cell layout quirks. -->
@@ -421,7 +439,7 @@
         class="hidden md:grid items-center gap-3 border-b border-[var(--color-border)] bg-[var(--color-surface-2)] px-3 py-2 text-[var(--color-subtle)]"
         style={GRID}
       >
-        <span class="cap-label">·</span>
+        <span aria-hidden="false"><span class="sr-only">Priority</span></span>
         <SortHeader label="Name" sortKey="name" current={data.sort} href={sortHref} direction="asc" />
         <SortHeader label="Company" sortKey="company" current={data.sort} href={sortHref} sortable={false} />
         <SortHeader label="Contact" sortKey="contact" current={data.sort} href={sortHref} sortable={false} />
@@ -442,13 +460,7 @@
             <div data-sveltekit-preload-data="tap" class="md:hidden group relative flex items-center gap-2 border-b border-[var(--color-border)] px-3 py-3 transition-colors last:border-b-0 {sel ? 'bg-[var(--color-highlight-bg)]' : 'hover:bg-[var(--color-row-hover)]'} {person.isArchived ? 'opacity-60' : ''}">
               <PriorityFlag value={(person.priority as Priority) ?? null} onChange={(p) => setPriority(person.id, p)} />
               <a href={`/people/${person.id}`} class="flex min-w-0 flex-1 items-center gap-3">
-                <span class="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-full border border-[var(--color-border)] bg-[var(--color-surface)] text-xs font-medium text-[var(--color-muted)]">
-                  {#if person.avatarUrl}
-                    <img src={person.avatarUrl} alt="" loading="lazy" class="h-full w-full object-cover" />
-                  {:else}
-                    {initials(person.name) || '·'}
-                  {/if}
-                </span>
+                <Avatar name={person.name} src={person.avatarUrl} size="md" />
                 <span class="min-w-0 flex-1">
                   <span class="flex items-center gap-1.5">
                     <span class="truncate text-sm font-medium text-[var(--color-text)]">{person.name}</span>
@@ -476,13 +488,7 @@
               />
 
               <a href={`/people/${person.id}`} class="flex min-w-0 items-center gap-3">
-                <span class="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-full border border-[var(--color-border)] bg-[var(--color-surface)] text-xs font-medium text-[var(--color-muted)]">
-                  {#if person.avatarUrl}
-                    <img src={person.avatarUrl} alt="" loading="lazy" class="h-full w-full object-cover" />
-                  {:else}
-                    {initials(person.name) || '·'}
-                  {/if}
-                </span>
+                <Avatar name={person.name} src={person.avatarUrl} size="md" />
                 <span class="min-w-0 flex-1">
                   <span class="flex items-center gap-2">
                     <span class="truncate text-sm font-medium text-[var(--color-text)]">{person.name}</span>

@@ -71,7 +71,7 @@
         {#if size}<span class="tabular">{size}</span>{/if}
       </span>
     {:else}
-      <span class="text-[var(--color-subtle)]">·</span>
+      <span class="text-[var(--color-subtle)]">—</span>
     {/if}
   </button>
   {/snippet}

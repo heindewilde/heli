@@ -13,7 +13,18 @@
  * transforms.
  */
 
-export type Placement = 'bottom-start' | 'bottom-end' | 'top-start' | 'top-end';
+/**
+ * The bare `'top'` / `'bottom'` variants centre the panel on its anchor. Menus
+ * and pickers want an edge aligned so their text lines up with the trigger's;
+ * a tooltip wants to be centred under the thing it describes.
+ */
+export type Placement =
+  | 'bottom-start'
+  | 'bottom-end'
+  | 'bottom'
+  | 'top-start'
+  | 'top-end'
+  | 'top';
 
 export type AnchorOptions = {
   anchor: HTMLElement | undefined;
@@ -58,8 +69,11 @@ function place(panel: HTMLElement, opts: AnchorOptions) {
   const height = Math.min(p.height, available);
   const top = wantsTop ? a.top - offset - height : a.bottom + offset;
 
-  const alignEnd = placement.endsWith('end');
-  let left = alignEnd ? a.right - p.width : a.left;
+  let left = placement.endsWith('end')
+    ? a.right - p.width
+    : placement.endsWith('start')
+      ? a.left
+      : a.left + (a.width - p.width) / 2;
   const maxLeft = window.innerWidth - p.width - VIEWPORT_MARGIN;
   left = Math.max(VIEWPORT_MARGIN, Math.min(left, Math.max(VIEWPORT_MARGIN, maxLeft)));
 

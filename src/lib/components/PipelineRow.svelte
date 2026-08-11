@@ -1,5 +1,6 @@
 <script lang="ts">
   import { Trash2, Archive, Funnel } from 'lucide-svelte';
+  import Badge from '$lib/ui/Badge.svelte';
 
   type Props = {
     href: string;
@@ -46,15 +47,18 @@
       {#if description}{description}{:else}<span class="italic text-[var(--color-subtle)]">{stageCount} {stageCount === 1 ? 'stage' : 'stages'}</span>{/if}
     </span>
   </span>
-  <span class="hidden items-center gap-2 text-xs sm:flex">
+  <span class="hidden items-center gap-1.5 sm:flex">
     {#if openCount > 0}
-      <span class="rounded-full border border-[var(--color-border)] bg-[var(--color-surface)] px-2 py-0.5 text-[var(--color-muted)]">{openCount} open</span>
+      <Badge size="md">{openCount} open</Badge>
     {/if}
     {#if wonCount > 0}
-      <span class="rounded-full border border-emerald-300/40 bg-emerald-300/15 px-2 py-0.5 text-emerald-700 dark:text-emerald-300">{wonCount} won</span>
+      <!-- Was `emerald-300/40` + a `dark:` utility, i.e. the raw Tailwind
+           palette and a variant that compiled against the OS rather than the
+           app's theme toggle. Same colour, now from the semantic token. -->
+      <Badge size="md" tone="success">{wonCount} won</Badge>
     {/if}
     {#if lostCount > 0}
-      <span class="rounded-full border border-[var(--color-border)] bg-[var(--color-surface)] px-2 py-0.5 text-[var(--color-muted)]">{lostCount} lost</span>
+      <Badge size="md">{lostCount} lost</Badge>
     {/if}
   </span>
   <span class="flex shrink-0 items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100 {selected ? 'opacity-100' : ''}">

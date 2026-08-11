@@ -156,7 +156,7 @@
       tabindex="-1"
       use:anchored={{ anchor: wrapperEl, placement, matchWidth }}
       use:trapFocus={{ autoFocus }}
-      class="z-[var(--z-popover)] overflow-auto overscroll-contain rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)] p-0 text-[var(--color-text)] shadow-[var(--shadow-lg)] focus:outline-none {panelClass}"
+      class="panel z-[var(--z-popover)] overflow-auto overscroll-contain rounded-[var(--radius-lg)] border border-[var(--color-border)] bg-[var(--color-surface)] p-0 text-[var(--color-text)] shadow-overlay focus:outline-none {panelClass}"
     >
       {@render content({ close })}
     </div>
@@ -172,3 +172,24 @@
   block here would instead out-specify those Tailwind classes and blank the
   panel out.
 -->
+
+<style>
+  /*
+   * Entry only — same reasoning as Dialog: an exit would need `open` to stay
+   * true after the caller cleared it, and `open` is bindable here, so that
+   * second source of truth would be the caller's problem too.
+   *
+   * `.panel` and `animation` alone, deliberately. This is the one property no
+   * Tailwind class on that element sets, so it cannot run into the specificity
+   * trap the comment above describes — and note it must not animate `transform`
+   * or `inset`, which position.ts owns and writes inline every scroll frame.
+   */
+  .panel {
+    animation: popover-in var(--duration-fast) var(--ease-out);
+  }
+  @keyframes popover-in {
+    from {
+      opacity: 0;
+    }
+  }
+</style>

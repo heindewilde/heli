@@ -9,6 +9,8 @@
    */
   import { ChevronDown } from 'lucide-svelte';
   import Popover from '$lib/ui/Popover.svelte';
+  import Badge from '$lib/ui/Badge.svelte';
+  import MenuItem from '$lib/ui/MenuItem.svelte';
 
   type Stage = { id: string; name: string; kind: string };
 
@@ -24,57 +26,54 @@
 
   let open = $state(false);
 
-  function dotClass(kind: string): string {
-    if (kind === 'won') return 'bg-emerald-500';
-    if (kind === 'lost') return 'bg-rose-500';
-    return 'bg-[var(--color-accent)]';
+  /**
+   * These were the last three raw Tailwind palette colours in the product
+   * (`emerald-300/40`, `rose-300/40`) and the last three `dark:` utilities —
+   * which, until `@custom-variant dark` was added, compiled against the OS
+   * preference rather than the app's theme toggle, so a won chip rendered its
+   * dark text on a light surface for anyone whose two settings disagreed.
+   * Both problems disappear by going through the semantic tokens.
+   */
+  function toneFor(kind: string): 'success' | 'danger' | 'neutral' {
+    if (kind === 'won') return 'success';
+    if (kind === 'lost') return 'danger';
+    return 'neutral';
   }
 
-  function chipClass(kind: string): string {
-    if (kind === 'won')
-      return 'border-emerald-300/40 bg-emerald-300/15 text-emerald-700 dark:text-emerald-300';
-    if (kind === 'lost')
-      return 'border-rose-300/40 bg-rose-300/15 text-rose-700 dark:text-rose-300';
-    return 'border-[var(--color-highlight-border)] bg-[var(--color-highlight-bg)] text-[var(--color-text)]';
+  function dotClass(kind: string): string {
+    if (kind === 'won') return 'bg-[var(--color-success)]';
+    if (kind === 'lost') return 'bg-[var(--color-danger)]';
+    return 'bg-[var(--color-accent)]';
   }
 </script>
 
 <Popover bind:open label="Move to stage" panelRole="listbox">
   {#snippet trigger(attrs)}
-    <button
-      {...attrs}
-      type="button"
-      class="inline-flex items-center gap-1 rounded-full border px-1.5 py-px text-[10px] {chipClass(
-        stageKind
-      )} hover:opacity-90"
-    >
-      <span>{stageName}</span>
-      <ChevronDown size={9} strokeWidth={2.5} />
+    <button {...attrs} type="button" class="max-w-full transition-opacity hover:opacity-80">
+      <Badge tone={toneFor(stageKind)} dot>
+        <span class="inline-flex items-center gap-1">
+          {stageName}
+          <ChevronDown size={9} strokeWidth={2.5} class="shrink-0 opacity-70" />
+        </span>
+      </Badge>
     </button>
   {/snippet}
 
   {#snippet content({ close })}
     <div class="min-w-[160px] p-1">
       {#each stages as s (s.id)}
-        <button
-          type="button"
-          role="option"
-          aria-selected={s.id === stageId}
+        <MenuItem
+          selected={s.id === stageId}
           onclick={() => {
             close();
             if (s.id !== stageId) onMove(s.id);
           }}
-          class="flex w-full items-center gap-2 rounded-[var(--radius-sm)] px-2 py-1.5 text-left text-xs hover:bg-[var(--color-bg)] {s.id ===
-          stageId
-            ? 'bg-[var(--color-bg)] font-medium'
-            : ''}"
         >
-          <span class="inline-block h-1.5 w-1.5 rounded-full {dotClass(s.kind)}"></span>
-          <span class="min-w-0 flex-1 truncate">{s.name}</span>
-          {#if s.id === stageId}
-            <span class="text-[10px] text-[var(--color-subtle)]">current</span>
-          {/if}
-        </button>
+          {#snippet icon()}
+            <span class="size-1.5 rounded-full {dotClass(s.kind)}"></span>
+          {/snippet}
+          {s.name}
+        </MenuItem>
       {/each}
       {#if stages.length === 0}
         <p class="px-2 py-1.5 text-xs italic text-[var(--color-subtle)]">Loading stages…</p>
