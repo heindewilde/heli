@@ -263,6 +263,34 @@ describe('sync', () => {
   });
 });
 
+describe('feed URL normalisation', () => {
+  test('accepts webcal:// — the scheme Apple actually hands you', async () => {
+    const { normalizeFeedUrl } = await import('../src/lib/server/calendar');
+    expect(normalizeFeedUrl('webcal://p12-caldav.icloud.com/published/2/ABC')).toBe(
+      'https://p12-caldav.icloud.com/published/2/ABC'
+    );
+    expect(normalizeFeedUrl('WEBCAL://example.com/c.ics')).toBe('https://example.com/c.ics');
+  });
+
+  test('preserves the query string — the token may live there', async () => {
+    const { normalizeFeedUrl } = await import('../src/lib/server/calendar');
+    const { cleanUrl } = await import('../src/lib/cleanUrl');
+
+    const withToken = 'https://example.com/feed.ics?s=SECRET&t=TOKEN&user=me';
+    // cleanUrl strips `s` and `t` as X share-link tracking params, which would
+    // silently destroy a credential. This is why feeds do not go through it.
+    expect(cleanUrl(withToken)).not.toContain('SECRET');
+    expect(normalizeFeedUrl(withToken)).toBe(withToken);
+  });
+
+  test('still refuses schemes that are not calendars', async () => {
+    const { normalizeFeedUrl } = await import('../src/lib/server/calendar');
+    expect(() => normalizeFeedUrl('file:///etc/passwd')).toThrow();
+    expect(() => normalizeFeedUrl('javascript:alert(1)')).toThrow();
+    expect(() => normalizeFeedUrl('   ')).toThrow();
+  });
+});
+
 describe('SSRF', () => {
   test('a feed pointed at cloud metadata is refused', async () => {
     const { syncFeed } = await import('../src/lib/server/calendar');

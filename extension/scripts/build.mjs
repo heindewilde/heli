@@ -3,6 +3,7 @@ import { cpSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { extractTokens } from './tokens.mjs';
+import { decodePng, encodePng, resize } from './resize.mjs';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const root = resolve(here, '..');
@@ -45,17 +46,28 @@ cpSync(resolve(root, 'manifest.json'), resolve(out, 'manifest.json'));
    living here — same reasoning as tokens.css above. A rebranding then reaches
    the extension on the next build instead of leaving it showing the old mark.
 
-   The sizes declared in manifest.json must match these files' real pixel
-   dimensions; Chrome scales from the nearest, and a mismatched key renders
-   blurry. There is no exact 128, so 96/192/512 are declared and Chrome picks. */
-const ICONS = {
-  'icon96.png': 'favicon-96x96.png',
-  'icon192.png': 'web-app-manifest-192x192.png',
-  'icon512.png': 'web-app-manifest-512x512.png'
-};
+   The sizes Chrome actually needs are 16 and 32 (the toolbar action), 48 (the
+   extensions page) and 128 (the install dialog and the Web Store). static/ has
+   none of them, so they are generated from the 512 source — see resize.mjs for
+   why that is a hundred lines rather than a dependency. Every declared size in
+   manifest.json is a real file at exactly that size; a mismatched key renders
+   blurry. */
+const ICON_SOURCE = resolve(repo, 'static/web-app-manifest-512x512.png');
+const ICON_SIZES = [16, 32, 48, 128, 512];
+
 mkdirSync(resolve(out, 'icons'), { recursive: true });
-for (const [dest, src] of Object.entries(ICONS)) {
-  cpSync(resolve(repo, 'static', src), resolve(out, 'icons', dest));
+let source;
+try {
+  source = decodePng(readFileSync(ICON_SOURCE));
+} catch (err) {
+  // The previous version swallowed a missing icon entirely; failing loudly is
+  // right, but a bare ENOENT from deep in cpSync gives no clue that the app's
+  // static/ directory is the culprit.
+  throw new Error(`Could not read the app icon at ${ICON_SOURCE}: ${err.message}`);
+}
+for (const size of ICON_SIZES) {
+  const image = size === source.width ? source : resize(source, size);
+  writeFileSync(resolve(out, 'icons', `icon${size}.png`), encodePng(image));
 }
 
 const common = {

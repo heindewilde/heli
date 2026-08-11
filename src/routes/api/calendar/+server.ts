@@ -5,8 +5,8 @@ import type { RequestHandler } from './$types';
 import { requireScope } from '$lib/server/scope';
 import { db } from '$lib/server/db';
 import { calendarFeeds } from '$lib/server/schema';
-import { listFeeds, redactFeed } from '$lib/server/calendar';
-import { assertPublicUrl, cleanUrl, UrlError } from '$lib/server/url';
+import { listFeeds, normalizeFeedUrl, redactFeed } from '$lib/server/calendar';
+import { assertPublicUrl, UrlError } from '$lib/server/url';
 import { sanitizePlainText } from '$lib/server/sanitize';
 
 export const GET: RequestHandler = async ({ locals }) => {
@@ -25,7 +25,7 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 
   let url: string;
   try {
-    url = cleanUrl(String(body.url ?? ''));
+    url = normalizeFeedUrl(String(body.url ?? ''));
     // Same guard the sync uses, applied at subscribe time so a bad URL fails
     // in front of the person who typed it rather than silently in a job.
     await assertPublicUrl(url);

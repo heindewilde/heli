@@ -79,8 +79,23 @@ export async function userCount(region?: string): Promise<number> {
   return rows.length;
 }
 
+/**
+ * Is this a brand-new install with no accounts anywhere?
+ *
+ * Asks `email_routing` on the **primary** database, not `users` on the default
+ * one. That table is the global registry — every `register()` writes a row to
+ * it precisely so a login can be routed to the right regional database — and it
+ * is the only place that knows about all regions at once.
+ *
+ * `userCount()` was counting `users` in the *default* region, which on a
+ * multi-region deployment is a local file that never receives a row: the real
+ * accounts live in EU/US/APAC. So it answered "yes, brand new" forever, and
+ * every registration flag downstream of it silently stopped working in the
+ * cloud while behaving correctly on self-host.
+ */
 export async function isFirstUser(): Promise<boolean> {
-  return (await userCount()) === 0;
+  const rows = await primaryDb().select({ email: emailRouting.email }).from(emailRouting).limit(1);
+  return rows.length === 0;
 }
 
 // Self-host safe default: once at least one account exists, signups are closed
@@ -88,8 +103,16 @@ export async function isFirstUser(): Promise<boolean> {
 // DISABLE_REGISTRATION=1 remains a hard kill switch and still wins if set.
 // The first signup is always allowed so an empty install can bootstrap.
 export async function isRegistrationDisabled(inviteToken?: string | null): Promise<boolean> {
-  if (process.env.DISABLE_REGISTRATION === '1') return true;
+  // Bootstrap comes first, ahead of the kill switch. An operator who sets
+  // DISABLE_REGISTRATION=1 in their .env *before* first boot — which the README
+  // explicitly invites — could otherwise never create the first account, and
+  // there is no way out of that from inside the app. The check above used to
+  // return early and lock them out, contradicting this function's own comment
+  // and the invariant recorded in CLAUDE.md.
+  //
+  // Cheap enough to run first: userCount is a LIMIT 2.
   if (await isFirstUser()) return false;
+  if (process.env.DISABLE_REGISTRATION === '1') return true;
   // A live invite admits its addressee even though public signup is closed.
   // Without this, invites are dead on arrival on every self-host — the default
   // there is closed-after-first-user, so the owner could never add a colleague.

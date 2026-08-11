@@ -98,6 +98,8 @@ ORIGIN=https://$HELI_DOMAIN
 # PUBLIC_LOGODEV_KEY=     # free key at https://logo.dev for pretty company logos
 # ENABLE_REGISTRATION=1   # sign-ups close after the first account; set this to reopen them
 # DISABLE_REGISTRATION=1  # hard kill switch for sign-ups
+# SCHEDULER_DISABLED=1    # stop the background calendar poller (see SELFHOST.md)
+# EXTENSION_ORIGINS=      # chrome-extension://<id> — only for the browser extension
 EOF
   chmod 600 .env
   ok "Wrote $INSTALL_DIR/.env"

@@ -18,7 +18,14 @@ export default defineConfig({
   resolve: {
     // Server modules import each other through `$lib/...` (e.g.
     // saveInteraction.ts -> $lib/interactions), which only SvelteKit resolves.
-    alias: { $lib: fileURLToPath(new URL('./src/lib', import.meta.url)) }
+    alias: {
+      $lib: fileURLToPath(new URL('./src/lib', import.meta.url)),
+      // A SvelteKit virtual module; see the stub for why the shim is faithful
+      // rather than empty.
+      '$env/dynamic/private': fileURLToPath(
+        new URL('./tests/helpers/env-stub.ts', import.meta.url)
+      )
+    }
   },
   test: {
     environment: 'node',
