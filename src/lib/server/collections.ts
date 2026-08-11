@@ -10,7 +10,7 @@ import {
   type MemberKind
 } from './schema';
 import { ftsQuery } from './search';
-import { sanitizePlainText } from './sanitize';
+import { sanitize, sanitizePlainText } from './sanitize';
 import type { Scope } from './scope';
 
 export type CollectionListRow = {
@@ -207,7 +207,11 @@ export async function createCollection(
   const d = db(s.region);
   const name = sanitizePlainText(input.name, 200);
   if (!name) throw new Error('missing_name');
-  const description = input.description ? sanitizePlainText(input.description, 1000) : null;
+  // `sanitize`, not `sanitizePlainText`: this column is rendered with `{@html}`
+  // by NotesEditor, and sanitizePlainText only strips control characters — it
+  // neither escapes nor removes markup. Same invariant as `people.notes` and
+  // `companies.description`, which already used the allowlist sanitizer.
+  const description = input.description ? sanitize(input.description) : null;
   const icon = input.icon ? sanitizePlainText(input.icon, 50) : null;
   const id = createId();
   const now = Date.now();
@@ -245,9 +249,7 @@ export async function updateCollection(
     updates.name = next;
   }
   if (input.description !== undefined) {
-    updates.description = input.description
-      ? sanitizePlainText(input.description, 1000) || null
-      : null;
+    updates.description = input.description ? sanitize(input.description) || null : null;
   }
   if (input.icon !== undefined) {
     updates.icon = input.icon ? sanitizePlainText(input.icon, 50) || null : null;

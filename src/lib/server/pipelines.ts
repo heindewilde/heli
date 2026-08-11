@@ -19,7 +19,7 @@ import {
   type PipelineView
 } from './schema';
 import { ftsQuery } from './search';
-import { sanitizePlainText } from './sanitize';
+import { sanitize, sanitizePlainText } from './sanitize';
 import { colorToKind } from '$lib/stageColors';
 import type { Scope } from './scope';
 
@@ -269,7 +269,9 @@ export async function createPipeline(
   const d = db(s.region);
   const name = sanitizePlainText(input.name, 200);
   if (!name) throw new Error('missing_name');
-  const description = input.description ? sanitizePlainText(input.description, 1000) : null;
+  // See the note in collections.ts: rendered with `{@html}`, so it needs the
+  // allowlist sanitizer rather than the control-character stripper.
+  const description = input.description ? sanitize(input.description) : null;
   const defaultView: PipelineView = input.defaultView && isPipelineView(input.defaultView) ? input.defaultView : 'kanban';
   const id = createId();
   const now = Date.now();
@@ -323,9 +325,7 @@ export async function updatePipeline(
     updates.name = next;
   }
   if (input.description !== undefined) {
-    updates.description = input.description
-      ? sanitizePlainText(input.description, 1000) || null
-      : null;
+    updates.description = input.description ? sanitize(input.description) || null : null;
   }
   if (input.defaultView !== undefined) {
     if (!isPipelineView(input.defaultView)) throw new Error('invalid_view');
