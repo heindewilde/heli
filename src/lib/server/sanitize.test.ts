@@ -50,6 +50,42 @@ test('permitted formatting survives', () => {
   expect(sanitize('<ul><li>one</li><li>two</li></ul>')).toBe('<ul><li>one</li><li>two</li></ul>');
 });
 
+/**
+ * Squire rewrites STRONG to B and EM to I as part of its own normalisation, so
+ * `<b>`/`<i>` is what an editor save actually posts. They are not in
+ * ALLOWED_TAGS and never will be — sanitize-html runs transformTags *before*
+ * the allowlist check, so they arrive as strong/em and are kept under that
+ * name. Without this, bold and italic are silently deleted on every save.
+ */
+test('editor bold and italic are normalised, not dropped', () => {
+  expect(sanitize('<p><b>x</b> and <i>y</i></p>')).toBe('<p><strong>x</strong> and <em>y</em></p>');
+});
+
+/**
+ * The reason `RichText.svelte` must construct Squire with `blockTag: 'P'`:
+ * `div` is not on the allowlist, and sanitize-html discards a disallowed tag
+ * while keeping its text. Left at Squire's default, every paragraph break in
+ * the document would disappear on save with nothing to show for it.
+ */
+test('div paragraphs collapse — why blockTag must be P', () => {
+  expect(sanitize('<div>one</div><div>two</div>')).toBe('onetwo');
+});
+
+test('editor-shaped output survives a round trip unchanged', () => {
+  const html = '<p>intro</p><ul><li>one</li></ul><blockquote><p>quoted</p></blockquote>';
+  expect(sanitize(html)).toBe(html);
+});
+
+/**
+ * Collection and pipeline descriptions used to go through `sanitizePlainText`,
+ * which strips control characters and nothing else, while NotesEditor renders
+ * them with `{@html}`. Any member could store this and run it in every
+ * colleague's session.
+ */
+test('a description-shaped payload is neutered', () => {
+  expect(sanitize('<img src=x onerror="alert(1)">')).not.toMatch(/onerror|<img/i);
+});
+
 test('external links are forced to rel=nofollow noopener noreferrer and target=_blank', () => {
   const out = sanitize('<a href="https://example.com">x</a>');
   expect(out).toContain('rel="nofollow noopener noreferrer"');

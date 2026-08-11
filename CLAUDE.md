@@ -37,6 +37,13 @@ Heli is a personal CRM. SvelteKit 2 (adapter-node, full SSR) + libSQL/SQLite + D
 - **Bundle-only deps go in `devDependencies`.** Anything tree-shaken into the build (e.g. `lucide-svelte`, Tailwind) does not belong in `dependencies` — leaving it there bloats production `node_modules` by the full source size.
 - **HTML parsing is `node-html-parser`** (`src/lib/server/og.ts`). Don't reintroduce `jsdom`, `cheerio`, or `parse5` — we deliberately removed an ~18 MB transitive chain. Note: `node-html-parser` does not support `[rel~="x"]`; iterate `link[rel]` manually (see `pickLink` in `og.ts`).
 - **SQLite memory is tunable via `SQLITE_CACHE_MB` / `SQLITE_MMAP_MB`** env vars (defaults 16 MB cache, 64 MB mmap). Don't hardcode pragma values — keep the env path so small-server deploys can shrink further.
+- **The rich-text editor is `squire-rte`, and that is a deliberate exception** to
+  "default to no dependency". 18 KB gzipped, zero dependencies, MIT, and it is
+  Fastmail's own email composer. Quill is 43 KB plus four dependencies including
+  `lodash-es`; TipTap is 90 KB+ across packages. It is a `devDependency`
+  (bundle-only) and `RichText.svelte` imports it dynamically, so it lands in its
+  own lazily-fetched chunk rather than the initial bundle. See the Rich text
+  section below before touching it.
 
 ## HTTP, caching, headers
 
@@ -73,6 +80,40 @@ genuinely owns its own stacking.
   dismissal comes from `layerStack`. Don't add one back — that is what forced
   the two a11y workarounds this replaced.
 - **`Editable.svelte`** — click-to-edit a value, optimistic with rollback.
+- **`RichText.svelte`** — the rich-text surface, wrapping `squire-rte`. Used by
+  `NotesEditor`, so it is behind person notes and every company / project /
+  collection / pipeline description. Four things about it are load-bearing, and
+  three of them fail *silently*:
+  - **Construct with `blockTag: 'P'`.** Squire's default is `DIV`, which is not
+    on the sanitize allowlist — and sanitize-html discards a disallowed tag
+    while keeping its text, so every paragraph break would vanish on save with
+    nothing to show for it. `sanitize.test.ts` pins the collapse.
+  - **Squire's canonical output is `<b>`/`<i>`** — it rewrites STRONG to B and
+    EM to I in its own cleanup. `sanitize.ts` maps them back with
+    `transformTags`, which sanitize-html runs *before* the allowlist check, so
+    neither tag needs adding to `ALLOWED_TAGS`. Delete that mapping and every
+    bold and italic is deleted on save.
+  - **Import it dynamically inside `onMount`.** `squire-rte` touches `document`
+    and `navigator` at module scope; a static import breaks SSR on all five
+    detail pages. It is also what keeps it out of the initial bundle.
+  - **The allowlist lives in `src/lib/richText.ts`**, not in `sanitize.ts`, so
+    the editor's paste filter (`src/lib/ui/pasteFilter.ts`) and the server
+    sanitizer cannot drift. Squire's default paste keeps `<table>`, `<font>`
+    and `<span style>`; without the mirror you watch a pasted table render and
+    then lose it on save. The filter accepts `PASTE_TAGS` — the allowlist *plus*
+    `b`/`i`, since the server rewrites those rather than dropping them. Security
+    is still entirely server-side; the filter is a WYSIWYG guarantee.
+  - Values written before the editor existed are plain text whose line breaks
+    live in `\n`. `richText.ts` decides: no block markup means legacy, so
+    convert on the way into the editor and keep `whitespace-pre-wrap` on the
+    read view. There is no backfill — rows normalize on first edit.
+- **Descriptions are `{@html}`, so they need `sanitize()`, not
+  `sanitizePlainText()`.** `collections.ts` and `pipelines.ts` used the latter,
+  which only strips control characters — a member could store
+  `<img src=x onerror=…>` in a collection description and run it in every
+  colleague's session. Fixed; the same invariant already held for
+  `people.notes`, `companies.description` and `projects.description`. If you add
+  another column that `NotesEditor` renders, it goes through `sanitize()`.
 - **`layerStack.ts`** — one stack, one pair of window listeners. Escape closes
   only the top layer; a pointer press walks down until it hits a layer
   containing the target. Never add a per-component Escape handler; it will fight

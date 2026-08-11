@@ -1,22 +1,22 @@
 import sanitizeHtml from 'sanitize-html';
-
-const ALLOWED_TAGS = [
-  'p', 'br', 'strong', 'em', 'u', 's',
-  'code', 'pre', 'blockquote',
-  'ul', 'ol', 'li',
-  'h1', 'h2', 'h3', 'h4', 'h5', 'h6',
-  'a', 'hr'
-];
-
-const ALLOWED_ATTRIBUTES: Record<string, string[]> = {
-  a: ['href', 'title', 'rel', 'target']
-};
+// The allowlist lives in a module the browser can import too, so the editor's
+// paste filter and this sanitizer cannot drift. This remains the enforcing end.
+import { ALLOWED_ATTRIBUTES, ALLOWED_TAGS } from '$lib/richText';
 
 const options: sanitizeHtml.IOptions = {
   allowedTags: ALLOWED_TAGS,
   allowedAttributes: ALLOWED_ATTRIBUTES,
   allowedSchemes: ['http', 'https', 'mailto', 'tel'],
   transformTags: {
+    // Squire's canonical output is `<b>`/`<i>` — it actively rewrites STRONG to
+    // B and EM to I as part of its own cleanup, so an editor round trip would
+    // otherwise lose every bold and italic to the allowlist. sanitize-html runs
+    // transforms *before* the allowlist check, so the transformed name is what
+    // gets tested and neither tag needs adding to ALLOWED_TAGS. Stored markup
+    // stays in one vocabulary: `<strong>` in, `<b>` in the editor, `<strong>`
+    // back out.
+    b: 'strong',
+    i: 'em',
     a: (_tagName, attribs) => ({
       tagName: 'a',
       attribs: {
