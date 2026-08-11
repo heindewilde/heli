@@ -340,6 +340,13 @@
     calSyncing = id;
     try {
       const res = await fetch(`/api/calendar/${id}`, { method: 'POST' });
+      if (!res.ok) {
+        // Without this, a 404 (feed deleted in another tab) or a 500 left
+        // `result.status` undefined, skipped the error branch, and reported
+        // "undefined added, undefined updated" as a success.
+        toast.danger('Could not sync that calendar.');
+        return;
+      }
       const result = await res.json();
       if (result.status === 'error') {
         toast.danger(result.error ?? 'Sync failed');

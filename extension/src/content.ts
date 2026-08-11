@@ -15,5 +15,13 @@ if (localStorage.getItem('__heli_debug')) {
   console.log('[heli] adapter:', adapter.id, capture.via);
 }
 
-// The value of the last expression is what executeScript returns.
-({ ...capture, url: location.href, adapter: adapter.id });
+// Hand the result back through a global rather than the script's completion
+// value. `executeScript({ files })` returns that completion value, but esbuild
+// wraps this module in an IIFE (it has imports, so it must be bundled), and the
+// completion value of `(() => { … })();` is the call's own result — undefined.
+// The popup reads this global back with a second, tiny executeScript.
+(window as unknown as { __heliCapture?: unknown }).__heliCapture = {
+  ...capture,
+  url: location.href,
+  adapter: adapter.id
+};

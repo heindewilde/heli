@@ -195,8 +195,22 @@ export function parseIcs(text: string): IcsParseResult {
   let calendarCancelled = false;
   let current: Partial<IcsEvent> & { attendees: IcsAttendee[] } = { attendees: [] };
   let inEvent = false;
+  // VALARM nests inside VEVENT and reuses the same property names. Without
+  // tracking it, a DISPLAY alarm's DESCRIPTION ("Event reminder") overwrites the
+  // meeting's, and an EMAIL alarm's ATTENDEE becomes a CRM person who was never
+  // on the invite — created outright under matchMode 'all'.
+  let inAlarm = false;
 
   for (const line of lines) {
+    if (line === 'BEGIN:VALARM') {
+      inAlarm = true;
+      continue;
+    }
+    if (line === 'END:VALARM') {
+      inAlarm = false;
+      continue;
+    }
+    if (inAlarm) continue;
     if (line === 'BEGIN:VEVENT') {
       inEvent = true;
       current = { attendees: [], cancelled: false, allDay: false };

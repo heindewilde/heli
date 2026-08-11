@@ -46,6 +46,33 @@ const NAV_CACHEABLE = /^\/(?:people|companies|projects|interactions|collections|
 // counter that would mix concurrent requests together.
 export const handle: Handle = (input) => withTiming(async () => handleRequest(input));
 
+/** The headers every response gets, whichever way it authenticated. */
+function applySecurityHeaders(response: Response): void {
+  response.headers.set('X-Content-Type-Options', 'nosniff');
+  response.headers.set('X-Frame-Options', 'DENY');
+  response.headers.set('Referrer-Policy', 'strict-origin-when-cross-origin');
+  // SvelteKit hydration requires 'unsafe-inline' scripts. This policy blocks
+  // framing, plugin content, and non-https external resources while keeping all
+  // existing UI functionality intact.
+  response.headers.set(
+    'Content-Security-Policy',
+    [
+      "default-src 'self'",
+      "script-src 'self' 'unsafe-inline'",
+      "style-src 'self' 'unsafe-inline'",
+      "img-src 'self' data: https: blob:",
+      "font-src 'self' data:",
+      "connect-src 'self'",
+      "frame-ancestors 'none'",
+      "object-src 'none'",
+      "base-uri 'self'"
+    ].join('; ')
+  );
+  if (!dev) {
+    response.headers.set('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
+  }
+}
+
 /** Rewrap a SvelteKit error body as `{ error: { code, message } }`. */
 async function reshapeApiError(res: Response): Promise<Response> {
   if (res.status < 400) return res;
@@ -95,9 +122,12 @@ const handleRequest: Handle = async ({ event, resolve }) => {
     return preflight(origin);
   }
 
+  // RFC 7235 makes the scheme case-insensitive, and several HTTP clients send
+  // `bearer`. Matching only `Bearer` dropped those through to the cookie branch
+  // and answered 401 with no hint that a token had been seen at all.
   const auth = isPublicApi ? event.request.headers.get('authorization') : null;
-  if (auth?.startsWith('Bearer heli_')) {
-    const validated = await validateToken(auth.slice('Bearer '.length).trim());
+  if (/^bearer\s+heli_/i.test(auth ?? '')) {
+    const validated = await validateToken((auth ?? '').replace(/^bearer\s+/i, '').trim());
     if (!validated) {
       return withCors(apiError('unauthorized', 'Invalid or expired token.', 401), origin);
     }
@@ -126,6 +156,10 @@ const handleRequest: Handle = async ({ event, resolve }) => {
     // envelope documented in API.md is true for *every* response and not only
     // the ones a handler returns explicitly.
     const shaped = await reshapeApiError(response);
+    // This branch returns early, so it used to skip the security headers set
+    // further down: token-authenticated responses shipped without nosniff, CSP
+    // or HSTS while cookie-authenticated ones on the same routes had them.
+    applySecurityHeaders(shaped);
     return withCors(maybeCompress(shaped, event.request.headers.get('accept-encoding')), origin);
   }
 
@@ -193,30 +227,7 @@ const handleRequest: Handle = async ({ event, resolve }) => {
     }
   }
 
-  response.headers.set('X-Content-Type-Options', 'nosniff');
-  response.headers.set('X-Frame-Options', 'DENY');
-  response.headers.set('Referrer-Policy', 'strict-origin-when-cross-origin');
-  // Tiptap (the rich-text editor) uses inline styles and blob: URLs for image
-  // paste; SvelteKit hydration requires 'unsafe-inline' scripts. This policy
-  // blocks framing, plugin content, and non-https external resources while
-  // keeping all existing UI functionality intact.
-  response.headers.set(
-    'Content-Security-Policy',
-    [
-      "default-src 'self'",
-      "script-src 'self' 'unsafe-inline'",
-      "style-src 'self' 'unsafe-inline'",
-      "img-src 'self' data: https: blob:",
-      "font-src 'self' data:",
-      "connect-src 'self'",
-      "frame-ancestors 'none'",
-      "object-src 'none'",
-      "base-uri 'self'"
-    ].join('; ')
-  );
-  if (!dev) {
-    response.headers.set('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
-  }
+  applySecurityHeaders(response);
 
   // Server-Timing: always in dev, and in production only for workspace owners.
   // Split into db vs the rest, because "spend the phase on fewer queries" and

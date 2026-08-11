@@ -238,3 +238,36 @@ describe('scopes', () => {
     expect((await validateToken(secret))!.user.role).toBe('admin');
   });
 });
+
+describe('v1 search', () => {
+  /**
+   * `AND p.id IN (SELECT rowid FROM people_fts …)` compared a cuid2 TEXT id
+   * against the FTS table's integer rowid, so it could never match and every
+   * `?q=` returned an empty list. The join has to be on rowid.
+   */
+  test('GET /api/v1/people?q= finds a matching person', async () => {
+    const { savePerson } = await import('../src/lib/server/savePerson');
+    const { GET } = await import('../src/routes/api/v1/people/+server');
+    await savePerson(alice.scope, null, { name: 'Zenobia Featherstone' });
+
+    const res = await GET({
+      url: new URL('http://localhost/api/v1/people?q=Featherstone'),
+      locals: { user: alice.user, sessionId: 's', token: null }
+    } as never);
+    const body = (await res.json()) as { data: { name: string }[] };
+    expect(body.data.map((r) => r.name)).toContain('Zenobia Featherstone');
+  });
+
+  test('GET /api/v1/companies?q= finds a matching company', async () => {
+    const { saveCompany } = await import('../src/lib/server/saveCompany');
+    const { GET } = await import('../src/routes/api/v1/companies/+server');
+    await saveCompany(alice.scope, null, { name: 'Quibblesworth Holdings' });
+
+    const res = await GET({
+      url: new URL('http://localhost/api/v1/companies?q=Quibblesworth'),
+      locals: { user: alice.user, sessionId: 's', token: null }
+    } as never);
+    const body = (await res.json()) as { data: { name: string }[] };
+    expect(body.data.map((r) => r.name)).toContain('Quibblesworth Holdings');
+  });
+});

@@ -5,7 +5,7 @@ import type { RequestHandler } from './$types';
 import { requireScope } from '$lib/server/scope';
 import { db } from '$lib/server/db';
 import { calendarFeeds } from '$lib/server/schema';
-import { listFeeds, normalizeFeedUrl, redactFeed } from '$lib/server/calendar';
+import { intOr, listFeeds, normalizeFeedUrl, redactFeed } from '$lib/server/calendar';
 import { assertPublicUrl, UrlError } from '$lib/server/url';
 import { sanitizePlainText } from '$lib/server/sanitize';
 
@@ -46,8 +46,11 @@ export const POST: RequestHandler = async ({ request, locals }) => {
       Array.isArray(body.selfEmails) ? body.selfEmails.map(String).slice(0, 10) : []
     ),
     matchMode: body.matchMode === 'all' ? 'all' : 'known',
-    windowPastDays: Number(body.windowPastDays) || 90,
-    windowFutureDays: Number(body.windowFutureDays) || 30,
+    // `??` not `||`: an explicit 0 is a valid window and `||` would silently
+    // rewrite it to the default. Defaults match the column defaults and the
+    // PATCH handler, which previously disagreed with both.
+    windowPastDays: intOr(body.windowPastDays, 90),
+    windowFutureDays: intOr(body.windowFutureDays, 0),
     createdAt: now,
     updatedAt: now
   });

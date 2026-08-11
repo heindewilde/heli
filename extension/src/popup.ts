@@ -51,10 +51,15 @@ async function activeTab(): Promise<chrome.tabs.Tab | undefined> {
 }
 
 async function parsePage(tabId: number): Promise<Parsed> {
+  // Two calls on purpose. The first runs the bundled parser, whose completion
+  // value is lost to esbuild's IIFE wrapper; the second is an inline function,
+  // whose *return* value executeScript does deliver.
+  await chrome.scripting.executeScript({ target: { tabId }, files: ['content.js'] });
   const [{ result }] = await chrome.scripting.executeScript({
     target: { tabId },
-    files: ['content.js']
+    func: () => (window as unknown as { __heliCapture?: unknown }).__heliCapture
   });
+  if (!result) throw new Error('Could not read this page.');
   return result as Parsed;
 }
 

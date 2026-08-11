@@ -4,7 +4,7 @@ import type { RequestHandler } from './$types';
 import { requireScope } from '$lib/server/scope';
 import { db } from '$lib/server/db';
 import { calendarFeeds } from '$lib/server/schema';
-import { previewFeed, redactFeed, syncFeed } from '$lib/server/calendar';
+import { intOr, previewFeed, redactFeed, syncFeed } from '$lib/server/calendar';
 import { sanitizePlainText } from '$lib/server/sanitize';
 
 /** A feed belongs to one person — see PERSONAL_TABLES. */
@@ -44,8 +44,9 @@ export const PATCH: RequestHandler = async ({ params, request, locals }) => {
   if ('label' in body) patch.label = body.label ? sanitizePlainText(String(body.label), 80) : null;
   if ('enabled' in body) patch.enabled = body.enabled ? 1 : 0;
   if ('matchMode' in body) patch.matchMode = body.matchMode === 'all' ? 'all' : 'known';
-  if ('windowPastDays' in body) patch.windowPastDays = Number(body.windowPastDays) || 90;
-  if ('windowFutureDays' in body) patch.windowFutureDays = Number(body.windowFutureDays) || 0;
+  // See intOr in $lib/server/calendar.ts for why this is not `||`.
+  if ('windowPastDays' in body) patch.windowPastDays = intOr(body.windowPastDays, 90);
+  if ('windowFutureDays' in body) patch.windowFutureDays = intOr(body.windowFutureDays, 0);
   if ('selfEmails' in body) {
     patch.selfEmails = JSON.stringify(
       Array.isArray(body.selfEmails) ? body.selfEmails.map(String).slice(0, 10) : []

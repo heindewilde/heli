@@ -12,6 +12,7 @@ import {
 import { decodeCursor, encodeCursor } from '$lib/server/cursor';
 import { savePerson } from '$lib/server/savePerson';
 import { sanitizePlainText } from '$lib/server/sanitize';
+import { cleanUrl, UrlError } from '$lib/server/url';
 import { ftsQuery } from '$lib/server/search';
 
 const MAX_LIMIT = 100;
@@ -25,7 +26,10 @@ export const GET: RequestHandler = async ({ url, locals }) => {
 
   const d = db(s.region);
   const searchClause = fts
-    ? sql`AND p.id IN (SELECT rowid FROM people_fts WHERE people_fts MATCH ${fts})`
+    ? // rowid, not id: the FTS table is external-content over people.rowid
+      // (content_rowid='rowid' in migrate.ts), while people.id is a cuid2
+      // TEXT. Comparing the two never matches, so every ?q= returned nothing.
+      sql`AND p.rowid IN (SELECT rowid FROM people_fts WHERE people_fts MATCH ${fts})`
     : sql``;
   const cursorClause = cursor
     ? sql`AND (p.created_at, p.id) < (${cursor.createdAt}, ${cursor.id})`
@@ -63,7 +67,19 @@ export const POST: RequestHandler = async ({ request, locals }) => {
   const name = sanitizePlainText(String(body.name ?? ''), 200);
   if (!name) return apiError('invalid_request', 'A name is required.', 400);
 
-  const result = await savePerson(s, (body.url as string) ?? null, {
+  // cleanUrl throws UrlError on anything unparseable, and an uncaught throw
+  // here surfaces as a 500 reshaped to `server_error` — the documented answer
+  // for a malformed request is 400 invalid_request.
+  let url: string | null = null;
+  if (body.url != null && String(body.url).trim() !== '') {
+    try {
+      url = cleanUrl(String(body.url));
+    } catch (err) {
+      return apiError('invalid_request', err instanceof UrlError ? err.message : 'Bad URL.', 400);
+    }
+  }
+
+  const result = await savePerson(s, url, {
     name,
     role: body.role ? sanitizePlainText(String(body.role), 200) : null,
     companyId: body.companyId ? String(body.companyId) : null,

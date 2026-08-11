@@ -43,23 +43,50 @@ export async function saveCompany(
       .from(companies)
       .where(and(eq(companies.workspaceId, s.workspaceId), eq(companies.url, url)))
       .get();
-    if (existing) return { id: existing.id, kind: 'company', dedup: true };
+    // See the note in savePerson: a caller that supplies `manual` with a URL
+    // has already read the page, so its data wins and enrichment is skipped.
+    const enriched = manual
+      ? {
+          name: manual.name,
+          industry: manual.industry ?? null,
+          location: manual.location ?? null,
+          description: manual.description ?? null,
+          notes: manual.notes ?? null
+        }
+      : null;
+
+    if (existing) {
+      if (enriched) {
+        const patch = Object.fromEntries(
+          Object.entries(enriched).filter(([, v]) => v !== null && v !== '')
+        );
+        if (Object.keys(patch).length > 0) {
+          await d
+            .update(companies)
+            .set({ ...patch, updatedAt: now })
+            .where(eq(companies.id, existing.id));
+          bumpSearchEpoch(s.workspaceId);
+        }
+      }
+      return { id: existing.id, kind: 'company', dedup: true };
+    }
 
     const id = createId();
     await d.insert(companies).values({
       id,
       workspaceId: s.workspaceId,
       userId: s.userId,
-      name: domainOf(u),
       url,
       domain: domainOf(u),
+      ...(enriched ?? {}),
+      name: enriched?.name || domainOf(u),
       isFavorite: 0,
       isArchived: 0,
-      source: 'parsing',
+      source: enriched ? null : 'parsing',
       createdAt: now,
       updatedAt: now
     });
-    void enrichCompany(id, s, u);
+    if (!enriched) void enrichCompany(id, s, u);
     bumpSearchEpoch(s.workspaceId);
     return { id, kind: 'company', dedup: false };
   }

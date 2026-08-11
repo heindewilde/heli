@@ -54,24 +54,60 @@ export async function savePerson(
       .from(people)
       .where(and(eq(people.workspaceId, s.workspaceId), eq(people.url, url)))
       .get();
-    if (existing) return { id: existing.id, kind: 'person', dedup: true };
+    // A caller supplying `manual` alongside a URL has already read the page —
+    // that is the browser extension, looking at the rendered, authenticated DOM
+    // the server cannot fetch. Apply what it found instead of discarding it,
+    // and skip the enrichment that would hit an authwall and overwrite good
+    // data with a fallback name.
+    const enriched = manual
+      ? {
+          name: manual.name,
+          role: manual.role ?? null,
+          companyId: manual.companyId ?? null,
+          email: manual.email ?? null,
+          phone: manual.phone ?? null,
+          location: manual.location ?? null,
+          notes: manual.notes ?? null
+        }
+      : null;
+
+    if (existing) {
+      // The extension's "Update" path: fill blanks and accept corrections
+      // without wiping fields the caller simply did not send.
+      if (enriched) {
+        const patch = Object.fromEntries(
+          Object.entries(enriched).filter(([, v]) => v !== null && v !== '')
+        );
+        if (Object.keys(patch).length > 0) {
+          await d
+            .update(people)
+            .set({ ...patch, updatedAt: now })
+            .where(eq(people.id, existing.id));
+          bumpSearchEpoch(s.workspaceId);
+        }
+      }
+      return { id: existing.id, kind: 'person', dedup: true };
+    }
 
     const id = createId();
     await d.insert(people).values({
       id,
       workspaceId: s.workspaceId,
       userId: s.userId,
-      name: fallbackName(u),
       url,
       domain: domainOf(u),
       handle: deriveHandle(u),
+      ...(enriched ?? {}),
+      name: enriched?.name || fallbackName(u),
       isFavorite: 0,
       isArchived: 0,
-      source: 'parsing',
+      // `parsing` hands the row to the boot janitor and shows a spinner.
+      // Neither is right when the data arrived with the request.
+      source: enriched ? null : 'parsing',
       createdAt: now,
       updatedAt: now
     });
-    void enrichPerson(id, s, u);
+    if (!enriched) void enrichPerson(id, s, u);
     bumpSearchEpoch(s.workspaceId);
     return { id, kind: 'person', dedup: false };
   }

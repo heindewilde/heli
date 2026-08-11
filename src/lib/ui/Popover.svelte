@@ -132,6 +132,15 @@
   });
 </script>
 
+<!--
+  The anchor is the wrapper, not the trigger host. The host is `display:
+  contents` so it does not disturb the caller's layout — but an element with
+  `display: contents` generates no box at all, so `getBoundingClientRect()`
+  returns all zeros and every panel would be positioned against the viewport's
+  top-left corner instead of its trigger. The wrapper is `inline-flex`, a real
+  box that tightly wraps the trigger (the panel is `position: fixed`, so it
+  contributes nothing to the wrapper's size).
+-->
 <span bind:this={wrapperEl} class="relative inline-flex min-w-0 max-w-full {className}">
   <span bind:this={triggerHostEl} class="contents">
     {@render trigger(attrs)}
@@ -145,7 +154,7 @@
       aria-label={label}
       popover="manual"
       tabindex="-1"
-      use:anchored={{ anchor: triggerHostEl, placement, matchWidth }}
+      use:anchored={{ anchor: wrapperEl, placement, matchWidth }}
       use:trapFocus={{ autoFocus }}
       class="z-[var(--z-popover)] overflow-auto overscroll-contain rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)] p-0 text-[var(--color-text)] shadow-[var(--shadow-lg)] focus:outline-none {panelClass}"
     >
