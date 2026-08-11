@@ -72,7 +72,33 @@ export const VARIABLE_NAMES = Object.keys(
   buildVariables({ name: '' }, { name: '', email: '' })
 ) as readonly string[];
 
-export function renderTemplate(body: string, vars: Record<string, string>): RenderResult {
+export type RenderOptions = {
+  /**
+   * Escape merge values for an HTML context.
+   *
+   * Required whenever the template body *is* markup — an email template. The
+   * values are plain text off a person record, so a company called
+   * "Procter & Gamble" would otherwise emit a bare `&` into HTML, and a name
+   * containing `<` would open a tag. Off for plain-text platforms, where
+   * escaping would put `&amp;` into a LinkedIn message.
+   */
+  escapeHtml?: boolean;
+};
+
+function escape(value: string): string {
+  return value
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+export function renderTemplate(
+  body: string,
+  vars: Record<string, string>,
+  opts: RenderOptions = {}
+): RenderResult {
   const unresolved: string[] = [];
 
   const text = body.replace(TOKEN, (match, rawName: string) => {
@@ -84,7 +110,7 @@ export function renderTemplate(body: string, vars: Record<string, string>): Rend
       if (!unresolved.includes(name)) unresolved.push(name);
       return match;
     }
-    return value;
+    return opts.escapeHtml ? escape(value) : value;
   });
 
   return { text, unresolved };
@@ -94,7 +120,8 @@ export function renderTemplate(body: string, vars: Record<string, string>): Rend
 export function renderFor(
   body: string,
   to: Recipient,
-  from: Sender
+  from: Sender,
+  opts: RenderOptions = {}
 ): RenderResult {
-  return renderTemplate(body, buildVariables(to, from));
+  return renderTemplate(body, buildVariables(to, from), opts);
 }

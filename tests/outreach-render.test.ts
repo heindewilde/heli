@@ -72,6 +72,51 @@ describe('renderTemplate', () => {
     expect(text).toBe('Hi <script>x</script>');
   });
 
+  /**
+   * Email bodies are HTML, so a merge value has to be escaped for that
+   * context — "Procter & Gamble" would otherwise emit a bare ampersand.
+   */
+  test('escapeHtml escapes merge values for an HTML body', () => {
+    const { text } = renderTemplate(
+      '<p>About {{company_name}}</p>',
+      { company_name: 'Procter & Gamble' },
+      { escapeHtml: true }
+    );
+    expect(text).toBe('<p>About Procter &amp; Gamble</p>');
+  });
+
+  test('escapeHtml stops a merge value opening a tag', () => {
+    const { text } = renderTemplate(
+      '<p>Hi {{first_name}}</p>',
+      { first_name: '<script>alert(1)</script>' },
+      { escapeHtml: true }
+    );
+    expect(text).not.toMatch(/<script/);
+    expect(text).toContain('&lt;script&gt;');
+  });
+
+  /**
+   * And it must stay off for plain platforms — escaping there would put a
+   * literal "&amp;" into a LinkedIn message.
+   */
+  test('plain platforms are not escaped', () => {
+    const { text } = renderTemplate('About {{company_name}}', {
+      company_name: 'Procter & Gamble'
+    });
+    expect(text).toBe('About Procter & Gamble');
+  });
+
+  test('the escaped value survives the round trip back to plain text', async () => {
+    const { htmlToPlain } = await import('../src/lib/richText');
+    const { text } = renderTemplate(
+      '<p>About {{company_name}}</p>',
+      { company_name: 'Procter & Gamble' },
+      { escapeHtml: true }
+    );
+    // What the clipboard's text/plain flavour and the character counter see.
+    expect(htmlToPlain(text)).toBe('About Procter & Gamble');
+  });
+
   test('a template with no variables is returned unchanged', () => {
     const { text, unresolved } = renderFor('No variables here.', ada, me);
     expect(text).toBe('No variables here.');

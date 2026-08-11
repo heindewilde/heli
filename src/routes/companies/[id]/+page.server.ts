@@ -35,7 +35,15 @@ export const load: PageServerLoad = async ({ locals, params, url }) => {
       role: people.role,
       avatarUrl: people.avatarUrl,
       isFavorite: people.isFavorite,
-      isArchived: people.isArchived
+      isArchived: people.isArchived,
+      // For the outreach composer: a template addresses a person, so writing
+      // from a company means picking one of these. Extra columns on a row this
+      // query already fetches — no additional round trip.
+      email: people.email,
+      location: people.location,
+      phone: people.phone,
+      linkedinUrl: people.linkedinUrl,
+      xUrl: people.xUrl
     })
     .from(people)
     .where(and(eq(people.companyId, company.id), eq(people.workspaceId, s.workspaceId), eq(people.isArchived, 0)))

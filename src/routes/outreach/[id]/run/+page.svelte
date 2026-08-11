@@ -1,6 +1,7 @@
 <script lang="ts">
   import { APP_NAME } from '$lib/branding';
   import { ArrowLeft, ArrowRight, Copy, Check, ExternalLink, SkipForward } from 'lucide-svelte';
+  import RichText from '$lib/ui/RichText.svelte';
   import { toast } from '$lib/toasts.svelte';
   import { copyRich, copyText } from '$lib/client/clipboard';
   import { htmlToPlain } from '$lib/richText';
@@ -31,8 +32,9 @@
    */
   const rendered = $derived(
     data.people.map((p) => {
-      const source = rich ? htmlToPlain(template.body) : template.body;
-      const body = renderFor(source, p, data.sender);
+      // An email body stays HTML end to end, with merge values escaped for
+      // that context; every other platform is plain and must not be escaped.
+      const body = renderFor(template.body, p, data.sender, { escapeHtml: rich });
       const subject = template.subject ? renderFor(template.subject, p, data.sender) : null;
       return {
         body: body.text,
@@ -59,8 +61,13 @@
     edits[person.id] = { ...current, [field]: value };
   }
 
+  /** Plain flavour: the clipboard's text/plain, the mailto body, the counter. */
+  const bodyPlain = $derived(rich ? htmlToPlain(current.body) : current.body);
+
   const link = $derived(
-    person ? deepLinkFor(template.platform, person, current) : null
+    person
+      ? deepLinkFor(template.platform, person, { subject: current.subject, body: bodyPlain })
+      : null
   );
 
   function next() {
@@ -75,8 +82,8 @@
 
   async function copy() {
     const plain =
-      spec.hasSubject && current.subject ? `${current.subject}\n\n${current.body}` : current.body;
-    const result = rich ? await copyRich(current.body.replace(/\n/g, '<br>'), plain) : await copyText(plain);
+      spec.hasSubject && current.subject ? `${current.subject}\n\n${bodyPlain}` : bodyPlain;
+    const result = rich ? await copyRich(current.body, plain) : await copyText(plain);
     if (result === 'failed') {
       toast.danger('Could not reach the clipboard');
       return;
@@ -202,25 +209,45 @@
         </label>
       {/if}
 
-      <label class="flex flex-col gap-1">
+      {#snippet bodyHeading()}
         <span
           class="flex items-center justify-between text-xs font-medium uppercase tracking-wide text-[var(--color-subtle)]"
         >
           <span>Message</span>
           <span
-            class={spec.bodyMax !== null && current.body.length > spec.bodyMax
+            class={spec.bodyMax !== null && bodyPlain.length > spec.bodyMax
               ? 'text-[var(--color-danger)]'
-              : ''}
-            >{current.body.length}{spec.bodyMax !== null ? `/${spec.bodyMax}` : ''}</span
+              : ''}>{bodyPlain.length}{spec.bodyMax !== null ? `/${spec.bodyMax}` : ''}</span
           >
         </span>
-        <textarea
-          value={current.body}
-          oninput={(e) => edit('body', (e.currentTarget as HTMLTextAreaElement).value)}
-          rows="9"
-          class="rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-bg)] px-3 py-2 text-sm leading-relaxed"
-        ></textarea>
-      </label>
+      {/snippet}
+
+      {#if rich}
+        <!-- A div rather than a label: RichText renders a contenteditable. -->
+        <div class="flex flex-col gap-1">
+          {@render bodyHeading()}
+          <!-- Keyed on the person, so stepping the queue reseeds the editor
+               with the next message instead of keeping the previous one. -->
+          {#key person.id}
+            <RichText
+              value={current.body}
+              showActions={false}
+              placeholder="Your message"
+              onInput={(html) => edit('body', html)}
+            />
+          {/key}
+        </div>
+      {:else}
+        <label class="flex flex-col gap-1">
+          {@render bodyHeading()}
+          <textarea
+            value={current.body}
+            oninput={(e) => edit('body', (e.currentTarget as HTMLTextAreaElement).value)}
+            rows="9"
+            class="rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-bg)] px-3 py-2 text-sm leading-relaxed"
+          ></textarea>
+        </label>
+      {/if}
 
       <div class="flex flex-wrap items-center gap-2">
         <button

@@ -1,5 +1,6 @@
 <script lang="ts">
   import Dialog from '$lib/ui/Dialog.svelte';
+  import RichText from '$lib/ui/RichText.svelte';
   import { Copy, Check, ExternalLink, ChevronDown } from 'lucide-svelte';
   import { toast } from '$lib/toasts.svelte';
   import { copyRich, copyText } from '$lib/client/clipboard';
@@ -58,14 +59,18 @@
   /** Unresolved names, computed against the template rather than the edit. */
   let unresolved = $state<string[]>([]);
 
-  const bodyCount = $derived(bodyDraft.length);
-  const overBudget = $derived(
-    spec?.bodyMax != null && bodyCount > spec.bodyMax
-  );
+  /**
+   * The plain-text flavour: the clipboard's `text/plain`, the `mailto:` body,
+   * and what the character budget counts. LinkedIn's 300 is 300 characters of
+   * message, not of markup.
+   */
+  const bodyPlain = $derived(rich ? htmlToPlain(bodyDraft) : bodyDraft);
+  const bodyCount = $derived(bodyPlain.length);
+  const overBudget = $derived(spec?.bodyMax != null && bodyCount > spec.bodyMax);
 
   const link = $derived(
     selected
-      ? deepLinkFor(selected.platform, person, { subject: subjectDraft, body: bodyDraft })
+      ? deepLinkFor(selected.platform, person, { subject: subjectDraft, body: bodyPlain })
       : null
   );
 
@@ -91,11 +96,13 @@
     selectedId = id;
     const t = templates.find((x) => x.id === id);
     if (!t) return;
-    // The stored body is HTML for email and plain for everything else; the
-    // editable preview is plain text either way, because that is what gets
-    // pasted and what the character budget counts.
-    const source = isRichPlatform(t.platform) ? htmlToPlain(t.body) : t.body;
-    const body = renderFor(source, person, sender);
+    // An email body stays HTML the whole way through — flattening it here is
+    // what silently discarded the bold and links the template was authored
+    // with. Merge values are escaped for that context; a plain platform must
+    // not be, or a LinkedIn message ends up containing `&amp;`.
+    const escapeHtml = isRichPlatform(t.platform);
+    const body = renderFor(t.body, person, sender, { escapeHtml });
+    // The subject is plain text on every platform that has one.
     const subject = t.subject ? renderFor(t.subject, person, sender) : null;
     bodyDraft = body.text;
     subjectDraft = subject?.text ?? '';
@@ -109,10 +116,10 @@
     if (!selected) return;
     // The whole message, subject included — pasting into a mail client without
     // the subject would silently drop half of what was written.
-    const plain = spec?.hasSubject && subjectDraft ? `${subjectDraft}\n\n${bodyDraft}` : bodyDraft;
-    const result = rich
-      ? await copyRich(bodyDraft.replace(/\n/g, '<br>'), plain)
-      : await copyText(plain);
+    const plain = spec?.hasSubject && subjectDraft ? `${subjectDraft}\n\n${bodyPlain}` : bodyPlain;
+    // The HTML flavour is the editor's own markup, so formatting survives the
+    // paste into a mail client.
+    const result = rich ? await copyRich(bodyDraft, plain) : await copyText(plain);
 
     if (result === 'failed') {
       toast.danger('Could not reach the clipboard');
@@ -238,7 +245,7 @@
             </label>
           {/if}
 
-          <label class="flex flex-col gap-1">
+          {#snippet bodyHeading()}
             <span
               class="flex items-center justify-between text-xs font-medium uppercase tracking-wide text-[var(--color-subtle)]"
             >
@@ -250,14 +257,36 @@
                 {bodyCount}{spec.bodyMax !== null ? `/${spec.bodyMax}` : ''}
               </span>
             </span>
-            <textarea
-              bind:value={bodyDraft}
-              rows="10"
-              class="rounded-[var(--radius-md)] border bg-[var(--color-surface)] px-3 py-2 text-sm leading-relaxed {overBudget
-                ? 'border-[var(--color-danger)]'
-                : 'border-[var(--color-border)]'}"
-            ></textarea>
-          </label>
+          {/snippet}
+
+          {#if rich}
+            <!-- A div, not a label: RichText renders a contenteditable, which a
+                 label has nothing to associate with. Its own aria-label names it. -->
+            <div class="flex flex-col gap-1">
+              {@render bodyHeading()}
+              <!-- Keyed on the template so switching selection remounts the
+                   editor: `value` seeds Squire once and it owns the DOM after. -->
+              {#key selected.id}
+                <RichText
+                  value={bodyDraft}
+                  showActions={false}
+                  placeholder="Your message"
+                  onInput={(html) => (bodyDraft = html)}
+                />
+              {/key}
+            </div>
+          {:else}
+            <label class="flex flex-col gap-1">
+              {@render bodyHeading()}
+              <textarea
+                bind:value={bodyDraft}
+                rows="10"
+                class="rounded-[var(--radius-md)] border bg-[var(--color-surface)] px-3 py-2 text-sm leading-relaxed {overBudget
+                  ? 'border-[var(--color-danger)]'
+                  : 'border-[var(--color-border)]'}"
+              ></textarea>
+            </label>
+          {/if}
 
           {#if overBudget}
             <p class="text-xs text-[var(--color-danger)]">

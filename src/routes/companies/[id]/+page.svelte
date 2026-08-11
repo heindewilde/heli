@@ -10,6 +10,7 @@
   import TagInput from '$lib/components/TagInput.svelte';
   import Skeleton from '$lib/ui/Skeleton.svelte';
   import AddReminder from '$lib/components/AddReminder.svelte';
+  import CompanyOutreachButton from '$lib/components/CompanyOutreachButton.svelte';
   import CollectionsCard from '$lib/components/CollectionsCard.svelte';
   import PipelinesCard from '$lib/components/PipelinesCard.svelte';
   import ProjectsCard from '$lib/components/ProjectsCard.svelte';
@@ -207,6 +208,14 @@
       </div>
     </div>
     <div class="flex items-center gap-1">
+      {#if data.user}
+        <CompanyOutreachButton
+          companyName={company.name}
+          people={data.linkedPeople}
+          sender={{ name: data.user.username ?? '', email: data.user.email }}
+          onSent={() => invalidateAll()}
+        />
+      {/if}
       <AddReminder iconOnly kind="company" refId={company.id} />
       <button
         type="button"

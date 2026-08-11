@@ -78,6 +78,41 @@
     };
   });
 
+  /**
+   * Outreach templates as palette commands.
+   *
+   * An `$effect` rather than `onMount`, deliberately: the layout does not
+   * remount on a workspace switch, so registering once would leave the previous
+   * workspace's template names in the palette — the same leak that made the
+   * palette's recents per-workspace. This re-runs whenever the layout data
+   * changes and unregisters the old set on the way.
+   */
+  $effect(() => {
+    const pending = data.outreachTemplates;
+    let unregister: (() => void) | null = null;
+    let cancelled = false;
+
+    Promise.resolve(pending).then((items) => {
+      if (cancelled || !items?.length) return;
+      unregister = registerCommands(
+        items.map((t) => ({
+          id: `outreach:${t.id}`,
+          title: `Outreach — ${t.name}`,
+          section: 'Navigate' as const,
+          icon: Send,
+          keywords: ['template', 'message', t.platform.replace('_', ' ')],
+          when: () => !!data.user,
+          run: () => goto(`/outreach/${t.id}`)
+        }))
+      );
+    });
+
+    return () => {
+      cancelled = true;
+      unregister?.();
+    };
+  });
+
   onMount(() => {
     watchServiceWorker();
 
