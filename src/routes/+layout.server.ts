@@ -3,10 +3,17 @@ import type { LayoutServerLoad } from './$types';
 import { listReminders } from '$lib/server/reminders-query';
 import { listMemberships } from '$lib/server/workspaces';
 import { listTemplateSummaries } from '$lib/server/outreach';
+import { getRunningEntry } from '$lib/server/time';
 
 export const load: LayoutServerLoad = async ({ locals }) => {
   if (!locals.user)
-    return { user: null, reminders: [], memberships: [], outreachTemplates: [] };
+    return {
+      user: null,
+      reminders: [],
+      memberships: [],
+      outreachTemplates: [],
+      runningEntry: null
+    };
   const s = requireScope(locals);
   // Stream the reminders promise — SvelteKit ships the HTML immediately and
   // resolves the popover's contents in-flight, so the sidebar doesn't gate
@@ -31,6 +38,15 @@ export const load: LayoutServerLoad = async ({ locals }) => {
      * in SQL. Mapping the columns off afterwards still fetched and decoded every
      * body, on every request in the app, to discard them.
      */
-    outreachTemplates: listTemplateSummaries(s, { archived: 'active' })
+    outreachTemplates: listTemplateSummaries(s, { archived: 'active' }),
+    /**
+     * The running timer, streamed like the reminders.
+     *
+     * It lives at the layout so the indicator survives navigation — a timer you
+     * can only see on /time is one you forget is running. Unawaited because
+     * nothing above the fold depends on it, and the indicator renders nothing
+     * at all when there is no timer.
+     */
+    runningEntry: getRunningEntry(s)
   };
 };

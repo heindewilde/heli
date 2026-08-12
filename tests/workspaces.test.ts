@@ -20,6 +20,9 @@ let ownerReminderId: string;
 /** Both authored by the leaver; they differ only in whose time they book. */
 let allocOnLeaverId: string;
 let allocOnOwnerId: string;
+/** A finished entry is billing history; a running one is live UI state. */
+let leaverFinishedEntryId: string;
+let leaverRunningEntryId: string;
 
 beforeAll(async () => {
   ctx = await freshDb();
@@ -84,6 +87,12 @@ beforeAll(async () => {
       minutesPerWeek: 600
     })
   ).id;
+
+  const { createEntry, startTimer } = await import('../src/lib/server/time');
+  leaverFinishedEntryId = (
+    await createEntry(leaverScope, { startedAt: now - 3 * 3_600_000, minutes: 120 })
+  ).id;
+  leaverRunningEntryId = (await startTimer(leaverScope)).entry.id;
 }, 120_000);
 
 afterAll(() => ctx?.cleanup());
@@ -141,6 +150,27 @@ test('reassignAuthorship hands over shared work but deletes personal rows', asyn
   expect(allocIds).toEqual([allocOnOwnerId]);
   expect(String(allocs.rows[0].user_id)).toBe(owner.user.id);
   expect(String(allocs.rows[0].assignee_user_id)).toBe(owner.user.id);
+
+  // Time splits the other way, by ROW_PERSONAL: a *finished* entry is billing
+  // history and must survive, reassigned like any shared record. A *running*
+  // one is live UI state belonging to someone who has gone — keeping it would
+  // leave the owner with a clock ticking on a job they never started, and it
+  // would occupy their one running-timer slot.
+  const entries = await ctx.client.execute({
+    sql: `SELECT id, user_id, ended_at FROM time_entries WHERE workspace_id = ?`,
+    args: [owner.scope.workspaceId]
+  });
+  const entryIds = entries.rows.map((r) => String(r.id));
+  expect(entryIds).toContain(leaverFinishedEntryId);
+  expect(entryIds).not.toContain(leaverRunningEntryId);
+  const kept = entries.rows.find((r) => String(r.id) === leaverFinishedEntryId)!;
+  expect(String(kept.user_id)).toBe(owner.user.id);
+
+  // The owner can therefore still start their own timer.
+  const { startTimer, stopTimer } = await import('../src/lib/server/time');
+  const started = await startTimer(owner.scope);
+  expect(started.alreadyRunning).toBe(false);
+  await stopTimer(owner.scope);
 });
 
 test('ASSIGNMENT_COLUMNS names real tenant tables', async () => {

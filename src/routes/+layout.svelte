@@ -7,17 +7,20 @@
   import ShortcutHelp from '$lib/components/ShortcutHelp.svelte';
   import RemindersPopover from '$lib/components/RemindersPopover.svelte';
   import ThemeToggle from '$lib/components/ThemeToggle.svelte';
+  import RunningTimer from '$lib/components/RunningTimer.svelte';
   import Tooltip from '$lib/ui/Tooltip.svelte';
   import UpdateBanner from '$lib/components/UpdateBanner.svelte';
   import { watchServiceWorker } from '$lib/client/sw.svelte';
-  import { LayoutDashboard, Users, Building2, MessagesSquare, Briefcase, Folder, Funnel, Send, CalendarRange, LogOut, Search, HelpCircle, Settings, Menu, X } from 'lucide-svelte';
+  // `Timer` is aliased: the nav array's own entries are `{ icon }` and a bare
+  // `Timer` next to `TimerBar`/`RunningTimer` reads as one of those components.
+  import { LayoutDashboard, Users, Building2, MessagesSquare, Briefcase, Folder, Funnel, Send, CalendarRange, Timer as TimerIcon, LogOut, Search, HelpCircle, Settings, Menu, X } from 'lucide-svelte';
   import { page, navigating } from '$app/state';
   import Popover from '$lib/ui/Popover.svelte';
   import MenuItem from '$lib/ui/MenuItem.svelte';
   import Avatar from '$lib/ui/Avatar.svelte';
   import { EllipsisVertical } from 'lucide-svelte';
   import { onMount } from 'svelte';
-  import { invalidate, goto } from '$app/navigation';
+  import { invalidate, invalidateAll, goto } from '$app/navigation';
   import { isTypingTarget } from '$lib/keyboard.svelte';
   import {
     registerCommands,
@@ -67,7 +70,8 @@
     { href: '/pipelines', label: 'Pipelines', icon: Funnel },
     { href: '/projects', label: 'Projects', icon: Briefcase },
     { href: '/outreach', label: 'Outreach', icon: Send },
-    { href: '/availability', label: 'Availability', icon: CalendarRange }
+    { href: '/availability', label: 'Availability', icon: CalendarRange },
+    { href: '/time', label: 'Time', icon: TimerIcon }
   ];
 
   /**
@@ -85,7 +89,7 @@
     { label: 'Records', hrefs: ['/people', '/companies', '/interactions'] },
     { label: 'Organise', hrefs: ['/collections', '/pipelines', '/projects'] },
     { label: 'Engage', hrefs: ['/outreach'] },
-    { label: 'Plan', hrefs: ['/availability'] }
+    { label: 'Plan', hrefs: ['/availability', '/time'] }
   ];
   const byHref = $derived(new Map(tabs.map((t) => [t.href, t])));
 
@@ -221,6 +225,23 @@
           shortcut: 'n p',
           when: signedIn,
           run: () => goto('/projects/new')
+        },
+        {
+          // Start-or-stop rather than two commands: there is only ever one
+          // timer, so the answer to ⌘K "timer" should be the thing you want
+          // next, whichever that is.
+          id: 'toggle-timer',
+          title: 'Start or stop the timer',
+          section: 'Create',
+          icon: TimerIcon,
+          keywords: ['track', 'time', 'clock', 'stop'],
+          shortcut: 'n t',
+          when: signedIn,
+          run: async () => {
+            const running = await Promise.resolve(data.runningEntry);
+            await fetch(running ? '/api/time/stop' : '/api/time/start', { method: 'POST' });
+            await invalidateAll();
+          }
         },
         {
           id: 'new-collection',
@@ -424,6 +445,11 @@
             <span class="text-xl font-bold tracking-[-0.04em]">heli</span>
           </a>
           <div class="ml-auto flex items-center gap-0.5">
+            <!-- Renders nothing unless a timer is running, so it costs no space
+                 on the pages that are not about time. -->
+            {#await data.runningEntry ?? null then runningEntry}
+              <RunningTimer entry={runningEntry} />
+            {/await}
             <Tooltip label="Search (⌘K)">
               {#snippet trigger(attrs)}
                 <button

@@ -601,6 +601,61 @@ export const projectAllocations = sqliteTable(
 );
 
 /**
+ * Tracked time. One row per stretch of work.
+ *
+ * **`ended_at IS NULL` means the timer is running.** There is no separate
+ * "current timer" table or column — the running entry *is* an entry that has
+ * not stopped, so starting on a laptop and stopping on a phone needs no
+ * synchronisation beyond the row itself. `uq_time_entries_running` (a partial
+ * unique index, see WORKSPACE_UNIQUES) is what enforces one per person.
+ *
+ * **No duration column.** A manual entry writes both timestamps and duration is
+ * always derived, so the two representations cannot drift.
+ *
+ * `hourly_rate` and `currency` are **snapshots**, resolved allocation → project
+ * when the entry is created or stopped. Re-deriving them at report time would
+ * mean raising a project's rate silently rewrites what you already invoiced.
+ *
+ * `project_id` is SET NULL, not CASCADE: deleting a project must not erase the
+ * record of hours billed against it. Same reasoning as
+ * `interactions.outreach_template_id`.
+ */
+export const timeEntries = sqliteTable(
+  'time_entries',
+  {
+    id: text('id').primaryKey(),
+    workspaceId: text('workspace_id')
+      .notNull()
+      .references(() => workspaces.id, { onDelete: 'cascade' }),
+    /** Whose time this is. A real owner, not attribution — reads filter on it. */
+    userId: text('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    /** Optional: a timer can start unassigned and be filed later. */
+    projectId: text('project_id').references(() => projects.id, { onDelete: 'set null' }),
+    milestoneId: text('milestone_id').references(() => projectMilestones.id, {
+      onDelete: 'set null'
+    }),
+    description: text('description'),
+    startedAt: integer('started_at').notNull(),
+    /** NULL means running. */
+    endedAt: integer('ended_at'),
+    billable: integer('billable').notNull().default(0),
+    hourlyRate: integer('hourly_rate'),
+    currency: text('currency'),
+    /** Reserved: the seam for an invoicing pass. Nothing writes it yet. */
+    invoicedAt: integer('invoiced_at'),
+    createdAt: integer('created_at').notNull(),
+    updatedAt: integer('updated_at').notNull()
+  },
+  (t) => [
+    index('idx_time_ws_started').on(t.workspaceId, t.startedAt),
+    index('idx_time_ws_user_started').on(t.workspaceId, t.userId, t.startedAt),
+    index('idx_time_ws_project').on(t.workspaceId, t.projectId)
+  ]
+);
+
+/**
  * Measurable targets on a project — "ship 12 posts", 7 done.
  *
  * Kept separate from milestones rather than folded in as nullable columns:
@@ -928,6 +983,7 @@ export type ProjectLink = typeof projectLinks.$inferSelect;
 export type ProjectMilestone = typeof projectMilestones.$inferSelect;
 export type ProjectGoal = typeof projectGoals.$inferSelect;
 export type ProjectAllocation = typeof projectAllocations.$inferSelect;
+export type TimeEntry = typeof timeEntries.$inferSelect;
 
 // Lives in `$lib/duration` so the browser can read it without pulling Drizzle
 // in. Re-exported here for server callers.

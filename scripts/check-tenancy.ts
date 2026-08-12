@@ -44,6 +44,11 @@ const ALLOW_FILES = new Set([
   // filters workspace_id first. See ASSIGNMENT_COLUMNS in migrate.ts for why
   // those rows are deleted rather than reassigned when a member leaves.
   'src/lib/server/allocations.ts',
+  // A time entry belongs to the person who tracked it: "my week" is the primary
+  // read, and only its owner (or an admin) may edit it. So user_id here is a
+  // real owner rather than attribution. Every statement filters workspace_id
+  // first.
+  'src/lib/server/time.ts',
   // Outreach templates are the one table where user_id means two different
   // things per row: attribution on a shared template, real ownership on a
   // private one. So listing is (workspace_id AND (shared OR user_id)) — see
@@ -205,6 +210,10 @@ const MEMBER_ALLOWED = new Map<string, string>([
   ['projects/[id]/milestones/+server.ts', "planning a project you can already edit"],
   ['projects/[id]/goals/+server.ts', "planning a project you can already edit"],
   ['projects/[id]/allocations/+server.ts', 'staffing a project is routine work in a small team'],
+  ['time/+server.ts', 'logging your own time'],
+  ['time/[id]/+server.ts', "your own entries; a colleague's calls requireRole in time.ts"],
+  ['time/start/+server.ts', 'starting your own timer'],
+  ['time/stop/+server.ts', 'stopping your own timer'],
   [
     'workspace/capacity/+server.ts',
     'your own working week is yours; setting a colleague’s calls requireRole in the handler'

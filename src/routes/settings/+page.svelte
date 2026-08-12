@@ -1278,7 +1278,17 @@
       <a href="/api/export?kind=interactions" class="inline-flex items-center gap-1 rounded-[var(--radius-sm)] border border-[var(--color-border)] px-3 py-2 text-sm hover:bg-[var(--color-bg)]">
         <Download size={14} strokeWidth={2} /> Interactions ({data.counts.interactions})
       </a>
+      <a href="/api/export?kind=projects" class="inline-flex items-center gap-1 rounded-[var(--radius-sm)] border border-[var(--color-border)] px-3 py-2 text-sm hover:bg-[var(--color-bg)]">
+        <Download size={14} strokeWidth={2} /> Projects
+      </a>
+      <a href="/api/export?kind=time" class="inline-flex items-center gap-1 rounded-[var(--radius-sm)] border border-[var(--color-border)] px-3 py-2 text-sm hover:bg-[var(--color-bg)]">
+        <Download size={14} strokeWidth={2} /> Tracked time
+      </a>
     </div>
+    <p class="text-xs text-[var(--color-muted)]">
+      Heli does not generate invoices. The tracked-time CSV carries the rate that was in force
+      when each entry was recorded, so it is what you bill from.
+    </p>
   </section>
   {/if}
 

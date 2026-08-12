@@ -11,6 +11,7 @@ import {
   getProjectGoals
 } from '$lib/server/projects-query';
 import { listAllocationsForProject, listMemberCapacities } from '$lib/server/allocations';
+import { trackedByProject } from '$lib/server/time';
 
 /**
  * Only the project row is awaited; everything else is returned unawaited so the
@@ -45,6 +46,8 @@ export const load: PageServerLoad = async ({ locals, params, url }) => {
     staffing: Promise.all([
       listAllocationsForProject(s, params.id),
       listMemberCapacities(s)
-    ]).then(([allocations, members]) => ({ allocations, members }))
+    ]).then(([allocations, members]) => ({ allocations, members })),
+    /** Tracked minutes on this project, for the plan-vs-actual strip. */
+    tracked: trackedByProject(s, [params.id]).then((m) => m.get(params.id) ?? 0)
   };
 };

@@ -34,6 +34,9 @@ const PROTECTED_PATTERNS = [
   /^\/interactions(\/|$)/,
   /^\/projects(\/|$)/,
   /^\/availability(\/|$)/,
+  // Deliberately absent from NAV_CACHEABLE below: a page carrying a live timer
+  // is the one thing that must never be painted from a stored copy.
+  /^\/time(\/|$)/,
   /^\/settings(\/|$)/
 ];
 

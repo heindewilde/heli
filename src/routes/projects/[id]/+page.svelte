@@ -19,6 +19,8 @@
   import GoalsCard from '$lib/components/GoalsCard.svelte';
   import AllocationsCard from '$lib/components/AllocationsCard.svelte';
   import Skeleton from '$lib/ui/Skeleton.svelte';
+  import { formatHours, formatMinutes } from '$lib/duration';
+  import type { AllocationRow } from '$lib/server/allocations';
   import {
     PROJECT_TYPES,
     PROJECT_TYPE_LABELS,
@@ -176,6 +178,19 @@
   const moneyValue = $derived(
     moneyField ? ((project[moneyField] as number | null) ?? 0) : 0
   );
+
+  /**
+   * Hours a week this project is currently booked for, across everyone.
+   *
+   * "Currently" matters: a ramp-down is two rows, and summing both would claim
+   * a commitment nobody made. Only allocations covering today count.
+   */
+  function weeklyCommitment(allocations: AllocationRow[]): number {
+    const now = Date.now();
+    return allocations
+      .filter((a) => a.startDate <= now && a.endDate >= now)
+      .reduce((n, a) => n + a.minutesPerWeek, 0);
+  }
 
   async function saveMoney(raw: string) {
     if (!moneyField) return;
@@ -509,6 +524,30 @@
           {/if}
         </div>
       </div>
+
+      <!-- Plan vs actual. The whole reason allocations and tracking share a
+           spine: agreed hours on one side, recorded hours on the other. -->
+      {#await Promise.all([data.tracked, data.staffing]) then [tracked, staffing]}
+        {@const committed = weeklyCommitment(staffing.allocations)}
+        {#if tracked > 0 || committed > 0}
+          <div class="flex flex-col gap-2 rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)] p-3 text-sm">
+            <h3 class="text-xs font-medium uppercase tracking-wide text-[var(--color-subtle)]">Time</h3>
+            {#if committed > 0}
+              <div class="flex items-center justify-between gap-2">
+                <span class="text-xs text-[var(--color-muted)]">Committed</span>
+                <span class="tabular-nums">{formatHours(committed)}/wk</span>
+              </div>
+            {/if}
+            <div class="flex items-center justify-between gap-2">
+              <span class="text-xs text-[var(--color-muted)]">Tracked</span>
+              <span class="tabular-nums">{formatMinutes(tracked)}</span>
+            </div>
+            <a href="/time?project={project.id}" class="text-xs text-[var(--color-muted)] underline">
+              See the entries
+            </a>
+          </div>
+        {/if}
+      {/await}
 
       <!-- Reminder -->
       <div class="flex flex-col gap-2 rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)] p-3">

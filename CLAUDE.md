@@ -786,6 +786,64 @@ send API anyway. Don't "finish" it by adding sending.
   reorder — it is board configuration the whole workspace sees. Writing a
   template stays open to members.
 
+## Planning: projects, allocations, availability, time
+
+Four things sharing one spine: a project says what the work is, an allocation
+says whose weeks it takes, `/availability` reads those weeks back, and `/time`
+records what actually happened.
+
+- **Hours are integer minutes everywhere**, the way money is cents. `7.5 hours`
+  is `450`, and 450 always adds up. `$lib/duration` is the only place that
+  converts, and `parseDuration` accepts every shape people type (`1:30`,
+  `1.5h`, `90m`, `90`) because a timesheet correction is a number you know.
+- **`$lib/weeks` is Monday-anchored and UTC on both sides of the wire.** There
+  is no workspace timezone setting anywhere in the app (see `ics.ts`) and this
+  is not the feature that should introduce one. Partial weeks are **pro-rated
+  by days covered** — without that, an engagement starting on a Wednesday reads
+  as a full week of commitment. The week key is real ISO-8601, because at a
+  year boundary a naive "day of year / 7" gives one week two different labels.
+- **`project_allocations` has two user columns and the difference is
+  load-bearing.** `user_id` is created-by attribution and is reassigned
+  normally; `assignee_user_id` is whose week is booked and is **deleted** when
+  that member leaves — see `ASSIGNMENT_COLUMNS` in `migrate.ts`. Reassigning it
+  would book the workspace owner for work that walked out of the door.
+- **`time_entries.ended_at IS NULL` *is* the running timer.** No separate table,
+  no flag; that is what lets you start on a laptop and stop on a phone.
+  `uq_time_entries_running` (partial unique, in `WORKSPACE_UNIQUES`) enforces
+  one per person, and `startTimer` leans on it rather than reading first —
+  a read-then-write races with your own second tab.
+- **There is no duration column.** Both timestamps are stored and duration is
+  derived, so the two representations cannot drift.
+- **The rate on a time entry is a snapshot**, resolved allocation → project when
+  the entry is created or stopped. Re-deriving it at report time would mean
+  raising a project's rate silently reprices work you already invoiced.
+  `tests/time-entries.test.ts` pins that.
+- **`time_entries.project_id` is `ON DELETE SET NULL`**, never CASCADE. Deleting
+  a project must not erase the record of hours billed against it — same
+  reasoning as `interactions.outreach_template_id`.
+- **`ROW_PERSONAL` splits time by row**: a *running* entry is live UI state
+  belonging to someone who has gone and is deleted; *finished* entries are
+  billing history and are reassigned.
+- **Heli generates no invoices.** `GET /api/export?kind=time` is the seam, and
+  it carries the stored rate rather than the project's current one. `invoicedAt`
+  exists as a nullable column so a locking pass is cheap later; nothing writes
+  it.
+- **Availability is computed from commitments only** — not tracked time, not
+  calendar load. `capacityWindow` is two queries whatever the window size (one
+  for members, one for overlapping allocations) and buckets in JS; a per-week or
+  per-member query is what would make a 52-week board slow against remote
+  libSQL.
+- **`/time` is deliberately absent from `NAV_CACHEABLE`** while being in
+  `PROTECTED_PATTERNS`: a page carrying a live timer must never be painted from
+  a stored copy. `/api/time` is likewise not in the service worker's SWR list;
+  `/availability` and `/api/capacity` are.
+- **`allocations.ts` and `time.ts` are in `ALLOW_FILES`.** Both filter on a user
+  column that is a real owner rather than attribution. Every statement in them
+  still filters `workspace_id` first.
+- **The billing cross-field rule is `BILLING_MONEY_FIELD`**, not an if/else
+  chain. A project owns exactly one money column; with four billing types the
+  chain had to be right in three separate places.
+
 ## Versioning
 
 Every push to `main` triggers two workflows:

@@ -14,8 +14,9 @@ import {
 } from '$lib/server/schema';
 import { csvStream, isoDate } from '$lib/server/csv';
 import { getTagsForEntities } from '$lib/server/tags';
+import { listTimeEntries } from '$lib/server/time';
 
-const KINDS = ['people', 'companies', 'interactions', 'projects'] as const;
+const KINDS = ['people', 'companies', 'interactions', 'projects', 'time'] as const;
 type Kind = (typeof KINDS)[number];
 
 function isKind(v: string | null): v is Kind {
@@ -173,6 +174,51 @@ export const GET: RequestHandler = async ({ url, locals }) => {
         isoDate(i.updatedAt)
       ]
     });
+  } else if (kind === 'time') {
+    // Tracked time. This is the invoicing seam — Heli generates no invoices, so
+    // the CSV is how hours reach whatever does. Running entries are excluded:
+    // an hour that has not finished is not a line on a bill.
+    //
+    // `hourly_rate_cents` is the snapshot stored on the row, not the project's
+    // current rate, so re-exporting an old month cannot silently reprice it.
+    const rows = await listTimeEntries(s, { userId: 'all', limit: 500 });
+    stream = csvStream({
+      header: [
+        'id',
+        'user',
+        'project',
+        'milestone',
+        'description',
+        'started_at',
+        'ended_at',
+        'minutes',
+        'billable',
+        'hourly_rate_cents',
+        'currency',
+        'amount_cents'
+      ],
+      rows: rows.filter((r) => r.endedAt != null),
+      toRow: (t) => {
+        const minutes = Math.round(((t.endedAt as number) - t.startedAt) / 60_000);
+        const amount = t.billable && t.hourlyRate != null
+          ? Math.round((t.hourlyRate * minutes) / 60)
+          : '';
+        return [
+          t.id,
+          t.userName,
+          t.projectName ?? '',
+          t.milestoneTitle ?? '',
+          t.description ?? '',
+          new Date(t.startedAt).toISOString(),
+          new Date(t.endedAt as number).toISOString(),
+          minutes,
+          t.billable ? '1' : '0',
+          t.hourlyRate ?? '',
+          t.currency ?? '',
+          amount
+        ];
+      }
+    });
   } else {
     // projects
     const rows = await d
@@ -226,11 +272,13 @@ export const GET: RequestHandler = async ({ url, locals }) => {
         'name',
         'description',
         'status',
+        'project_type',
         'start_date',
         'end_date',
         'billing_type',
         'hourly_rate_cents',
         'fixed_fee_cents',
+        'monthly_fee_cents',
         'currency',
         'next_step',
         'person_ids',
@@ -245,11 +293,13 @@ export const GET: RequestHandler = async ({ url, locals }) => {
         p.name,
         p.description ?? '',
         p.status,
+        p.projectType ?? '',
         isoDate(p.startDate),
         isoDate(p.endDate),
         p.billingType,
         p.hourlyRate ?? '',
         p.fixedFee ?? '',
+        p.monthlyFee ?? '',
         p.currency ?? '',
         p.nextStep ?? '',
         (peopleByProject.get(p.id) ?? []).join('|'),

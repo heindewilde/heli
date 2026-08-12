@@ -343,6 +343,28 @@ CREATE TABLE IF NOT EXISTS project_allocations (
 );
 -- Tenancy indexes: see WORKSPACE_INDEXES.
 
+-- Tracked time. ended_at IS NULL means the timer is running; there is no
+-- separate current-timer table. project_id is SET NULL, not CASCADE — deleting
+-- a project must not erase the record of hours billed against it. No duration
+-- column: it is always derived from the two timestamps.
+CREATE TABLE IF NOT EXISTS time_entries (
+  id TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  project_id TEXT REFERENCES projects(id) ON DELETE SET NULL,
+  milestone_id TEXT REFERENCES project_milestones(id) ON DELETE SET NULL,
+  description TEXT,
+  started_at INTEGER NOT NULL,
+  ended_at INTEGER,
+  billable INTEGER NOT NULL DEFAULT 0,
+  hourly_rate INTEGER,
+  currency TEXT,
+  invoiced_at INTEGER,
+  created_at INTEGER NOT NULL,
+  updated_at INTEGER NOT NULL
+);
+-- Tenancy indexes: see WORKSPACE_INDEXES. The one-running-timer rule is a
+-- partial unique index and lives in WORKSPACE_UNIQUES.
+
 CREATE TABLE IF NOT EXISTS collections (
   id TEXT PRIMARY KEY,
   user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -651,6 +673,7 @@ const ALTERS: string[] = [
   // Capacity planning. Minutes, not hours — integers all the way down.
   `ALTER TABLE workspace_members ADD COLUMN weekly_capacity_minutes INTEGER`,
   `ALTER TABLE project_allocations ADD COLUMN workspace_id TEXT REFERENCES workspaces(id)`,
+  `ALTER TABLE time_entries ADD COLUMN workspace_id TEXT REFERENCES workspaces(id)`,
   // Stage color picker on pipeline creation.
   `ALTER TABLE pipeline_stages ADD COLUMN color TEXT`,
   // ── Workspace tenancy ──────────────────────────────────────────────────────
@@ -708,7 +731,8 @@ export const TENANT_TABLES = [
   'api_tokens',
   'calendar_feeds',
   'outreach_templates',
-  'project_allocations'
+  'project_allocations',
+  'time_entries'
 ] as const;
 
 /**
@@ -755,7 +779,13 @@ export const PERSONAL_TABLES: readonly string[] = ['reminders', 'api_tokens', 'c
  * PERSONAL_TABLES, which `tests/workspaces.test.ts` asserts.
  */
 export const ROW_PERSONAL: Record<string, string> = {
-  outreach_templates: "visibility = 'private'"
+  outreach_templates: "visibility = 'private'",
+  // A *running* timer is live UI state belonging to someone who has gone, not a
+  // record of work — handing it over would leave the owner with a clock ticking
+  // on a job they never started, and it would occupy their one running-timer
+  // slot. Completed entries are billing history and are reassigned like any
+  // other shared record: deleting them would destroy invoiceable hours.
+  time_entries: 'ended_at IS NULL'
 };
 
 // Applied after the backfill so they are built against real data.
@@ -783,6 +813,10 @@ CREATE INDEX IF NOT EXISTS idx_people_statuses_ws_sort ON people_statuses(worksp
 CREATE INDEX IF NOT EXISTS idx_alloc_ws_range ON project_allocations(workspace_id, start_date, end_date);
 CREATE INDEX IF NOT EXISTS idx_alloc_ws_assignee ON project_allocations(workspace_id, assignee_user_id, start_date);
 CREATE INDEX IF NOT EXISTS idx_alloc_project ON project_allocations(project_id);
+
+CREATE INDEX IF NOT EXISTS idx_time_ws_started ON time_entries(workspace_id, started_at);
+CREATE INDEX IF NOT EXISTS idx_time_ws_user_started ON time_entries(workspace_id, user_id, started_at);
+CREATE INDEX IF NOT EXISTS idx_time_ws_project ON time_entries(workspace_id, project_id);
 
 CREATE INDEX IF NOT EXISTS idx_interactions_ws_occurred ON interactions(workspace_id, occurred_at);
 CREATE INDEX IF NOT EXISTS idx_interactions_ws_company ON interactions(workspace_id, company_id);
@@ -830,7 +864,17 @@ const WORKSPACE_UNIQUES: string[] = [
   // and a non-partial index keeps the Drizzle ON CONFLICT target simple. A
   // partial one would need a matching `targetWhere` at every call site, which
   // is a trap for whoever writes the second one.
-  `CREATE UNIQUE INDEX IF NOT EXISTS uq_interactions_ws_external ON interactions(workspace_id, external_source, external_id)`
+  `CREATE UNIQUE INDEX IF NOT EXISTS uq_interactions_ws_external ON interactions(workspace_id, external_source, external_id)`,
+  // One running timer per person. This index *is* the rule — `startTimer`
+  // attempts the insert and treats a constraint violation as "already running"
+  // rather than reading first and racing.
+  //
+  // Partial, unlike uq_interactions_ws_external: here the NULL is exactly what
+  // is being constrained, so there is no version of this without the WHERE.
+  // Per (workspace, user) rather than globally — a regional database cannot
+  // enforce a cross-workspace constraint anyway, and two workspaces are two
+  // jobs.
+  `CREATE UNIQUE INDEX IF NOT EXISTS uq_time_entries_running ON time_entries(workspace_id, user_id) WHERE ended_at IS NULL`
 ];
 
 // The old per-user uniques MUST go before invites ship. Once a member can be

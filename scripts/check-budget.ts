@@ -33,8 +33,12 @@ import { join } from 'node:path';
  * same commit that moves them, so the diff says what changed and why.
  */
 const BASELINE = {
-  shellJsGzip: 74_342,
-  shellCssGzip: 10_444,
+  // +2.0 KB when the running-timer indicator joined the root layout. It is in
+  // the shell because a timer you can only see on /time is one you forget is
+  // running — and it must be statically imported, since a new dynamic boundary
+  // in the root layout is what has repeatedly broken hydration here.
+  shellJsGzip: 76_390,
+  shellCssGzip: 10_649,
   largestRouteGzip: 47_002,
   prodPackages: 23,
   prodBytes: 12_214_272
