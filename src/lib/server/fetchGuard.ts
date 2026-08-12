@@ -95,6 +95,46 @@ export async function readCapped(res: Response, maxBytes = DEFAULT_MAX_BYTES): P
   return out;
 }
 
+/**
+ * The binary sibling of `readCapped`, and it **rejects** rather than truncates.
+ *
+ * That difference is the reason it is a separate function. Half a `.ics` file is
+ * still a readable calendar with some events missing, so truncating there is a
+ * sane degradation; half a PNG is a corrupt file that would be hashed, written
+ * to the avatar cache under that hash, and served forever. Over the cap, this
+ * returns null and the caller keeps the remote URL unset.
+ */
+export async function readCappedBytes(
+  res: Response,
+  maxBytes: number
+): Promise<Uint8Array | null> {
+  const reader = res.body?.getReader();
+  if (!reader) return null;
+  const chunks: Uint8Array[] = [];
+  let total = 0;
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    total += value.byteLength;
+    if (total > maxBytes) {
+      try {
+        await reader.cancel();
+      } catch {
+        /* noop */
+      }
+      return null;
+    }
+    chunks.push(value);
+  }
+  const out = new Uint8Array(total);
+  let offset = 0;
+  for (const c of chunks) {
+    out.set(c, offset);
+    offset += c.byteLength;
+  }
+  return out;
+}
+
 export function withTimeout(ms = DEFAULT_TIMEOUT_MS): { signal: AbortSignal; done: () => void } {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), ms);

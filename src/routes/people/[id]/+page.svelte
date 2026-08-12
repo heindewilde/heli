@@ -27,6 +27,7 @@
   import { registerCommands } from '$lib/commands/registry.svelte';
   import { onMount } from 'svelte';
   import { pollWhile } from '$lib/polling';
+  import { initialsOf } from '$lib/initials';
 
   let { data } = $props();
   const person = $derived(data.person);
@@ -242,15 +243,7 @@
     await invalidate('heli:person');
   }
 
-  const initials = $derived(
-    person.name
-      .split(/\s+/)
-      .map((s) => s[0])
-      .filter(Boolean)
-      .slice(0, 2)
-      .join('')
-      .toUpperCase()
-  );
+  const initials = $derived(initialsOf(person.name));
 </script>
 
 <svelte:head>
@@ -505,6 +498,12 @@
   </div>
 </article>
 
+<!--
+  Fetched when the composer is first opened rather than with the page. The
+  dialog and its RichText surface are a substantial chunk, and this is one of
+  the two heaviest routes in the app; it opens behind a button or an
+  `?outreach=` hand-off, never on load.
+-->
 {#if data.user}
   <OutreachDialog
     open={outreachOpen}

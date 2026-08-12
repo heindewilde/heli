@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, describe, expect, test } from 'vitest';
 import { freshDb, type TestDb } from './helpers/testDb';
-import { makeTenant, scopeFor, type Tenant } from './helpers/fixtures';
+import { joinWorkspace, makeTenant, type Tenant } from './helpers/fixtures';
 
 /**
  * The token path is the app's second authentication mechanism, and unlike the
@@ -139,21 +139,8 @@ describe('isolation', () => {
 
   test('a second member of the same workspace does not see the first’s tokens', async () => {
     const { listTokens } = await import('../src/lib/server/tokens');
-    const { db } = await import('../src/lib/server/db');
-    const { workspaceMembers } = await import('../src/lib/server/schema');
 
-    await db(alice.scope.region).insert(workspaceMembers).values({
-      workspaceId: alice.scope.workspaceId,
-      userId: bob.user.id,
-      role: 'member',
-      createdAt: Date.now()
-    });
-    const bobHere = scopeFor({
-      ...bob.user,
-      workspaceId: alice.scope.workspaceId,
-      workspaceName: 'alice',
-      role: 'member'
-    });
+    const bobHere = await joinWorkspace(alice, bob);
     expect(await listTokens(bobHere)).toEqual([]);
   });
 
@@ -236,19 +223,8 @@ describe('scopes', () => {
     const { and, eq } = await import('drizzle-orm');
 
     const erin = await makeTenant('erin');
-    await db(alice.scope.region).insert(workspaceMembers).values({
-      workspaceId: alice.scope.workspaceId,
-      userId: erin.user.id,
-      role: 'member',
-      createdAt: Date.now()
-    });
+    const erinHere = await joinWorkspace(alice, erin);
     const { createToken, validateToken } = await import('../src/lib/server/tokens');
-    const erinHere = scopeFor({
-      ...erin.user,
-      workspaceId: alice.scope.workspaceId,
-      workspaceName: 'alice',
-      role: 'member'
-    });
     const { secret } = await createToken(erinHere, { name: 'wide', scopes: ['read', 'write'] });
 
     const v = await validateToken(secret);

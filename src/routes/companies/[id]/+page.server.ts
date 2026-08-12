@@ -19,20 +19,20 @@ export const load: PageServerLoad = async ({ locals, params, url, depends }) => 
   depends('heli:company');
   const s = requireScope(locals);
   const d = db(locals.user.region);
-  const company = await d
+  // Only the header blocks first paint; everything else streams. See the note
+  // on the person detail load — same reasoning, same pattern.
+  //
+  // These two run together rather than one after the other: the people query
+  // filters on `params.id`, which is already in hand, so waiting for the company
+  // row first bought nothing but a round trip in front of first paint. The 404
+  // is still decided by the company result.
+  const companyPromise = d
     .select()
     .from(companies)
     .where(and(eq(companies.id, params.id), eq(companies.workspaceId, s.workspaceId)))
     .get();
-  if (!company) throw error(404, 'not_found');
 
-  const FRESH_GRACE_MS = 30_000;
-  const justSaved = url.searchParams.get('just') === '1' && Date.now() - company.createdAt < FRESH_GRACE_MS;
-  const dedup = url.searchParams.get('dedup') === '1';
-
-  // Only the header blocks first paint; everything else streams. See the note
-  // on the person detail load — same reasoning, same pattern.
-  const linkedPeople = await d
+  const linkedPeoplePromise = d
     .select({
       id: people.id,
       name: people.name,
@@ -50,9 +50,16 @@ export const load: PageServerLoad = async ({ locals, params, url, depends }) => 
       xUrl: people.xUrl
     })
     .from(people)
-    .where(and(eq(people.companyId, company.id), eq(people.workspaceId, s.workspaceId), eq(people.isArchived, 0)))
+    .where(and(eq(people.companyId, params.id), eq(people.workspaceId, s.workspaceId), eq(people.isArchived, 0)))
     .orderBy(desc(people.updatedAt))
     .limit(50);
+
+  const [company, linkedPeople] = await Promise.all([companyPromise, linkedPeoplePromise]);
+  if (!company) throw error(404, 'not_found');
+
+  const FRESH_GRACE_MS = 30_000;
+  const justSaved = url.searchParams.get('just') === '1' && Date.now() - company.createdAt < FRESH_GRACE_MS;
+  const dedup = url.searchParams.get('dedup') === '1';
 
   return {
     company,

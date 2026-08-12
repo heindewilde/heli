@@ -7,6 +7,7 @@ import {
   StickyNote,
   Sparkle
 } from 'lucide-svelte';
+import { calendarLabel, startOfDay, timeLabel } from '$lib/dates';
 
 // The vocabulary itself lives in a dependency-free module so server code can
 // import it without pulling in the icons above. Re-exported here so every
@@ -38,21 +39,18 @@ export const TYPE_META: Record<
 
 export function dayBucket(ts: number, today = new Date()): { key: string; label: string } {
   const d = new Date(ts);
-  const startOfDay = (x: Date) => new Date(x.getFullYear(), x.getMonth(), x.getDate()).getTime();
   const todayStart = startOfDay(today);
-  const yesterdayStart = todayStart - 86_400_000;
   const dStart = startOfDay(d);
   const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
   if (dStart === todayStart) return { key, label: 'Today' };
-  if (dStart === yesterdayStart) return { key, label: 'Yesterday' };
-  return {
-    key,
-    label: d.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric', year: d.getFullYear() === today.getFullYear() ? undefined : 'numeric' })
-  };
+  // Yesterday, not Tomorrow: this buckets an activity feed, which only ever
+  // looks backwards. The due-date chip is the forward-facing twin.
+  if (dStart === todayStart - 86_400_000) return { key, label: 'Yesterday' };
+  return { key, label: calendarLabel(d, today) };
 }
 
 export function formatTime(ts: number): string {
-  return new Date(ts).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
+  return timeLabel(new Date(ts));
 }
 
 export function formatLastSeen(ts: number | null): string {

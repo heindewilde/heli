@@ -162,6 +162,10 @@
   }
 
   ul {
+    /* Tailwind's preflight sets `list-style: none` on every list. The bullets
+       here used to come back via @tailwindcss/typography, which this page did
+       not otherwise use and which is no longer loaded. */
+    list-style: disc;
     padding-left: 1.25rem;
     display: flex;
     flex-direction: column;

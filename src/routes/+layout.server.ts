@@ -2,7 +2,7 @@ import { requireScope } from '$lib/server/scope';
 import type { LayoutServerLoad } from './$types';
 import { listReminders } from '$lib/server/reminders-query';
 import { listMemberships } from '$lib/server/workspaces';
-import { listTemplates } from '$lib/server/outreach';
+import { listTemplateSummaries } from '$lib/server/outreach';
 
 export const load: LayoutServerLoad = async ({ locals }) => {
   if (!locals.user)
@@ -26,9 +26,11 @@ export const load: LayoutServerLoad = async ({ locals }) => {
      * affordable here and is *not* affordable for entities: this is tens of
      * rows, and only the id, name and platform — never a body. Entity search
      * stays on the server, where SQLite does it better.
+     *
+     * `listTemplateSummaries`, not `listTemplates`: the projection has to happen
+     * in SQL. Mapping the columns off afterwards still fetched and decoded every
+     * body, on every request in the app, to discard them.
      */
-    outreachTemplates: listTemplates(s, { archived: 'active' }).then((items) =>
-      items.map((t) => ({ id: t.id, name: t.name, platform: t.platform }))
-    )
+    outreachTemplates: listTemplateSummaries(s, { archived: 'active' })
   };
 };

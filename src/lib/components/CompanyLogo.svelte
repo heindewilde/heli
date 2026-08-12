@@ -1,6 +1,7 @@
 <script lang="ts">
   import { Building2 } from 'lucide-svelte';
   import { logoDevUrl, type LogoFormat } from '$lib/logo';
+  import { initialsOf } from '$lib/initials';
 
   type Rounded = 'sm' | 'md' | 'full';
 
@@ -24,15 +25,7 @@
     class: className = ''
   }: Props = $props();
 
-  const initials = $derived(
-    (name ?? '')
-      .split(/\s+/)
-      .map((s) => s[0])
-      .filter(Boolean)
-      .slice(0, 2)
-      .join('')
-      .toUpperCase()
-  );
+  const initials = $derived(initialsOf(name));
 
   const light = $derived(logoDevUrl(domain, { size: 128, theme: 'light', format }));
   const dark = $derived(logoDevUrl(domain, { size: 128, theme: 'dark', format }));

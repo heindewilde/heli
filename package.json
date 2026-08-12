@@ -8,30 +8,29 @@
   },
   "scripts": {
     "dev": "vite dev",
-    "build": "vite build",
+    "build": "vite build && tsx scripts/check-externals.ts",
     "preview": "vite preview",
-    "check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json && tsx scripts/check-tenancy.ts && tsx scripts/check-overlays.ts && vitest run",
+    "check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json && tsx scripts/check-tenancy.ts && tsx scripts/check-overlays.ts && tsx scripts/check-budget.ts && vitest run",
     "check:watch": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --watch",
     "test": "vitest run",
     "test:watch": "vitest"
   },
   "dependencies": {
     "@libsql/client": "^0.17.2",
-    "@paralleldrive/cuid2": "^3.3.0",
-    "@sveltejs/adapter-node": "^5.5.4",
-    "bcryptjs": "^3.0.3",
-    "drizzle-orm": "^0.45.2",
-    "node-html-parser": "^7.1.0",
-    "sanitize-html": "^2.17.3"
+    "bcryptjs": "^3.0.3"
   },
   "devDependencies": {
+    "@paralleldrive/cuid2": "^3.3.0",
+    "@sveltejs/adapter-node": "^5.5.4",
     "@sveltejs/kit": "^2.57.0",
     "@sveltejs/vite-plugin-svelte": "^7.0.0",
-    "@tailwindcss/typography": "^0.5.19",
     "@tailwindcss/vite": "^4.2.2",
     "@types/sanitize-html": "^2.16.0",
     "drizzle-kit": "^0.31.10",
+    "drizzle-orm": "^0.45.2",
     "lucide-svelte": "^0.577.0",
+    "node-html-parser": "^7.1.0",
+    "sanitize-html": "^2.17.3",
     "squire-rte": "^2.4.8",
     "svelte": "^5.55.2",
     "svelte-check": "^4.0.0",

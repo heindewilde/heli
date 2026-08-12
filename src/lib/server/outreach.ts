@@ -59,10 +59,7 @@ export type ListFilters = {
   limit?: number;
 };
 
-export async function listTemplates(
-  s: Scope,
-  filters: ListFilters = {}
-): Promise<OutreachTemplate[]> {
+function listConditions(s: Scope, filters: ListFilters) {
   const archived = filters.archived ?? 'active';
   const conditions = [visibleTo(s)];
   if (archived !== 'all') {
@@ -75,15 +72,65 @@ export async function listTemplates(
     const like = `%${filters.q.trim().toLowerCase()}%`;
     conditions.push(sql`lower(${outreachTemplates.name}) LIKE ${like}`);
   }
+  return and(...conditions);
+}
 
+export async function listTemplates(
+  s: Scope,
+  filters: ListFilters = {}
+): Promise<OutreachTemplate[]> {
   const rows = await db(s.region)
     .select()
     .from(outreachTemplates)
-    .where(and(...conditions))
+    .where(listConditions(s, filters))
     .orderBy(asc(outreachTemplates.name))
     .limit(Math.min(filters.limit ?? 200, 500));
 
   return rows as OutreachTemplate[];
+}
+
+/** Just enough of a template to name it in a menu. */
+export type TemplateSummary = { id: string; name: string; platform: string };
+
+/**
+ * The same query as `listTemplates` with a three-column projection.
+ *
+ * This exists because the root layout runs it on **every authenticated request
+ * in the app** to populate the command palette, and the unprojected version was
+ * pulling every template `body` across the wire to throw them away. `body` is
+ * capped at 20,000 chars, so the worst case was megabytes decoded into strings
+ * and discarded, per navigation, against remote libSQL. The comment in
+ * `+layout.server.ts` promising "never a body" was true of what reached the
+ * browser and false of what reached the server.
+ */
+export async function listTemplateSummaries(
+  s: Scope,
+  filters: ListFilters = {}
+): Promise<TemplateSummary[]> {
+  return db(s.region)
+    .select({
+      id: outreachTemplates.id,
+      name: outreachTemplates.name,
+      platform: outreachTemplates.platform
+    })
+    .from(outreachTemplates)
+    .where(listConditions(s, filters))
+    .orderBy(asc(outreachTemplates.name))
+    .limit(Math.min(filters.limit ?? 200, 500));
+}
+
+/**
+ * A count, for the "showing N of M" line. The page used to get M by running the
+ * unfiltered list a second time and reading `.length` — a full second
+ * `SELECT *`, bodies included, to produce one integer.
+ */
+export async function countTemplates(s: Scope, filters: ListFilters = {}): Promise<number> {
+  const row = await db(s.region)
+    .select({ n: sql<number>`count(*)` })
+    .from(outreachTemplates)
+    .where(listConditions(s, filters))
+    .get();
+  return row?.n ?? 0;
 }
 
 export async function getTemplate(s: Scope, id: string): Promise<OutreachTemplate | null> {

@@ -2,7 +2,7 @@
   import { APP_NAME } from '$lib/branding';
   import { goto, invalidateAll } from '$app/navigation';
   import { Trash2, Archive, X, FolderOpen, Funnel } from 'lucide-svelte';
-  import { COLLECTION_ICON_MAP } from '$lib/collectionIcons';
+  import CollectionIcon from '$lib/components/CollectionIcon.svelte';
   import CompanyLogo from '$lib/components/CompanyLogo.svelte';
   import PersonPicker from '$lib/components/PersonPicker.svelte';
   import CompanyPicker from '$lib/components/CompanyPicker.svelte';
@@ -134,9 +134,8 @@
 
   <header class="flex items-start gap-4">
     <span class="mt-1 flex h-9 w-9 shrink-0 items-center justify-center rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-surface)] text-[var(--color-muted)]">
-      {#if collection.icon && COLLECTION_ICON_MAP[collection.icon]}
-        {@const Ic = COLLECTION_ICON_MAP[collection.icon]}
-        <Ic size={16} strokeWidth={2} />
+      {#if collection.icon}
+        <CollectionIcon name={collection.icon} size={16} strokeWidth={2} />
       {:else}
         <FolderOpen size={16} strokeWidth={2} />
       {/if}

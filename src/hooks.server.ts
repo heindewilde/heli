@@ -38,8 +38,14 @@ const PROTECTED_PATTERNS = [
 
 // CRM pages whose SSR HTML the service worker may keep for back-navigation and
 // offline reads. Deliberately excludes /settings and /admin: nothing there is
-// worth an offline copy, and both render account-level detail.
-const NAV_CACHEABLE = /^\/(?:people|companies|projects|interactions|collections|pipelines|outreach)(?:\/|$)/;
+// worth an offline copy, and both render account-level detail. /outreach is
+// excluded for a different reason — a composer is the most volatile surface in
+// the app and the least useful painted stale.
+//
+// This list and NAV_PATHS in src/service-worker.ts are one decision in two
+// places and must stay identical. A path the worker stores but this marks
+// `no-store` would be cached while telling the browser not to.
+const NAV_CACHEABLE = /^\/(?:people|companies|projects|interactions|collections|pipelines)(?:\/|$)/;
 
 // The whole request runs inside one AsyncLocalStorage scope, so every query the
 // db client issues lands in this request's timing bucket rather than a shared

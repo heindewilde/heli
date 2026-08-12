@@ -113,6 +113,46 @@ describe('sync', () => {
     expect(await countInteractions()).toBe(2);
   });
 
+  test('two events sharing an identity collapse to one row, last spelling wins', async () => {
+    const { syncFeed } = await import('../src/lib/server/calendar');
+    const feed = await makeFeed();
+    // Malformed but real: the same UID twice with no RECURRENCE-ID to tell them
+    // apart. This used to resolve by accident — the first event inserted and the
+    // second found that freshly inserted row and updated it. Now that every row
+    // is read up front, both would take the insert path and collide on
+    // uq_interactions_ws_external unless they are deduped first.
+    serve(ICS(VEVENT({ uid: 'dup', summary: 'First' }), VEVENT({ uid: 'dup', summary: 'Second' })));
+
+    const result = await syncFeed(alice.scope, feed);
+    expect(result.status).toBe('ok');
+    expect(result.created).toBe(1);
+
+    const rows = await ctx.client.execute(
+      `SELECT title FROM interactions WHERE title IN ('First', 'Second')`
+    );
+    expect(rows.rows).toHaveLength(1);
+    expect(rows.rows[0].title).toBe('Second');
+  });
+
+  test('a feed larger than one write batch still commits every row', async () => {
+    const { syncFeed } = await import('../src/lib/server/calendar');
+    const feed = await makeFeed();
+    // Writes are flushed in chunks of 200. A feed that spans several chunks is
+    // the case where an off-by-one in the slicing would silently drop events.
+    const events = Array.from({ length: 250 }, (_, i) =>
+      VEVENT({ uid: `bulk-${i}`, summary: `Meeting ${i}` })
+    );
+    serve(ICS(...events));
+
+    const result = await syncFeed(alice.scope, feed);
+    expect(result.created).toBe(250);
+
+    const rows = await ctx.client.execute(
+      `SELECT COUNT(*) AS n FROM interactions WHERE title LIKE 'Meeting %'`
+    );
+    expect(Number(rows.rows[0].n)).toBe(250);
+  });
+
   test('links attendees that already exist as people', async () => {
     const { syncFeed } = await import('../src/lib/server/calendar');
     const { savePerson } = await import('../src/lib/server/savePerson');

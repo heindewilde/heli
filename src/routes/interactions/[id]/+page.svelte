@@ -6,6 +6,9 @@
   import CompanyPicker from '$lib/components/CompanyPicker.svelte';
   import ProjectPicker from '$lib/components/ProjectPicker.svelte';
   import StatusChip from '$lib/components/StatusChip.svelte';
+  // The body is sanitized HTML rendered with {@html}, so it needs the same
+  // typography as the notes editor produces.
+  import '$lib/ui/richText.css';
   import AddReminder from '$lib/components/AddReminder.svelte';
   import { FolderKanban } from 'lucide-svelte';
   import type { ProjectStatus } from '$lib/server/schema';
@@ -185,7 +188,7 @@
           class="rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 text-sm leading-relaxed"
         ></textarea>
       {:else if interaction.body}
-        <div class="prose prose-sm max-w-none whitespace-pre-wrap text-sm leading-relaxed text-[var(--color-text)] [&_a]:text-[var(--color-text)]">
+        <div class="rich-text whitespace-pre-wrap [&_a]:text-[var(--color-text)]">
           {@html interaction.body}
         </div>
       {:else}

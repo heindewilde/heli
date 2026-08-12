@@ -1,6 +1,6 @@
 <script lang="ts">
   import Popover from '$lib/ui/Popover.svelte';
-  import OutreachDialog from './OutreachDialog.svelte';
+  // OutreachDialog is imported lazily at its mount point below.
   import { Send } from 'lucide-svelte';
   import type { Sender } from '$lib/outreach/render';
 
@@ -91,12 +91,19 @@
   </Popover>
 {/if}
 
+<!--
+  Lazy for the same reason as on the person page: this button lives on
+  `/companies/[id]`, and the composer only exists once somebody has picked who
+  they are writing to.
+-->
 {#if chosen}
-  <OutreachDialog
-    open={dialogOpen}
-    person={{ ...chosen, companyName }}
-    {sender}
-    onclose={() => (dialogOpen = false)}
-    {onSent}
-  />
+  {#await import('./OutreachDialog.svelte') then { default: OutreachDialog }}
+    <OutreachDialog
+      open={dialogOpen}
+      person={{ ...chosen, companyName }}
+      {sender}
+      onclose={() => (dialogOpen = false)}
+      {onSent}
+    />
+  {/await}
 {/if}

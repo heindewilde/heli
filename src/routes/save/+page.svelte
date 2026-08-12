@@ -1,6 +1,6 @@
 <script lang="ts">
   import { APP_NAME } from '$lib/branding';
-  import { AlertTriangle, CheckCircle, BookmarkX } from 'lucide-svelte';
+  import { AlertTriangle, CheckCircle } from 'lucide-svelte';
   import { saveErrorMessage } from '$lib/save-errors';
 
   let { data } = $props();

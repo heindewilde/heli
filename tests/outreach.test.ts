@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, expect, test } from 'vitest';
 import { freshDb, type TestDb } from './helpers/testDb';
-import { makeTenant, scopeFor, type Tenant } from './helpers/fixtures';
+import { joinWorkspace, makeTenant, type Tenant } from './helpers/fixtures';
 import type { Scope } from '../src/lib/server/scope';
 
 /**
@@ -27,22 +27,10 @@ beforeAll(async () => {
   outsider = await makeTenant('outsider');
 
   const { db } = await import('../src/lib/server/db');
-  const { workspaceMembers } = await import('../src/lib/server/schema');
   const { createTemplate } = await import('../src/lib/server/outreach');
   const { savePerson } = await import('../src/lib/server/savePerson');
 
-  await db(alice.scope.region).insert(workspaceMembers).values({
-    workspaceId: alice.scope.workspaceId,
-    userId: bob.user.id,
-    role: 'member',
-    createdAt: Date.now()
-  });
-  bobScope = scopeFor({
-    ...bob.user,
-    workspaceId: alice.scope.workspaceId,
-    workspaceName: alice.user.workspaceName,
-    role: 'member'
-  });
+  bobScope = await joinWorkspace(alice, bob);
 
   sharedId = (
     await createTemplate(alice.scope, {

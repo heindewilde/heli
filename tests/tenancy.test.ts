@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, describe, expect, test } from 'vitest';
 import { freshDb, type TestDb } from './helpers/testDb';
-import { makeTenant, type Tenant } from './helpers/fixtures';
+import { joinWorkspace, makeTenant, type Tenant } from './helpers/fixtures';
 
 /**
  * `scripts/check-tenancy.ts` proves a workspace filter *exists*. It cannot prove
@@ -199,22 +199,10 @@ describe('reminders are personal, not just workspace-scoped', () => {
   test('a second member of the same workspace does not see them', async () => {
     const { listReminders } = await import('../src/lib/server/reminders-query');
     const { db } = await import('../src/lib/server/db');
-    const { workspaceMembers } = await import('../src/lib/server/schema');
     const { scopeFor } = await import('./helpers/fixtures');
 
     // Put Bob into Alice's workspace as a member, then look through his eyes.
-    await db(alice.scope.region).insert(workspaceMembers).values({
-      workspaceId: alice.scope.workspaceId,
-      userId: bob.user.id,
-      role: 'member',
-      createdAt: Date.now()
-    });
-    const bobInAlicesWorkspace = scopeFor({
-      ...bob.user,
-      workspaceId: alice.scope.workspaceId,
-      workspaceName: 'alice',
-      role: 'member'
-    });
+    const bobInAlicesWorkspace = await joinWorkspace(alice, bob);
 
     const rows = await listReminders(bobInAlicesWorkspace);
     // Alice's reminder lives in this workspace. Bob must not see it.

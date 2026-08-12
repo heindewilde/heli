@@ -8,6 +8,7 @@ import { people } from '$lib/server/schema';
 import {
   CONTACTS_IMPORT_COOKIE,
   storePendingImport,
+  ImportTooLargeError,
   type MappedPerson
 } from '$lib/server/contactImport';
 import { parseLinkedInConnections } from '$lib/server/linkedinCsv';
@@ -83,7 +84,16 @@ export const POST: RequestHandler = async ({ request, cookies, locals }) => {
     toImport.push(p);
   }
 
-  const importId = storePendingImport(s.userId, toImport, duplicateCount, 'linkedin_csv');
+  // A staged import is held in memory until it is committed, so the row count is
+  // a memory budget rather than a product limit. Rejected here with the count so
+  // the message can say what to do about it, not just that it failed.
+  let importId: string;
+  try {
+    importId = storePendingImport(s.userId, toImport, duplicateCount, 'linkedin_csv');
+  } catch (e) {
+    if (e instanceof ImportTooLargeError) throw error(413, 'too_many_rows');
+    throw e;
+  }
   cookies.set(CONTACTS_IMPORT_COOKIE, importId, {
     path: '/',
     httpOnly: true,

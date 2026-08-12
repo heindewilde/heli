@@ -1,0 +1,168 @@
+/*
+ * Typography for rendered rich text.
+ *
+ * This replaces `@tailwindcss/typography`'s `prose` classes on the three
+ * surfaces that used them. The plugin emitted 150 `.prose*` selectors — 18.5 KB
+ * of the 64 KB root stylesheet, ~29% of the CSS every page in the app loaded,
+ * including the landing page and `/auth`, which have no rich text on them at
+ * all. Tailwind v4 emits one sheet from `app.css`, and `app.css` is imported by
+ * the root layout, so there was no way to scope the plugin to the routes that
+ * wanted it.
+ *
+ * Imported as a plain CSS module rather than declared in `app.css`, so Vite
+ * splits it into the chunks of the components that import it. A page with no
+ * editor and no notes on it does not download this.
+ *
+ * `/privacy` and `/terms` also carried `class="prose"` and are untouched by the
+ * removal: both already hand-roll their own typography in a scoped `<style>`
+ * block, so the plugin's output was dead weight there before this change.
+ *
+ * The selector list is exactly `ALLOWED_TAGS` from `src/lib/richText.ts`. Those
+ * are the only tags `sanitize()` lets through, so anything else styled here
+ * would be styling markup that cannot reach the DOM.
+ */
+
+.rich-text {
+  color: var(--color-text);
+  font-size: 0.875rem;
+  line-height: 1.6;
+}
+
+/*
+ * `>` throughout, and margins only *between* siblings.
+ *
+ * A leading or trailing margin would push the contenteditable's first line away
+ * from the caret's own box, so the cursor starts visually detached from the
+ * padding the field advertises.
+ */
+.rich-text > * + * {
+  margin-top: 0.75em;
+}
+
+.rich-text > :first-child {
+  margin-top: 0;
+}
+
+.rich-text > :last-child {
+  margin-bottom: 0;
+}
+
+.rich-text h1,
+.rich-text h2,
+.rich-text h3,
+.rich-text h4,
+.rich-text h5,
+.rich-text h6 {
+  font-weight: 600;
+  line-height: 1.3;
+  letter-spacing: -0.01em;
+  color: var(--color-text);
+}
+
+/*
+ * Deliberately compressed against the plugin's defaults. These headings sit
+ * inside a note or a description, not at the top of a document, so h1 at the
+ * plugin's 2.25em dwarfed the field it lives in.
+ */
+.rich-text h1 {
+  font-size: 1.25em;
+}
+.rich-text h2 {
+  font-size: 1.125em;
+}
+.rich-text h3 {
+  font-size: 1em;
+}
+.rich-text h4,
+.rich-text h5,
+.rich-text h6 {
+  font-size: 0.9375em;
+}
+
+/* A heading after body copy needs more air above it than below. */
+.rich-text > * + :is(h1, h2, h3, h4, h5, h6) {
+  margin-top: 1.25em;
+}
+
+.rich-text ul,
+.rich-text ol {
+  padding-left: 1.5em;
+}
+
+.rich-text ul {
+  list-style: disc;
+}
+
+.rich-text ol {
+  list-style: decimal;
+}
+
+.rich-text li {
+  margin-top: 0.25em;
+}
+
+/* Nested lists are a continuation, not a new block. */
+.rich-text li > ul,
+.rich-text li > ol {
+  margin-top: 0.25em;
+}
+
+.rich-text a {
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.rich-text strong,
+.rich-text b {
+  font-weight: 600;
+}
+
+.rich-text em,
+.rich-text i {
+  font-style: italic;
+}
+
+.rich-text u {
+  text-decoration: underline;
+}
+
+.rich-text s {
+  text-decoration: line-through;
+}
+
+.rich-text code {
+  font-size: 0.875em;
+  padding: 0.125em 0.3em;
+  border-radius: 0.25rem;
+  background: var(--color-surface-2);
+  border: 1px solid var(--color-border);
+}
+
+.rich-text pre {
+  padding: 0.75em 1em;
+  border-radius: var(--radius-sm);
+  background: var(--color-surface-2);
+  border: 1px solid var(--color-border);
+  overflow-x: auto;
+  font-size: 0.875em;
+  line-height: 1.5;
+}
+
+/* The <pre> owns the frame; the <code> inside it must not draw a second one. */
+.rich-text pre code {
+  padding: 0;
+  border: 0;
+  background: none;
+  font-size: inherit;
+}
+
+.rich-text blockquote {
+  padding-left: 1em;
+  border-left: 2px solid var(--color-border);
+  color: var(--color-muted);
+}
+
+.rich-text hr {
+  border: 0;
+  border-top: 1px solid var(--color-border);
+}

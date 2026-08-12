@@ -1,5 +1,5 @@
 import { requireScope } from '$lib/server/scope';
-import { listTemplates } from '$lib/server/outreach';
+import { listTemplates, countTemplates } from '$lib/server/outreach';
 import { isOutreachPlatform } from '$lib/outreach/platforms';
 import type { PageServerLoad } from './$types';
 
@@ -21,16 +21,20 @@ export const load: PageServerLoad = async ({ locals, url }) => {
   const archivedParam = url.searchParams.get('archived');
   const archived = isArchivedFilter(archivedParam) ? archivedParam : 'active';
 
-  const items = await listTemplates(s, {
-    q: q || undefined,
-    platform: platform ?? undefined,
-    archived
-  });
+  const filtered = archived !== 'active' || !!q || !!platform;
 
-  const total =
-    archived === 'active' && !q && !platform
-      ? items.length
-      : (await listTemplates(s, { archived: 'active' })).length;
+  // On a filtered view the total came from running the unfiltered list a second
+  // time and reading `.length` — a full second `SELECT *`, every template body
+  // included, to produce one integer. The two run in parallel now, and the
+  // second is a COUNT.
+  const [items, total] = await Promise.all([
+    listTemplates(s, {
+      q: q || undefined,
+      platform: platform ?? undefined,
+      archived
+    }),
+    filtered ? countTemplates(s, { archived: 'active' }) : null
+  ]);
 
-  return { items, q, platform, archived, total };
+  return { items, q, platform, archived, total: total ?? items.length };
 };

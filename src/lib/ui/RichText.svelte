@@ -3,6 +3,9 @@
   import { Bold, Italic, Link2, List, ListOrdered } from 'lucide-svelte';
   import { toEditorHtml } from '$lib/richText';
   import { sanitizeToDOMFragment } from './pasteFilter';
+  // Replaces `@tailwindcss/typography`; see the file header for why it is a CSS
+  // module rather than a rule in app.css.
+  import './richText.css';
   import type Squire from 'squire-rte';
 
   type Props = {
@@ -229,7 +232,7 @@
         aria-multiline="true"
         aria-label={placeholder}
         tabindex="0"
-        class="prose prose-sm max-w-none min-h-32 px-3 py-2 text-sm leading-relaxed text-[var(--color-text)] focus:outline-none [&_a]:text-[var(--color-text)]"
+        class="rich-text min-h-32 px-3 py-2 focus:outline-none [&_a]:text-[var(--color-text)]"
       ></div>
       {#if empty}
         <span

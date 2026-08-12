@@ -56,6 +56,18 @@ export function ifNoneMatch(request: Request, etag: string): boolean {
 // MIN_COMPRESS_BYTES (when Content-Length is known) pass through untouched.
 const MIN_COMPRESS_BYTES = 256;
 
+/**
+ * zlib allocates its window and hash chains per stream, in *native* memory that
+ * `--max-old-space-size` does not bound and heap snapshots do not show — but the
+ * OOM killer on a 1 GB VPS counts it. At the defaults (windowBits 15, memLevel 8)
+ * that is ~256 KB per concurrent response; memLevel 7 halves the hash chains for
+ * a compression-ratio difference in the noise on the JSON and HTML we send.
+ *
+ * Level 6 is zlib's own default, stated here rather than implied so the two
+ * knobs sit together.
+ */
+const GZIP_OPTIONS = { level: 6, memLevel: 7 } as const;
+
 export function maybeCompress(response: Response, acceptEncoding: string | null): Response {
   if (!acceptEncoding || !/\bgzip\b/i.test(acceptEncoding)) return response;
   if (response.headers.has('Content-Encoding')) return response;
@@ -65,7 +77,7 @@ export function maybeCompress(response: Response, acceptEncoding: string | null)
   const len = response.headers.get('Content-Length');
   if (len !== null && Number(len) < MIN_COMPRESS_BYTES) return response;
 
-  const gz = createGzip();
+  const gz = createGzip(GZIP_OPTIONS);
   const piped = Readable.fromWeb(response.body as Parameters<typeof Readable.fromWeb>[0]).pipe(gz);
   const body = Readable.toWeb(piped) as ReadableStream;
   const headers = new Headers(response.headers);

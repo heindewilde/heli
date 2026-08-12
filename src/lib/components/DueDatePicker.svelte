@@ -1,6 +1,7 @@
 <script lang="ts">
   import Popover from '$lib/ui/Popover.svelte';
   import { Calendar, X, ChevronDown } from 'lucide-svelte';
+  import { calendarLabel, isSameDay, timeLabel } from '$lib/dates';
 
   type Props = {
     value: number | null;
@@ -50,27 +51,16 @@
   function fmtChip(ts: number): string {
     const d = new Date(ts);
     const t0 = today();
-    const tom = tomorrow();
-    const sameDay = (a: Date, b: Date) =>
-      a.getFullYear() === b.getFullYear() &&
-      a.getMonth() === b.getMonth() &&
-      a.getDate() === b.getDate();
 
+    // Tomorrow, not Yesterday: a due date looks forwards. `dayBucket` in
+    // interactions.ts is the backward-facing twin; both share the fallback
+    // spelling below.
     let label: string;
-    if (sameDay(d, t0)) label = 'Today';
-    else if (sameDay(d, tom)) label = 'Tomorrow';
-    else {
-      const sameYear = d.getFullYear() === t0.getFullYear();
-      label = d.toLocaleDateString(undefined, {
-        weekday: 'short',
-        month: 'short',
-        day: 'numeric',
-        year: sameYear ? undefined : 'numeric'
-      });
-    }
+    if (isSameDay(d, t0)) label = 'Today';
+    else if (isSameDay(d, tomorrow())) label = 'Tomorrow';
+    else label = calendarLabel(d, t0);
     if (!isDateOnly(ts)) {
-      const time = d.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
-      label += ` · ${time}`;
+      label += ` · ${timeLabel(d)}`;
     }
     return label;
   }

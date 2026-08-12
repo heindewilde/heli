@@ -25,18 +25,32 @@ export const LIMITS: Record<string, Limit> = {
   apiTokenWrite: { name: 'api_token_write', max: 30, windowMs: 60 * 1000 }
 };
 
+/**
+ * `gc` runs on every call, so both bounds below exist to keep it O(1) in the
+ * common case and amortised in the bad one.
+ *
+ * `GC_TRIGGER` is above `MAX_KEYS` and `TARGET_KEYS` is below it, deliberately.
+ * With a single threshold the map settled at exactly `MAX_KEYS`, so the next
+ * request pushed it one over, sorted all 5,001 entries to evict exactly one, and
+ * the request after that did it again — a permanent per-request O(n log n) plus
+ * a 5,001-element allocation for as long as the box stayed busy. Sweeping down
+ * to a target well under the trigger buys ~500 quiet requests per sweep.
+ */
+const GC_TRIGGER = Math.floor(MAX_KEYS * 1.1);
+const TARGET_KEYS = Math.floor(MAX_KEYS * 0.9);
+
 function gc() {
-  if (buckets.size <= MAX_KEYS) return;
+  if (buckets.size <= GC_TRIGGER) return;
   const now = Date.now();
   const stale = now - 60 * 60 * 1000;
   for (const [k, b] of buckets) {
     if (b.lastSeen < stale) buckets.delete(k);
   }
-  if (buckets.size <= MAX_KEYS) return;
-  // Still over: drop oldest by lastSeen until under threshold.
+  if (buckets.size <= TARGET_KEYS) return;
+  // Still over: drop oldest by lastSeen down to the target, not to the trigger.
   const sorted = [...buckets.entries()].sort((a, b) => a[1].lastSeen - b[1].lastSeen);
   for (const [k] of sorted) {
-    if (buckets.size <= MAX_KEYS) break;
+    if (buckets.size <= TARGET_KEYS) break;
     buckets.delete(k);
   }
 }

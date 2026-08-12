@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, expect, test } from 'vitest';
 import { freshDb, type TestDb } from './helpers/testDb';
-import { makeTenant, scopeFor, type Tenant } from './helpers/fixtures';
+import { joinWorkspace, makeTenant, scopeFor, type Tenant } from './helpers/fixtures';
 
 /**
  * `reassignAuthorship` shipped a data-leak bug once: it handed a departing
@@ -29,18 +29,7 @@ beforeAll(async () => {
   const { createId } = await import('@paralleldrive/cuid2');
 
   // Put the leaver into the owner's workspace as a member.
-  await db(owner.scope.region).insert(workspaceMembers).values({
-    workspaceId: owner.scope.workspaceId,
-    userId: leaver.user.id,
-    role: 'member',
-    createdAt: Date.now()
-  });
-  leaverScope = scopeFor({
-    ...leaver.user,
-    workspaceId: owner.scope.workspaceId,
-    workspaceName: owner.user.workspaceName,
-    role: 'member'
-  });
+  leaverScope = await joinWorkspace(owner, leaver);
 
   // Shared CRM work, authored by the leaver.
   const person = await savePerson(leaverScope, null, { name: 'Grace Hopper' });

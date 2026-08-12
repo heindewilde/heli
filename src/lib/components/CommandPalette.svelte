@@ -2,6 +2,7 @@
   import Dialog from '$lib/ui/Dialog.svelte';
   import Kbd from '$lib/ui/Kbd.svelte';
   import { goto, preloadData } from '$app/navigation';
+  import { initialsOf } from '$lib/initials';
   import {
     Search,
     User,
@@ -218,14 +219,6 @@
     pipeline: 'Pipeline'
   };
 
-  function getInitials(name: string): string {
-    return name
-      .split(/\s+/)
-      .slice(0, 2)
-      .map((p) => p[0]?.toUpperCase() ?? '')
-      .join('');
-  }
-
   const placeholder = $derived(
     activeScope ? `Search ${activeScope.label.toLowerCase()}…` : 'Search, or type a command…'
   );
@@ -367,7 +360,7 @@
                           class="h-full w-full object-cover"
                         />
                       {:else}
-                        {getInitials(h.title)}
+                        {initialsOf(h.title)}
                       {/if}
                     </span>
                   {:else}

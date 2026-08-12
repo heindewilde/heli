@@ -1,7 +1,7 @@
 <script lang="ts">
   import { APP_NAME } from '$lib/branding';
   import { enhance } from '$app/forms';
-  import { FolderOpen, Search, X, Users, Building2 } from 'lucide-svelte';
+  import { Search, X, Users, Building2 } from 'lucide-svelte';
   import { COLLECTION_ICON_MAP, COLLECTION_ICON_NAMES } from '$lib/collectionIcons';
   import { autofocus } from '$lib/actions';
 

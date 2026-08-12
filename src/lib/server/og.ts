@@ -1,6 +1,6 @@
 import { parse, type HTMLElement } from 'node-html-parser';
 import { assertPublicUrl } from './url';
-import { fetchGuarded, readCapped } from './fetchGuard';
+import { fetchGuarded, readCapped, withTimeout } from './fetchGuard';
 
 const TIMEOUT_MS = 10_000;
 
@@ -223,8 +223,9 @@ function isImagePoor(html: string): boolean {
 
 export async function fetchOg(url: URL | string): Promise<OgData> {
   const target = typeof url === 'string' ? new URL(url) : url;
-  const ctrl = new AbortController();
-  const timer = setTimeout(() => ctrl.abort(), TIMEOUT_MS);
+  // `withTimeout` from fetchGuard, not a hand-rolled controller — this module
+  // is where that helper came from.
+  const { signal, done } = withTimeout(TIMEOUT_MS);
   try {
     // LinkedIn is hostile to ordinary browser UAs but serves more to
     // Googlebot. For LinkedIn hosts, try Googlebot first.
@@ -232,7 +233,7 @@ export async function fetchOg(url: URL | string): Promise<OgData> {
     const firstUa = linkedin ? GOOGLEBOT_UA : BROWSER_UA;
     const secondUa = linkedin ? BROWSER_UA : GOOGLEBOT_UA;
 
-    let res = await fetchOnce(target, ctrl.signal, firstUa);
+    let res = await fetchOnce(target, signal, firstUa);
     let finalUrl = new URL(res.url || target.toString(), target);
     let ct = res.headers.get('content-type') || '';
 
@@ -250,7 +251,7 @@ export async function fetchOg(url: URL | string): Promise<OgData> {
     const shouldRetry = looksThin(res.status, html) || (linkedin && isImagePoor(html));
     if (shouldRetry) {
       try {
-        const res2 = await fetchOnce(target, ctrl.signal, secondUa);
+        const res2 = await fetchOnce(target, signal, secondUa);
         const ct2 = res2.headers.get('content-type') || '';
         if (ct2.includes('html') || ct2.includes('xml')) {
           const html2 = await readCapped(res2);
@@ -313,7 +314,7 @@ export async function fetchOg(url: URL | string): Promise<OgData> {
       phone: pickJsonLdContact(jsonLd).telephone
     };
   } finally {
-    clearTimeout(timer);
+    done();
   }
 }
 

@@ -34,7 +34,45 @@ Heli is a personal CRM. SvelteKit 2 (adapter-node, full SSR) + libSQL/SQLite + D
 ## Lightweightness rules
 
 - **Default to no dependency.** A 50-line hand-rolled helper beats a 5 MB package. Check `npm install --omit=dev` size before merging a new `dependencies` entry.
+- **`dependencies` has exactly two entries, and that is deliberate.**
+  `@libsql/client` (native bindings) and `bcryptjs` are the only packages the
+  running server resolves from `node_modules`. Everything else the server uses —
+  `drizzle-orm`, `sanitize-html`, `node-html-parser`, `@paralleldrive/cuid2` —
+  sits in `devDependencies` **on purpose**, because `adapter-node` externalises
+  exactly what is in `dependencies` and bundles the rest. Bundling them took the
+  production closure from 100 packages / 43.7 MB to 23 / 11.9 MB.
+  - **Moving one of them back to `dependencies` un-bundles it** and re-inflates
+    the image. If you add a server dependency, the default is
+    `devDependencies`; it only belongs in `dependencies` if it has native
+    bindings or does runtime `require()` that rollup cannot see.
+  - **`scripts/check-externals.ts` is what makes this safe.** It runs as part of
+    `npm run build` and **fails** if the built server imports anything that is
+    neither a `node:` builtin nor a current `dependencies` entry. Without it,
+    a package that quietly stayed external would resolve fine in dev and throw
+    `ERR_MODULE_NOT_FOUND` on the first production request.
 - **Bundle-only deps go in `devDependencies`.** Anything tree-shaken into the build (e.g. `lucide-svelte`, Tailwind) does not belong in `dependencies` — leaving it there bloats production `node_modules` by the full source size.
+- **`scripts/check-budget.ts` prints the footprint on every `npm run check`** —
+  app-shell JS and CSS, the heaviest route, and the production dependency
+  closure, each against a committed `BASELINE`. It is **report-only** by design:
+  a threshold that fails the build gets raised by whoever is in a hurry, whereas
+  moving `BASELINE` is a diff a reviewer sees. Update it in the same commit that
+  moves the numbers.
+- **No `@tailwindcss/typography`.** It was 18.5 KB of the 64 KB root stylesheet —
+  shipped to every page, including the landing page — for five call sites.
+  `src/lib/ui/richText.css` replaces it: a plain CSS module imported by the three
+  components that render sanitized HTML, so Vite splits it into their chunks. Its
+  selector list mirrors `ALLOWED_TAGS` in `src/lib/richText.ts`; anything else
+  would be styling markup `sanitize()` cannot emit. `/privacy` and `/terms` carry
+  `class="prose"` but style it themselves in a scoped `<style>` — note they need
+  an explicit `list-style: disc`, because Tailwind's preflight resets it and the
+  plugin used to put it back.
+- **Nothing that ships to the browser may import `@paralleldrive/cuid2`.** It
+  pulls `@noble/hashes`, which rollup emits as a 25 KB raw / 11 KB gzipped chunk
+  of SHA-512. `src/lib/toasts.svelte.ts` imported it for a toast's list key and,
+  because `Toaster` is mounted unconditionally in the root layout, that made a
+  cryptographic hash ~29% of the app shell. It uses a counter now — and *not*
+  `crypto.randomUUID()`, which is undefined outside a secure context (the
+  plain-HTTP LAN self-host that `src/lib/client/clipboard.ts` also exists for).
 - **HTML parsing is `node-html-parser`** (`src/lib/server/og.ts`). Don't reintroduce `jsdom`, `cheerio`, or `parse5` — we deliberately removed an ~18 MB transitive chain. Note: `node-html-parser` does not support `[rel~="x"]`; iterate `link[rel]` manually (see `pickLink` in `og.ts`).
 - **SQLite memory is tunable via `SQLITE_CACHE_MB` / `SQLITE_MMAP_MB`** env vars (defaults 16 MB cache, 64 MB mmap). Don't hardcode pragma values — keep the env path so small-server deploys can shrink further.
 - **The rich-text editor is `squire-rte`, and that is a deliberate exception** to
@@ -44,6 +82,43 @@ Heli is a personal CRM. SvelteKit 2 (adapter-node, full SSR) + libSQL/SQLite + D
   (bundle-only) and `RichText.svelte` imports it dynamically, so it lands in its
   own lazily-fetched chunk rather than the initial bundle. See the Rich text
   section below before touching it.
+
+## Code splitting: a hazard worth knowing about
+
+Three attempts to lazy-load a component in this app produced a **production-only
+hydration crash that blanked every page**: lucide's legacy-mode `Icon` calling
+Svelte's `init()` with a null component context, thrown from the root layout's
+first `<Tooltip>`. It reproduces only in a built app — `npm run dev`,
+`svelte-check` and the whole Vitest suite stay green — so nothing but loading
+the built app in a browser catches it.
+
+The three that tripped it, all now reverted:
+- `{#await import(...)}` for `OutreachDialog` at both its call sites, which left
+  it reachable *only* dynamically, so Rollup gave it a chunk of its own — and
+  that chunk transitively contains another dynamic import, because `RichText`
+  fetches `squire-rte` on mount.
+- Having `MessageComposer` shared by *both* `OutreachDialog` and
+  `/outreach/[id]/run`, which creates the same shape: a shared chunk that leads
+  to `squire-rte`. The component still exists and `OutreachDialog` uses it —
+  it is the second consumer that broke things, so the run screen keeps its own
+  copy of the composer markup and the duplication there is deliberate, not an
+  oversight.
+- Two `+error.svelte` files rewritten as shims containing no runes, which Svelte
+  therefore compiles in **legacy mode**. A legacy-mode route node puts
+  SvelteKit's root on the Svelte 4 compatibility path. `<svelte:options
+  runes={true} />` did not rescue it.
+
+Practical rules until this is understood properly:
+- **Do not introduce a new dynamic import that can reach `RichText`.** Squire's
+  own lazy import is fine and must stay; a *second* dynamic boundary above it is
+  what breaks.
+- **Every route node must use at least one rune**, so none of them compile in
+  legacy mode.
+- **Load the built app in a browser before merging anything that moves a chunk
+  boundary.** The type check and the tests cannot see this class of failure.
+- Lazy-loading the command palette also silently cost a feature: page-scoped
+  "This page" commands are registered in each page's `onMount`, and a palette
+  that mounts only when opened never sees them.
 
 ## HTTP, caching, headers
 
@@ -172,7 +247,7 @@ query *count*, and the lever is fewer round trips.
   }
   ```
   **DO NOT** call `invalidateAll()` after a simple PATCH on a list-cache-backed page — it negates the optimism by triggering a full server reload. Trust the local cache. Only invalidate when the mutation crosses something the cache doesn't own (tag counts, totals, statuses-list).
-- **Service worker: `src/service-worker.ts`** auto-registers in prod builds. Cache-first for hashed build + static + `/avatars/*`; stale-while-revalidate for GET `/api/{people,companies,projects,interactions,search}`; **network-first with a 30-entry LRU fallback for SSR navigations** to `/people|companies|projects|interactions|collections|pipelines`. Skips `no-store`/`no-cache` responses. New builds wait for explicit reload via the `UpdateBanner` (no `skipWaiting` on install — keeps mid-flight pages on one version).
+- **Service worker: `src/service-worker.ts`** auto-registers in prod builds. Cache-first for hashed build + static + `/avatars/*`; stale-while-revalidate for GET `/api/{people,companies,projects,interactions,search}`; **network-first with a 12-entry LRU fallback for SSR navigations** to `/people|companies|projects|interactions|collections|pipelines`. Skips `no-store`/`no-cache` responses. New builds wait for explicit reload via the `UpdateBanner` (no `skipWaiting` on install — keeps mid-flight pages on one version).
   - Storing rendered CRM pages is a decision made **server-side**: `hooks.server.ts`
     marks exactly those routes `private, max-age=0, must-revalidate` instead of
     the `no-store` default. `/settings`, `/admin` and `/` stay `no-store`.
@@ -352,7 +427,9 @@ tables is *created-by attribution only and must never be used as a filter*.
 ## Implementation gotchas to remember
 
 - **FTS5 triggers**: when adding/altering FTS5 virtual tables, mirror `ai/ad/au` triggers for every column listed in the `CREATE VIRTUAL TABLE` block. On migration, seed `INSERT INTO *_fts(rowid, …) SELECT …` so pre-existing rows are searchable.
-- **SSRF guard with redirects**: `fetch` follows redirects automatically; `assertPublicUrl` on the input URL is not enough. Use `redirect: 'manual'` and re-check `assertPublicUrl` on each `Location` header before re-fetching. Cap to a few hops. The implementation is the private `fetchOnce` in `src/lib/server/og.ts` — it is **not** shared yet, so anything else making outbound requests has to reimplement it. Extract it before adding a second caller.
+- **SSRF guard with redirects**: `fetch` follows redirects automatically; `assertPublicUrl` on the input URL is not enough. Use `redirect: 'manual'` and re-check `assertPublicUrl` on each `Location` header before re-fetching. Cap to a few hops. The one implementation is `fetchGuarded` in `src/lib/server/fetchGuard.ts`, and **every outbound caller goes through it** — `og.ts`, `calendar.ts` and `imageCache.ts`. `imageCache` reimplemented the whole loop line for line for a while, which meant two guards to audit and two places for a fix to reach only one of. Don't write a third; add an option instead.
+  - Read bodies with `readCapped` (text, truncates) or `readCappedBytes` (binary, **rejects**). The difference is deliberate: half an `.ics` is a calendar missing some events, half a PNG is a corrupt file that would be hashed and cached under that hash forever.
+  - Use `withTimeout()` rather than a hand-rolled `AbortController`; it is exported from the same module.
 - **IPv6 in the SSRF guard**: `u.hostname` keeps the brackets on a literal (`[::1]`) and `isIP()` rejects that form, so strip them before the check. And `new URL()` re-serializes `[::ffff:127.0.0.1]` to `::ffff:7f00:1` — never match private ranges against the dotted spelling. `isPrivateIPv6` works on the eight expanded groups and covers IPv4-mapped, IPv4-compatible, NAT64 and 6to4, all of which carry a real IPv4 address. Covered by `src/lib/server/url.test.ts`.
 - **Bookmarklet** posts to `/api/save` with `credentials:'include'` — only works when invoked from same-origin (i.e. while on a Heli tab) or when CORS is configured. Same-origin limitation is documented in Settings; do not loosen CORS for it.
 - **Registration has two flags, and the docs must name both.** `ENABLE_REGISTRATION=1` reopens public sign-ups, which self-host closes automatically once one account exists; `DISABLE_REGISTRATION=1` is the hard kill switch and wins. Bootstrap escape hatch: registration is always allowed while `users` is empty, and a live invite admits its addressee even when public signup is closed.
@@ -392,6 +469,22 @@ review, and works with providers Google has never heard of. The cost is that the
   both the update and the delete paths: a re-sync never overwrites someone's
   edit, and a cancelled meeting someone has annotated is retitled rather than
   deleted.
+- **`syncFeed` reads and writes in batches, and that constrains it.** It used to
+  run one SELECT per event plus one or two writes — ~6,000 round trips for a full
+  2,000-event feed, times `MAX_FEEDS_PER_TICK`, inside a 60-second interval.
+  Existence is now one chunked `inArray` (`matchInteractions`, same `MATCH_CHUNK`
+  as `matchPeople`) and the writes go through `d.batch()` in chunks of 200.
+  - **Queue writes in dependency order.** A batch is one transaction executed in
+    sequence, so an `interaction_people` row has to be pushed after the
+    interaction it references.
+  - **Events are deduped by `externalId`, last one wins.** Two VEVENTs sharing a
+    UID and RECURRENCE-ID used to resolve by accident — the first inserted and
+    the second found that fresh row and updated it. Reading everything up front
+    removes the accident: both would insert and collide on
+    `uq_interactions_ws_external`.
+  - The attendee lookup is a `Map` built once. It was a
+    `flatMap(...).find(...)` *inside* the per-email loop, which on `matchMode:
+    'all'` rebuilt every participant of every event once per new address.
 - **RRULE is not expanded.** Recurring events are skipped and *counted*, and the
   count is shown in Settings. Correct expansion (EXDATE, BYSETPOS, UNTIL, COUNT)
   is 500+ lines, and a weekly 1:1 producing 52 interactions a year is noise. If
@@ -444,6 +537,19 @@ Nobody wants all 3,400 of their connections. The staged list is reviewed on its
 own route before it is committed — filter by search, has-email, connected-since
 and company, then pick.
 
+- **The staging map is keyed by `userId`, not by the staging token.** Keyed by
+  token, every upload minted a fresh key while the cookie was overwritten, so the
+  previous entry became unreachable — nothing could call `getPendingImport` on
+  it, its TTL was never read, and it lived until the process died. One retried
+  3,400-row upload stranded ~1.4 MB; an 8 MB CSV strands ~22 MB, and `LIMITS.api`
+  allows 300 requests a minute. One slot per user is what the UX already offers,
+  so a re-upload now replaces its predecessor. `storePendingImport` also sweeps
+  expired entries on write and rejects anything over `MAX_IMPORT_ROWS` (10,000) —
+  the rows are held in memory, so the count is a memory budget, not a product
+  limit. `tests/import-staging.test.ts` pins replace, sweep and cap.
+- **The commit inserts in chunks of 100, not one row at a time.** A row per round
+  trip meant ~100 seconds inside one handler for a 3,400-row import. A failed
+  chunk retries row by row, so the `errors` count still counts contacts.
 - **The commit takes indices, never rows.** `POST /api/import` accepts
   `{ include: number[] }` into the staged list, so the server goes on inserting
   only data it parsed itself; the worst a bad body can do is import fewer people.
@@ -618,6 +724,14 @@ no queue, no deliverability, no unsubscribe law, no per-workspace credentials �
 and it works identically for LinkedIn, X and WhatsApp, none of which expose a
 send API anyway. Don't "finish" it by adding sending.
 
+- **The root layout uses `listTemplateSummaries`, never `listTemplates`.** It
+  runs on every authenticated request in the app to populate the command palette
+  and keeps only `id`, `name`, `platform`. The unprojected version fetched every
+  `body` (capped at 20,000 chars, limit 200) across the wire to discard it —
+  megabytes per navigation against remote libSQL. Mapping the columns off in JS
+  is not the same thing; the projection has to happen in SQL. `countTemplates`
+  exists for the same reason: `/outreach` used to run the whole list a second
+  time to read `.length`.
 - **Templates address a person, never a company.** You cannot DM a company. From
   a company you pick one of its people.
 - **`user_id` on `outreach_templates` means two different things per row**:

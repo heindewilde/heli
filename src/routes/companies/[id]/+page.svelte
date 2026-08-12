@@ -148,15 +148,6 @@
     goto('/companies');
   }
 
-  const initials = $derived(
-    company.name
-      .split(/\s+/)
-      .map((s) => s[0])
-      .filter(Boolean)
-      .slice(0, 2)
-      .join('')
-      .toUpperCase()
-  );
 </script>
 
 <svelte:head>

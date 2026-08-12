@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, expect, test } from 'vitest';
 import { freshDb, type TestDb } from './helpers/testDb';
-import { makeTenant, scopeFor, type Tenant } from './helpers/fixtures';
+import { joinWorkspace, makeTenant, type Tenant } from './helpers/fixtures';
 
 /**
  * Outreach templates are the first table where "is this row personal?" is
@@ -43,12 +43,7 @@ beforeAll(async () => {
   const { workspaceMembers, outreachTemplates } = await import('../src/lib/server/schema');
   const { createId } = await import('@paralleldrive/cuid2');
 
-  await db(owner.scope.region).insert(workspaceMembers).values({
-    workspaceId: owner.scope.workspaceId,
-    userId: leaver.user.id,
-    role: 'member',
-    createdAt: Date.now()
-  });
+  await joinWorkspace(owner, leaver);
 
   const now = Date.now();
   sharedId = createId();

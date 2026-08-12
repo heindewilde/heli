@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, expect, test } from 'vitest';
 import { freshDb, type TestDb } from './helpers/testDb';
-import { makeTenant, scopeFor, type Tenant } from './helpers/fixtures';
+import { joinWorkspace, makeTenant, type Tenant } from './helpers/fixtures';
 import type { Scope } from '../src/lib/server/scope';
 
 /**
@@ -33,18 +33,7 @@ beforeAll(async () => {
   const { createTemplate } = await import('../src/lib/server/outreach');
   const { asc, eq } = await import('drizzle-orm');
 
-  await db(alice.scope.region).insert(workspaceMembers).values({
-    workspaceId: alice.scope.workspaceId,
-    userId: bob.user.id,
-    role: 'member',
-    createdAt: Date.now()
-  });
-  bobScope = scopeFor({
-    ...bob.user,
-    workspaceId: alice.scope.workspaceId,
-    workspaceName: alice.user.workspaceName,
-    role: 'member'
-  });
+  bobScope = await joinWorkspace(alice, bob);
 
   const pipeline = await createPipeline(alice.scope, { name: 'Fundraising' });
   const stages = await db(alice.scope.region)

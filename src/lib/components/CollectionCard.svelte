@@ -1,6 +1,6 @@
 <script lang="ts">
   import { Trash2, Archive, FolderOpen, Users, Building2, Funnel } from 'lucide-svelte';
-  import { COLLECTION_ICON_MAP } from '$lib/collectionIcons';
+  import CollectionIcon from '$lib/components/CollectionIcon.svelte';
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   type AnyIcon = any;
 
@@ -30,7 +30,6 @@
     onCreatePipeline
   }: Props = $props();
 
-  const IconComponent = $derived(icon ? COLLECTION_ICON_MAP[icon] ?? null : null);
 </script>
 
 <a
@@ -74,8 +73,8 @@
 
   <!-- Icon -->
   <span class="flex h-10 w-10 items-center justify-center rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-bg)] text-[var(--color-muted)]">
-    {#if IconComponent}
-      <IconComponent size={20} strokeWidth={1.75} />
+    {#if icon}
+      <CollectionIcon name={icon} size={20} strokeWidth={1.75} />
     {:else}
       <FolderOpen size={20} strokeWidth={1.75} />
     {/if}

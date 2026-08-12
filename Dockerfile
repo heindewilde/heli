@@ -6,6 +6,14 @@ COPY package*.json ./
 RUN npm ci
 COPY . .
 RUN npm run build
+# Source maps are ~2x the size of the server bundle they describe, and `node`
+# only reads them with --enable-source-maps, which the CMD below does not pass.
+# So in the image they are pure pull weight. They are still produced by the
+# build, so a local `npm run build` can still be debugged.
+RUN find build -name '*.js.map' -delete
+# Everything the server actually imports at runtime is asserted by
+# scripts/check-externals.ts during `npm run build`, so this prune cannot
+# silently remove something the bundle still needs.
 RUN npm prune --omit=dev
 
 FROM node:22-alpine

@@ -27,3 +27,39 @@ export async function makeTenant(label: string): Promise<Tenant> {
   });
   return { user, scope: scopeFor(user) };
 }
+
+/**
+ * Put `guest` into `host`'s workspace and return the scope they would carry
+ * while working in it.
+ *
+ * A tenant's own scope always points at their own workspace, so every test that
+ * needs a *colleague* — the visibility rules on shared vs private templates,
+ * role gates, authorship reassignment — had to insert the membership row and
+ * re-mint the scope by hand. That block was copy-pasted into six files.
+ *
+ * The membership row is written directly rather than through an invite: these
+ * tests are about what a member can do once they are in, and the invite flow has
+ * its own coverage.
+ */
+export async function joinWorkspace(
+  host: Tenant,
+  guest: Tenant,
+  role: 'member' | 'admin' = 'member'
+): Promise<Scope> {
+  const { db } = await import('../../src/lib/server/db');
+  const { workspaceMembers } = await import('../../src/lib/server/schema');
+
+  await db(host.scope.region).insert(workspaceMembers).values({
+    workspaceId: host.scope.workspaceId,
+    userId: guest.user.id,
+    role,
+    createdAt: Date.now()
+  });
+
+  return scopeFor({
+    ...guest.user,
+    workspaceId: host.scope.workspaceId,
+    workspaceName: host.user.workspaceName,
+    role
+  });
+}

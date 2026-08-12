@@ -12,7 +12,7 @@ import {
   stripSiteSuffix,
   type OgData
 } from './og';
-import { sanitize } from './sanitize';
+import { sanitize, truncateWords } from './sanitize';
 import type { Scope } from './scope';
 import { bumpSearchEpoch } from './search';
 
@@ -160,7 +160,7 @@ function cleanDescription(raw: string | undefined): string | null {
   if (!raw) return null;
   const trimmed = raw.trim();
   if (!trimmed) return null;
-  const capped = trimmed.length > 400 ? trimmed.slice(0, 400).replace(/\s+\S*$/, '') + '…' : trimmed;
+  const capped = truncateWords(trimmed, 400);
   return sanitize(capped);
 }
 

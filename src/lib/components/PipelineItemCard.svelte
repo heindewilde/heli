@@ -43,17 +43,6 @@
     item.kind === 'person' ? `/people/${item.refId}` : `/companies/${item.refId}`
   );
 
-  const initials = $derived.by(() => {
-    const name = item.member?.name ?? '';
-    return name
-      .split(/\s+/)
-      .map((s) => s[0])
-      .filter(Boolean)
-      .slice(0, 2)
-      .join('')
-      .toUpperCase();
-  });
-
   const valueLabel = $derived.by(() => {
     if (item.valueCents == null) return null;
     const v = item.valueCents / 100;

@@ -2,16 +2,11 @@
   import { invalidateAll } from '$app/navigation';
   import { FolderOpen, Plus, X } from 'lucide-svelte';
   import { toast } from '$lib/toasts.svelte';
-  import { COLLECTION_ICON_MAP } from '$lib/collectionIcons';
+  import CollectionIcon from '$lib/components/CollectionIcon.svelte';
   import type { CollectionMembershipForEntity } from '$lib/server/collections';
   import type { MemberKind } from '$lib/server/schema';
   import Popover from '$lib/ui/Popover.svelte';
   import Combobox from '$lib/ui/Combobox.svelte';
-
-  function iconFor(icon: string | null) {
-    if (!icon) return null;
-    return COLLECTION_ICON_MAP[icon] ?? null;
-  }
 
   type Props = {
     kind: MemberKind;
@@ -100,10 +95,9 @@
     {:else}
       <ul class="flex flex-col">
         {#each collections as c (c.id)}
-          {@const Ic = iconFor(c.icon)}
           <li class="group flex items-center gap-2 rounded-[var(--radius-sm)] px-2 py-1.5 hover:bg-[var(--color-bg)] {c.isArchived ? 'opacity-60' : ''}">
-            {#if Ic}
-              <Ic size={12} strokeWidth={2} class="shrink-0 text-[var(--color-subtle)]" />
+            {#if c.icon}
+              <CollectionIcon name={c.icon} size={12} class="text-[var(--color-subtle)]" />
             {:else}
               <FolderOpen size={12} strokeWidth={2} class="shrink-0 text-[var(--color-subtle)]" />
             {/if}

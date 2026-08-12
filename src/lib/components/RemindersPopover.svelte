@@ -1,7 +1,7 @@
 <script lang="ts">
   import Popover from '$lib/ui/Popover.svelte';
   import { invalidateAll } from '$app/navigation';
-  import { Bell, Plus, X } from 'lucide-svelte';
+  import { Bell, X } from 'lucide-svelte';
   import { toast } from '$lib/toasts.svelte';
 
   type Reminder = {

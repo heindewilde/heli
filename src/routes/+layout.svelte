@@ -629,6 +629,15 @@
   {/if}
 </div>
 
+<!--
+  Statically imported, deliberately.
+
+  Lazy-loading these behind their open flags saved ~3 KB gzipped from the app
+  shell and cost a feature: page-scoped commands. `people/[id]` and friends
+  register "This page" commands in `onMount`, and a palette that mounts only
+  when it opens does not pick them up — ⌘K showed Navigate/Workspace/Create and
+  nothing for the record you were looking at. Verified in a production build.
+-->
 {#if user}
   <CommandPalette bind:open={paletteOpen} onClose={() => (paletteOpen = false)} />
   <ShortcutHelp bind:open={helpOpen} onClose={() => (helpOpen = false)} />

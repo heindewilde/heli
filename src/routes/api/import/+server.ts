@@ -62,38 +62,64 @@ export const POST: RequestHandler = async ({ locals, cookies, request }) => {
   let imported = 0;
   let errors = 0;
 
-  for (const contact of toImport) {
+  // `url`, `domain` and `handle` are what make an imported person the *same*
+  // record as a later capture of their profile: the extension looks a URL up
+  // through `/api/v1/lookup`, which matches on the unique (workspace_id, url).
+  // Import a connection without the URL and capturing them from the browser
+  // creates a second person instead of enriching the first. `linkedinCsv` has
+  // already put it through the same `cleanUrl`.
+  const row = (contact: (typeof toImport)[number]) => {
+    const u = contact.url ? new URL(contact.url) : null;
+    return {
+      id: createId(),
+      workspaceId: s.workspaceId,
+      userId: s.userId,
+      name: contact.name,
+      url: contact.url ?? null,
+      domain: u ? domainOf(u) : null,
+      handle: u ? deriveHandle(u) : null,
+      email: contact.email ?? null,
+      phone: contact.phone ?? null,
+      role: contact.role ?? null,
+      location: contact.location ?? null,
+      notes: contact.notes ? sanitize(contact.notes) : null,
+      suggestedCompanyName: contact.suggestedCompanyName ?? null,
+      isFavorite: 0,
+      isArchived: 0,
+      source: pending.source,
+      createdAt: now,
+      updatedAt: now
+    };
+  };
+
+  /**
+   * Inserted in chunks, not one row at a time.
+   *
+   * A row at a time meant one network round trip per contact — a 3,400-row
+   * import spent ~100 seconds inside this handler, against remote libSQL, with
+   * the whole staged array held live throughout. 100 rows × 18 columns is 1,800
+   * bind variables, comfortably inside SQLite's limit.
+   *
+   * A failed chunk is retried row by row rather than written off, so `errors`
+   * still counts individual contacts: one bad URL among a hundred must not
+   * discard the other ninety-nine, which is exactly what the per-row try/catch
+   * this replaced was protecting against.
+   */
+  const CHUNK = 100;
+  for (let i = 0; i < toImport.length; i += CHUNK) {
+    const slice = toImport.slice(i, i + CHUNK);
     try {
-      // `url`, `domain` and `handle` are what make an imported person the *same*
-      // record as a later capture of their profile: the extension looks a URL up
-      // through `/api/v1/lookup`, which matches on the unique
-      // (workspace_id, url). Import a connection without the URL and capturing
-      // them from the browser creates a second person instead of enriching the
-      // first. `linkedinCsv` has already put it through the same `cleanUrl`.
-      const u = contact.url ? new URL(contact.url) : null;
-      await d.insert(people).values({
-        id: createId(),
-        workspaceId: s.workspaceId,
-        userId: s.userId,
-        name: contact.name,
-        url: contact.url ?? null,
-        domain: u ? domainOf(u) : null,
-        handle: u ? deriveHandle(u) : null,
-        email: contact.email ?? null,
-        phone: contact.phone ?? null,
-        role: contact.role ?? null,
-        location: contact.location ?? null,
-        notes: contact.notes ? sanitize(contact.notes) : null,
-        suggestedCompanyName: contact.suggestedCompanyName ?? null,
-        isFavorite: 0,
-        isArchived: 0,
-        source: pending.source,
-        createdAt: now,
-        updatedAt: now
-      });
-      imported++;
+      await d.insert(people).values(slice.map(row));
+      imported += slice.length;
     } catch {
-      errors++;
+      for (const contact of slice) {
+        try {
+          await d.insert(people).values(row(contact));
+          imported++;
+        } catch {
+          errors++;
+        }
+      }
     }
   }
 
@@ -101,7 +127,7 @@ export const POST: RequestHandler = async ({ locals, cookies, request }) => {
   // epoch exists for; without this they stay missing from cached results.
   if (imported > 0) bumpSearchEpoch(s.workspaceId);
 
-  deletePendingImport(importId);
+  deletePendingImport(s.userId);
   cookies.delete(CONTACTS_IMPORT_COOKIE, { path: '/' });
 
   // `deselected` so the result line can say the rest were discarded rather than
@@ -113,9 +139,8 @@ export const POST: RequestHandler = async ({ locals, cookies, request }) => {
 export const DELETE: RequestHandler = async ({ locals, cookies }) => {
   const s = requireScope(locals);
 
-  const importId = cookies.get(CONTACTS_IMPORT_COOKIE);
-  if (importId) {
-    deletePendingImport(importId);
+  if (cookies.get(CONTACTS_IMPORT_COOKIE)) {
+    deletePendingImport(s.userId);
     cookies.delete(CONTACTS_IMPORT_COOKIE, { path: '/' });
   }
 

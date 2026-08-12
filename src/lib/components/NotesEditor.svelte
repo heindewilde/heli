@@ -2,6 +2,9 @@
   import { Pencil } from 'lucide-svelte';
   import RichText from '$lib/ui/RichText.svelte';
   import { hasBlockMarkup } from '$lib/richText';
+  // The read view renders the same markup the editor produces, so it needs the
+  // same typography. Importing it twice is free — Vite dedupes the module.
+  import '$lib/ui/richText.css';
 
   type Props = {
     value: string | null;
@@ -54,7 +57,7 @@
       <span class="min-w-0 flex-1">
         {#if value}
           <div
-            class="prose prose-sm max-w-none text-[var(--color-text)] [&_a]:text-[var(--color-text)] {legacyPlainText
+            class="rich-text [&_a]:text-[var(--color-text)] {legacyPlainText
               ? 'whitespace-pre-wrap'
               : ''}"
           >

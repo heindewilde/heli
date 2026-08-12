@@ -1,5 +1,4 @@
 @import 'tailwindcss';
-@plugin "@tailwindcss/typography";
 
 /*
  * Teach Tailwind that dark mode is our `[data-theme]` attribute, not the OS.

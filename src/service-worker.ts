@@ -13,6 +13,10 @@ const CACHE = `heli-${version}`;
 // gets its own cache — old caches are pruned on activate.
 const PRECACHE: string[] = [...build, ...files];
 
+// A Set, because the lookup below runs on every single GET the page makes and
+// `PRECACHE` is ~140 entries — a linear scan per request for a membership test.
+const PRECACHE_SET = new Set(PRECACHE);
+
 // API endpoints that we serve with stale-while-revalidate. They are private
 // per-user data, so we only ever cache responses that came back with
 // `Cache-Control: private, max-age=*, must-revalidate` (set in cache.ts).
@@ -23,11 +27,18 @@ const SWR_PATHS = /^\/api\/(?:people|companies|projects|interactions|search)(?:\
 // of the browser's error page. hooks.server.ts marks exactly these routes
 // `private, max-age=0, must-revalidate` rather than `no-store` — the decision
 // to store them is made there, on purpose, not smuggled in here.
-const NAV_PATHS = /^\/(?:people|companies|projects|interactions|collections|pipelines|outreach)(?:\/|$)/;
+// `outreach` is deliberately absent: a composer's contents are the most volatile
+// thing in the app and the least useful to paint from a stale copy. Keep this in
+// step with the route list in hooks.server.ts, which is what marks these
+// cacheable in the first place — a path here that is `no-store` there would be
+// stored anyway while telling the browser not to.
+const NAV_PATHS = /^\/(?:people|companies|projects|interactions|collections|pipelines)(?:\/|$)/;
 
-// Cap on stored pages. Each is a full SSR document, so this is a disk-footprint
-// bound as much as a freshness one; oldest entries go first.
-const NAV_CACHE_LIMIT = 30;
+// Cap on stored pages. Each is a full SSR document at 100-300 KB, so this is a
+// disk-footprint bound as much as a freshness one — 30 of them is several
+// megabytes on the user's device for a back-navigation win that 12 delivers
+// nearly all of. Oldest entries go first.
+const NAV_CACHE_LIMIT = 12;
 const NAV_CACHE = `${CACHE}-nav`;
 
 sw.addEventListener('install', (event) => {
@@ -66,7 +77,7 @@ sw.addEventListener('fetch', (event) => {
   if (url.pathname.startsWith('/auth')) return;
 
   // Hashed build assets + everything in /static (favicons, fonts, …).
-  if (PRECACHE.includes(url.pathname)) {
+  if (PRECACHE_SET.has(url.pathname)) {
     event.respondWith(cacheFirst(req));
     return;
   }

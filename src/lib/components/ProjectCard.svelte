@@ -2,7 +2,7 @@
   import { Briefcase, AlertTriangle, Users, CalendarClock } from 'lucide-svelte';
   import StatusChip from './StatusChip.svelte';
   import CompanyLogo from './CompanyLogo.svelte';
-  import { COLLECTION_ICON_MAP } from '$lib/collectionIcons';
+  import CollectionIcon from '$lib/components/CollectionIcon.svelte';
   import type { ProjectStatus } from '$lib/server/schema';
 
   type Company = { id: string; name: string; domain: string | null; logoUrl: string | null; faviconUrl: string | null };
@@ -33,7 +33,6 @@
     selected = false
   }: Props = $props();
 
-  const CardIcon = $derived(icon && COLLECTION_ICON_MAP[icon] ? COLLECTION_ICON_MAP[icon] : null);
 
   const overdue = $derived(
     status === 'active' && typeof endDate === 'number' && endDate < Date.now()
@@ -70,8 +69,8 @@
   <!-- Icon + status -->
   <div class="flex items-start justify-between gap-2">
     <span class="flex h-10 w-10 shrink-0 items-center justify-center rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-bg)] text-[var(--color-muted)]">
-      {#if CardIcon}
-        <CardIcon size={20} strokeWidth={1.75} />
+      {#if icon}
+        <CollectionIcon name={icon} size={20} strokeWidth={1.75} />
       {:else}
         <Briefcase size={20} strokeWidth={1.75} />
       {/if}

@@ -4,6 +4,10 @@
   import { APP_NAME } from '$lib/branding';
   import { toast } from '$lib/toasts.svelte';
   import { readErrorCode } from '$lib/api-error';
+  // Not `navigator.clipboard` directly: that is undefined outside a secure
+  // context, which is exactly the docker-compose quickstart before Caddy is in
+  // front of it and any plain-HTTP LAN self-host. copyText falls back.
+  import { copyText } from '$lib/client/clipboard';
   import { Bookmark, Building2, CalendarDays, Download, ShieldAlert, KeyRound, Mail, User, LogOut, Copy, Check, Users } from 'lucide-svelte';
 
   let { data } = $props();
@@ -28,6 +32,42 @@
     `javascript:void(window.open('${data.origin}/save?url='+encodeURIComponent(location.href),'_blank'))`
   );
 
+  /**
+   * The part of a mutation that is the same in every handler on this page:
+   * JSON headers, `JSON.stringify`, mapping an error code to a message, and
+   * toasting it. Returns the response on success and null once it has already
+   * reported the failure, so a call site reads `if (!res) return;`.
+   *
+   * Deliberately *not* a `mutate()` that also owns the busy flag, the success
+   * toast and what happens afterwards. Those differ at nearly every call site —
+   * some redirect, some purge the service worker, some re-invalidate on failure
+   * to put a `<select>` back — and folding them in would need one option per
+   * handler, which is a switch statement wearing a function's clothes.
+   */
+  async function request(
+    url: string,
+    init: { method: string; body?: unknown },
+    errors: Record<string, string>,
+    fallback: string
+  ): Promise<Response | null> {
+    try {
+      const res = await fetch(url, {
+        method: init.method,
+        ...(init.body === undefined
+          ? {}
+          : { headers: { 'content-type': 'application/json' }, body: JSON.stringify(init.body) })
+      });
+      if (!res.ok) {
+        toast.danger(errors[await readErrorCode(res)] ?? fallback);
+        return null;
+      }
+      return res;
+    } catch {
+      toast.danger(fallback);
+      return null;
+    }
+  }
+
   // ── Team ───────────────────────────────────────────────────────────────────
   const teamAdmin = $derived(data.workspace.role === 'owner' || data.workspace.role === 'admin');
   const isOwner = $derived(data.workspace.role === 'owner');
@@ -49,21 +89,17 @@
     e.preventDefault();
     busy = 'invite';
     try {
-      const res = await fetch('/api/workspace/invites', {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ email: inviteEmail, role: inviteRole })
-      });
-      if (!res.ok) {
-        toast.danger(INVITE_ERRORS[await readErrorCode(res)] ?? 'Could not send that invitation.');
-        return;
-      }
+      const res = await request(
+        '/api/workspace/invites',
+        { method: 'POST', body: { email: inviteEmail, role: inviteRole } },
+        INVITE_ERRORS,
+        'Could not send that invitation.'
+      );
+      if (!res) return;
       const { emailed } = await res.json();
       toast.success(emailed ? 'Invitation sent.' : 'Invitation created — copy the link to share it.');
       inviteEmail = '';
       await invalidateAll();
-    } catch {
-      toast.danger('Could not send that invitation.');
     } finally {
       busy = null;
     }
@@ -72,25 +108,26 @@
   async function revokeInvite(token: string) {
     busy = token;
     try {
-      const res = await fetch(`/api/workspace/invites/${encodeURIComponent(token)}`, {
-        method: 'DELETE'
-      });
-      if (!res.ok) throw new Error();
-      await invalidateAll();
-    } catch {
-      toast.danger('Could not revoke that invitation.');
+      const res = await request(
+        `/api/workspace/invites/${encodeURIComponent(token)}`,
+        { method: 'DELETE' },
+        {},
+        'Could not revoke that invitation.'
+      );
+      if (res) await invalidateAll();
     } finally {
       busy = null;
     }
   }
 
   async function copyInvite(url: string) {
-    try {
-      await navigator.clipboard.writeText(url);
-      toast.success('Invite link copied.');
-    } catch {
+    // copyText reports failure by return value, not by throwing — it has a
+    // non-secure-context fallback that can itself fail.
+    if ((await copyText(url)) === 'failed') {
       toast.danger('Could not copy the link.');
+      return;
     }
+    toast.success('Invite link copied.');
   }
 
   async function removeMember(userId: string, label: string) {
@@ -99,14 +136,15 @@
     }
     busy = userId;
     try {
-      const res = await fetch(`/api/workspace/members/${encodeURIComponent(userId)}`, {
-        method: 'DELETE'
-      });
-      if (!res.ok) throw new Error();
+      const res = await request(
+        `/api/workspace/members/${encodeURIComponent(userId)}`,
+        { method: 'DELETE' },
+        {},
+        'Could not remove that member.'
+      );
+      if (!res) return;
       toast.success(`${label} removed.`);
       await invalidateAll();
-    } catch {
-      toast.danger('Could not remove that member.');
     } finally {
       busy = null;
     }
@@ -130,15 +168,15 @@
   async function deleteWorkspace() {
     busy = 'deleteWorkspace';
     try {
-      const res = await fetch('/api/workspace', { method: 'DELETE' });
-      if (!res.ok) {
-        toast.danger(WORKSPACE_ERRORS[await readErrorCode(res)] ?? 'Could not delete this workspace.');
-        return;
-      }
+      const res = await request(
+        '/api/workspace',
+        { method: 'DELETE' },
+        WORKSPACE_ERRORS,
+        'Could not delete this workspace.'
+      );
+      if (!res) return;
       navigator.serviceWorker?.controller?.postMessage('PURGE_API');
       location.assign('/');
-    } catch {
-      toast.danger('Could not delete this workspace.');
     } finally {
       busy = null;
     }
@@ -148,15 +186,13 @@
     e.preventDefault();
     busy = 'rename';
     try {
-      const res = await fetch('/api/workspace', {
-        method: 'PATCH',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ name: workspaceName })
-      });
-      if (!res.ok) {
-        toast.danger(WORKSPACE_ERRORS[await readErrorCode(res)] ?? 'Could not rename this workspace.');
-        return;
-      }
+      const res = await request(
+        '/api/workspace',
+        { method: 'PATCH', body: { name: workspaceName } },
+        WORKSPACE_ERRORS,
+        'Could not rename this workspace.'
+      );
+      if (!res) return;
       toast.success('Workspace renamed.');
       // The header switcher reads memberships from the layout load, which
       // doesn't re-run on client-side navigation — without this the old name
@@ -173,15 +209,13 @@
     e.preventDefault();
     busy = 'newWorkspace';
     try {
-      const res = await fetch('/api/workspace', {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ name: newWorkspaceName })
-      });
-      if (!res.ok) {
-        toast.danger(WORKSPACE_ERRORS[await readErrorCode(res)] ?? 'Could not create that workspace.');
-        return;
-      }
+      const res = await request(
+        '/api/workspace',
+        { method: 'POST', body: { name: newWorkspaceName } },
+        WORKSPACE_ERRORS,
+        'Could not create that workspace.'
+      );
+      if (!res) return;
       // The session moved to the new workspace, so everything cached on this
       // page belongs to the old one.
       navigator.serviceWorker?.controller?.postMessage('PURGE_API');
@@ -222,16 +256,15 @@
     }
     busy = userId;
     try {
-      const res = await fetch('/api/workspace/transfer', {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ userId })
-      });
-      if (!res.ok) throw new Error();
+      const res = await request(
+        '/api/workspace/transfer',
+        { method: 'POST', body: { userId } },
+        {},
+        'Could not transfer ownership.'
+      );
+      if (!res) return;
       toast.success(`${label} is now the owner.`);
       await invalidateAll();
-    } catch {
-      toast.danger('Could not transfer ownership.');
     } finally {
       busy = null;
     }
@@ -246,20 +279,24 @@
       return;
     }
     busy = 'leave';
-    try {
-      const res = await fetch(`/api/workspace/members/${encodeURIComponent(data.user.id)}`, {
-        method: 'DELETE'
-      });
-      if (!res.ok) throw new Error();
-      // The session now points at a different workspace, so every cached
-      // /api/* response and every $state island on the page belongs to the one
-      // just left. Same purge-and-hard-navigate as WorkspaceSwitcher.
-      navigator.serviceWorker?.controller?.postMessage('PURGE_API');
-      location.assign('/');
-    } catch {
-      toast.danger('Could not leave that workspace.');
+    const res = await request(
+      `/api/workspace/members/${encodeURIComponent(data.user.id)}`,
+      { method: 'DELETE' },
+      {},
+      'Could not leave that workspace.'
+    );
+    if (!res) {
       busy = null;
+      return;
     }
+    // `busy` stays set on success: the page is navigating away, and clearing it
+    // would re-enable the button for the frames before unload.
+    //
+    // The session now points at a different workspace, so every cached /api/*
+    // response and every $state island on the page belongs to the one just
+    // left. Same purge-and-hard-navigate as WorkspaceSwitcher.
+    navigator.serviceWorker?.controller?.postMessage('PURGE_API');
+    location.assign('/');
   }
 
   /**
@@ -281,7 +318,11 @@
     // By far the likeliest mistake: the archive LinkedIn sends holds a dozen
     // CSVs and only one of them is the connections list.
     not_a_connections_export:
-      'That does not look like a LinkedIn connections export. Look for Connections.csv inside the archive.'
+      'That does not look like a LinkedIn connections export. Look for Connections.csv inside the archive.',
+    // A staged import is held in memory until you commit it, so the row count is
+    // capped. Splitting the file is the answer, and each half commits normally.
+    too_many_rows:
+      'That export has more connections than can be staged at once. Split the CSV and import it in two halves.'
   };
 
   /**
@@ -338,26 +379,23 @@
     if (calBusy || !calUrl.trim()) return;
     calBusy = true;
     try {
-      const res = await fetch('/api/calendar', {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({
-          url: calUrl.trim(),
-          label: calLabel.trim() || null,
-          selfEmails: calSelf
-            .split(',')
-            .map((e) => e.trim())
-            .filter(Boolean)
-        })
-      });
-      if (!res.ok) {
-        toast.danger(
-          (await readErrorCode(res)) === 'private_address'
-            ? 'That address is not reachable from the server.'
-            : 'Could not add that calendar.'
-        );
-        return;
-      }
+      const res = await request(
+        '/api/calendar',
+        {
+          method: 'POST',
+          body: {
+            url: calUrl.trim(),
+            label: calLabel.trim() || null,
+            selfEmails: calSelf
+              .split(',')
+              .map((e) => e.trim())
+              .filter(Boolean)
+          }
+        },
+        { private_address: 'That address is not reachable from the server.' },
+        'Could not add that calendar.'
+      );
+      if (!res) return;
       calendars = [...calendars, await res.json()];
       calUrl = '';
       calLabel = '';
@@ -409,25 +447,20 @@
   }
 
   async function setMatchMode(id: string, matchMode: string) {
-    const res = await fetch(`/api/calendar/${id}`, {
-      method: 'PATCH',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ matchMode })
-    });
-    if (!res.ok) {
-      toast.danger('Could not update.');
-      return;
-    }
+    const res = await request(
+      `/api/calendar/${id}`,
+      { method: 'PATCH', body: { matchMode } },
+      {},
+      'Could not update.'
+    );
+    if (!res) return;
     calendars = calendars.map((c) => (c.id === id ? { ...c, matchMode } : c));
   }
 
   async function removeCalendar(id: string, label: string | null) {
     if (!confirm(`Remove ${label || 'this calendar'}? Imported meetings stay.`)) return;
-    const res = await fetch(`/api/calendar/${id}`, { method: 'DELETE' });
-    if (!res.ok) {
-      toast.danger('Could not remove.');
-      return;
-    }
+    const res = await request(`/api/calendar/${id}`, { method: 'DELETE' }, {}, 'Could not remove.');
+    if (!res) return;
     calendars = calendars.filter((c) => c.id !== id);
   }
 
@@ -457,15 +490,13 @@
     if (tokenBusy || tokenScopes.length === 0) return;
     tokenBusy = true;
     try {
-      const res = await fetch('/api/v1/tokens', {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ name: tokenName.trim() || 'Untitled token', scopes: tokenScopes })
-      });
-      if (!res.ok) {
-        toast.danger('Could not create token');
-        return;
-      }
+      const res = await request(
+        '/api/v1/tokens',
+        { method: 'POST', body: { name: tokenName.trim() || 'Untitled token', scopes: tokenScopes } },
+        {},
+        'Could not create token'
+      );
+      if (!res) return;
       const { data: created } = await res.json();
       freshSecret = created.secret;
       secretCopied = false;
@@ -478,18 +509,20 @@
 
   async function revokeApiToken(id: string, name: string) {
     if (!confirm(`Revoke "${name}"? Anything using it stops working immediately.`)) return;
-    const res = await fetch(`/api/v1/tokens/${id}`, { method: 'DELETE' });
-    if (!res.ok) {
-      toast.danger('Could not revoke token');
-      return;
-    }
+    const res = await request(`/api/v1/tokens/${id}`, { method: 'DELETE' }, {}, 'Could not revoke token');
+    if (!res) return;
     tokens = tokens.filter((t) => t.id !== id);
     toast.success('Token revoked');
   }
 
   async function copySecret() {
     if (!freshSecret) return;
-    await navigator.clipboard.writeText(freshSecret);
+    if ((await copyText(freshSecret)) === 'failed') {
+      // The secret is shown exactly once, so a silent failure here is the worst
+      // of the three: the user closes the dialog believing they have it.
+      toast.danger('Could not copy. Select the token and copy it by hand.');
+      return;
+    }
     secretCopied = true;
     setTimeout(() => (secretCopied = false), 2000);
   }
@@ -503,13 +536,12 @@
   }
 
   async function copyBookmarklet() {
-    try {
-      await navigator.clipboard.writeText(bookmarkletJs);
-      copied = true;
-      setTimeout(() => (copied = false), 1500);
-    } catch {
+    if ((await copyText(bookmarkletJs)) === 'failed') {
       toast.danger('Could not copy. Drag the button instead.');
+      return;
     }
+    copied = true;
+    setTimeout(() => (copied = false), 1500);
   }
 
   async function postUser(payload: Record<string, unknown>): Promise<{ ok: boolean; status: number; body: any }> {

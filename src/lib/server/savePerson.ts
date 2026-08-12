@@ -14,7 +14,7 @@ import {
   stripCompanySuffix,
   stripSiteSuffix
 } from './og';
-import { sanitize } from './sanitize';
+import { sanitize, truncateWords } from './sanitize';
 import { cacheRemoteImage } from './imageCache';
 import type { Scope } from './scope';
 import { bumpSearchEpoch } from './search';
@@ -199,7 +199,7 @@ function cleanDescription(raw: string | undefined): string | null {
   const trimmed = raw.trim();
   if (!trimmed) return null;
   if (LINKEDIN_BOILERPLATE_RE.test(trimmed)) return null;
-  const capped = trimmed.length > 280 ? trimmed.slice(0, 280).replace(/\s+\S*$/, '') + '…' : trimmed;
+  const capped = truncateWords(trimmed, 280);
   return sanitize(capped);
 }
 

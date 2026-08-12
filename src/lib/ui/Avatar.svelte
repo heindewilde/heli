@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { initialsOf } from '$lib/initials';
   /**
    * Person avatars were hand-rolled inline at every call site — the list rows,
    * the pipeline cards, the dashboard lists, the interaction feed — each with
@@ -43,16 +44,7 @@
     xl: 'size-14 text-lg'
   };
 
-  /** First letters of the first two words — "Karen Sparck Jones" → "KS". */
-  const initials = $derived(
-    (name ?? '')
-      .trim()
-      .split(/\s+/)
-      .filter(Boolean)
-      .slice(0, 2)
-      .map((w) => [...w][0]?.toUpperCase() ?? '')
-      .join('')
-  );
+  const initials = $derived(initialsOf(name));
 
   /**
    * FNV-1a over the name. Any stable hash would do; this one is four lines and
