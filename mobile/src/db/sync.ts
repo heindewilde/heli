@@ -4,6 +4,7 @@ import { request, ApiError } from '../api/client';
 import { loadCredential } from '../api/credentials';
 import * as cache from './cache';
 import { enqueue, flush, pendingCount } from './outbox';
+import { newLocalId } from './replay-policy';
 
 /**
  * The seam between the network and the mirror.
@@ -155,6 +156,9 @@ export async function refreshInteractions(): Promise<void> {
 
 /* ── writing ─────────────────────────────────────────────────────────────── */
 
+/** Distinguishes two rows created in the same millisecond. */
+let localSeq = 0;
+
 /**
  * Patch a person optimistically.
  *
@@ -203,7 +207,8 @@ export async function logInteraction(input: {
   const ws = await workspace();
   if (!ws) return;
 
-  const localId = `local_${Date.now().toString(36)}`;
+  // Through the shared helper, so `isLocalId` can always recognise it.
+  const localId = newLocalId(Date.now(), ++localSeq);
   const now = Date.now();
 
   await cache.insertLocalInteraction(ws, {

@@ -1,6 +1,7 @@
 import { db } from './index';
 import { notify } from './cache';
 import { ApiError, request } from '../api/client';
+import { isRetryable, mergePatch, retryDelay, rollbackFields } from './replay-policy';
 
 /**
  * Writes that have not reached the server yet.
@@ -86,7 +87,10 @@ export async function enqueue(input: EnqueueInput): Promise<string> {
       input.entityId
     );
     if (existing) {
-      const merged = { ...JSON.parse(existing.body ?? '{}'), ...(input.body as object) };
+      const merged = mergePatch(
+        JSON.parse(existing.body ?? '{}'),
+        (input.body ?? {}) as Record<string, unknown>
+      );
       await handle.runAsync(`UPDATE outbox SET body = ? WHERE id = ?`, [
         JSON.stringify(merged),
         existing.id
@@ -201,7 +205,7 @@ export async function flush(): Promise<FlushResult> {
       } catch (err) {
         const api = err instanceof ApiError ? err : null;
 
-        if (api && !api.retryable) {
+        if (api && !isRetryable({ code: api.code, status: api.status })) {
           // Terminal. Roll the optimistic value back so the UI stops showing an
           // edit that will never exist, and surface it rather than dropping it.
           await handle.runAsync(
@@ -215,10 +219,7 @@ export async function flush(): Promise<FlushResult> {
         }
 
         const attempts = entry.attempts + 1;
-        // Exponential, capped at an hour. The cap matters: a phone left offline
-        // for a week should not come back and hammer the server, nor wait a
-        // week to try again.
-        const delay = Math.min(60_000 * 2 ** (attempts - 1), 3_600_000);
+        const delay = retryDelay(attempts);
         await handle.runAsync(
           `UPDATE outbox SET attempts = ?, next_attempt_at = ?, last_error = ? WHERE id = ?`,
           [attempts, Date.now() + delay, api?.message ?? String(err), entry.id]
@@ -284,10 +285,14 @@ async function rollback(entry: {
   }
 
   const prev = JSON.parse(entry.prev) as Record<string, unknown>;
-  const cols = Object.keys(prev);
+  // Only the columns the failed write actually touched — `prev` is already
+  // narrowed to those at enqueue time, and rollbackFields keeps that true if it
+  // ever stops being.
+  const restore = rollbackFields(prev, prev);
+  const cols = Object.keys(restore);
   if (cols.length === 0) return;
   await handle.runAsync(
     `UPDATE ${entry.entity_table} SET ${cols.map((c) => `${c} = ?`).join(', ')}, pending = 0 WHERE id = ?`,
-    [...cols.map((c) => prev[c] as never), entry.entity_id]
+    [...cols.map((c) => restore[c] as never), entry.entity_id]
   );
 }
