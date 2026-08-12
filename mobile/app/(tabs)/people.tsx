@@ -3,7 +3,7 @@ import { Animated, Platform, RefreshControl, TextInput, View } from 'react-nativ
 import { useRouter } from 'expo-router';
 import { FlashList } from '@shopify/flash-list';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Search, Star, Users } from 'lucide-react-native';
+import { Building2, Search, Star, Users } from 'lucide-react-native';
 import { Screen } from '../../src/ui/Screen';
 import { Text } from '../../src/ui/Text';
 import { Pressable } from '../../src/ui/Pressable';
@@ -11,10 +11,11 @@ import { Avatar } from '../../src/ui/Avatar';
 import { SkeletonRow } from '../../src/ui/Skeleton';
 import { EmptyState } from '../../src/ui/EmptyState';
 import { SwipeRow } from '../../src/ui/SwipeRow';
+import { SegmentedControl } from '../../src/ui/SegmentedControl';
 import { useTheme } from '../../src/theme';
 import { haptics } from '../../src/ui/haptics';
-import { useRows, refreshPeople, patchPerson } from '../../src/db/sync';
-import { listPeople, type PersonRow } from '../../src/db/cache';
+import { useRows, refreshPeople, refreshCompanies, patchPerson } from '../../src/db/sync';
+import { listPeople, listCompanies, type PersonRow, type CompanyRow } from '../../src/db/cache';
 import { loadCredential } from '../../src/api/credentials';
 import { formatLastSeen } from '../../../src/lib/interactionMeta';
 
@@ -39,6 +40,7 @@ export default function PeopleScreen() {
   const scrollY = useRef(new Animated.Value(0)).current;
 
   const [q, setQ] = useState('');
+  const [tab, setTab] = useState<'people' | 'companies'>('people');
   const [refreshing, setRefreshing] = useState(false);
   const [ws, setWs] = useState<string | null>(null);
 
@@ -47,22 +49,35 @@ export default function PeopleScreen() {
     return null;
   }, []);
 
-  const { rows, loading } = useRows(
+  const { rows: people, loading: loadingPeople } = useRows(
     'people',
     async () => (ws ? listPeople(ws, { q: q.trim() || undefined, limit: 200 }) : []),
+    [ws, q]
+  );
+  const { rows: companies, loading: loadingCompanies } = useRows(
+    'companies',
+    async () => (ws ? listCompanies(ws, { q: q.trim() || undefined, limit: 200 }) : []),
     [ws, q]
   );
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
     try {
-      await refreshPeople({ q: q.trim() || undefined });
+      // Both, whichever is showing: the other tab is one tap away and a stale
+      // list behind a segmented control is the kind of thing nobody thinks to
+      // pull-to-refresh.
+      await Promise.all([
+        refreshPeople({ q: q.trim() || undefined }),
+        refreshCompanies({ q: q.trim() || undefined })
+      ]);
     } finally {
       setRefreshing(false);
     }
   }, [q]);
 
-  const people = rows ?? [];
+  const showingPeople = tab === 'people';
+  const loading = showingPeople ? loadingPeople : loadingCompanies;
+  const rows = showingPeople ? (people ?? []) : (companies ?? []);
 
   return (
     <Screen
@@ -81,6 +96,17 @@ export default function PeopleScreen() {
         </Pressable>
       }
     >
+      <View style={{ paddingHorizontal: 16, paddingTop: 4, paddingBottom: 2 }}>
+        <SegmentedControl
+          value={tab}
+          onChange={setTab}
+          segments={[
+            { value: 'people', label: 'People' },
+            { value: 'companies', label: 'Companies' }
+          ]}
+        />
+      </View>
+
       <View style={{ paddingHorizontal: 16, paddingVertical: 8, flexDirection: 'row', gap: 8 }}>
         <View
           style={{
@@ -98,7 +124,7 @@ export default function PeopleScreen() {
           <TextInput
             value={q}
             onChangeText={setQ}
-            placeholder="Filter this list"
+            placeholder={showingPeople ? 'Filter people' : 'Filter companies'}
             placeholderTextColor={t.c('--color-subtle')}
             autoCorrect={false}
             returnKeyType="search"
@@ -128,7 +154,7 @@ export default function PeopleScreen() {
         </Pressable>
       </View>
 
-      {loading && people.length === 0 ? (
+      {loading && rows.length === 0 ? (
         <View>
           {Array.from({ length: 8 }).map((_, i) => (
             <SkeletonRow key={i} />
@@ -136,9 +162,9 @@ export default function PeopleScreen() {
         </View>
       ) : (
         <FlashList
-          data={people}
+          data={rows as (PersonRow | CompanyRow)[]}
           estimatedItemSize={ROW_HEIGHT}
-          keyExtractor={(p) => p.id}
+          keyExtractor={(r) => r.id}
           onScroll={Animated.event([{ nativeEvent: { contentOffset: { y: scrollY } } }], {
             useNativeDriver: true
           })}
@@ -161,18 +187,28 @@ export default function PeopleScreen() {
               />
             ) : (
               <EmptyState
-                icon={<Users size={22} color={t.c('--color-subtle')} />}
-                title="No people yet"
-                body="Save someone from the browser extension, or add them here."
+                icon={
+                  showingPeople ? (
+                    <Users size={22} color={t.c('--color-subtle')} />
+                  ) : (
+                    <Building2 size={22} color={t.c('--color-subtle')} />
+                  )
+                }
+                title={showingPeople ? 'No people yet' : 'No companies yet'}
+                body="Save one from the browser extension, or add it here."
               />
             )
           }
-          renderItem={({ item }) => (
-            <PersonListRow
-              person={item}
-              onPress={() => router.push(`/person/${item.id}`)}
-            />
-          )}
+          renderItem={({ item }) =>
+            showingPeople ? (
+              <PersonListRow
+                person={item as PersonRow}
+                onPress={() => router.push(`/person/${item.id}`)}
+              />
+            ) : (
+              <CompanyListRow company={item as CompanyRow} />
+            )
+          }
         />
       )}
     </Screen>
@@ -246,5 +282,40 @@ function PersonListRow({ person, onPress }: { person: PersonRow; onPress: () => 
         ) : null}
       </Pressable>
     </SwipeRow>
+  );
+}
+
+function CompanyListRow({ company }: { company: CompanyRow }) {
+  const t = useTheme();
+  return (
+    <View
+      style={{
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 12,
+        paddingHorizontal: 16,
+        height: ROW_HEIGHT,
+        backgroundColor: t.c('--color-surface')
+      }}
+    >
+      {/* A rounded square, not a circle. The shape is how you tell an
+          organisation from a person at a glance, before reading either. */}
+      <Avatar name={company.name} uri={company.logoUrl ?? company.faviconUrl} size="md" shape="square" />
+      <View style={{ flex: 1, gap: 1 }}>
+        <Text variant="sm" weight="600" numberOfLines={1}>
+          {company.name}
+        </Text>
+        <Text variant="xs" tone="muted" numberOfLines={1}>
+          {[company.industry, company.location].filter(Boolean).join(' · ') ||
+            company.domain ||
+            '—'}
+        </Text>
+      </View>
+      {company.lastAt ? (
+        <Text variant="2xs" tone="subtle" tabular>
+          {formatLastSeen(company.lastAt)}
+        </Text>
+      ) : null}
+    </View>
   );
 }

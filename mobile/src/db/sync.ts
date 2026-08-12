@@ -94,6 +94,21 @@ export async function refreshPeople(opts: { q?: string } = {}): Promise<void> {
   }
 }
 
+export async function refreshCompanies(opts: { q?: string } = {}): Promise<void> {
+  const ws = await workspace();
+  if (!ws) return;
+  try {
+    const res = await request<{ data: cache.CompanyRow[]; nextCursor: string | null }>(
+      '/companies',
+      { query: { limit: 50, q: opts.q } }
+    );
+    const rows = Array.isArray(res) ? (res as unknown as cache.CompanyRow[]) : res.data;
+    await cache.upsertCompanies(ws, rows);
+  } catch (err) {
+    if (!(err instanceof ApiError) || err.code !== 'offline') throw err;
+  }
+}
+
 export async function refreshInteractions(): Promise<void> {
   const ws = await workspace();
   if (!ws) return;

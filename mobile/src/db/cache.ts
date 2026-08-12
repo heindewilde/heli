@@ -298,3 +298,89 @@ function toInteraction(r: Record<string, unknown>): InteractionRow {
     pending: (r.pending as number) ?? 0
   };
 }
+
+/* ── companies ───────────────────────────────────────────────────────────── */
+
+export type CompanyRow = {
+  id: string;
+  name: string;
+  domain: string | null;
+  url: string | null;
+  logoUrl: string | null;
+  faviconUrl: string | null;
+  industry: string | null;
+  location: string | null;
+  isFavorite: number;
+  isArchived: number;
+  createdAt: number;
+  updatedAt: number;
+  lastAt: number | null;
+  pending?: number;
+};
+
+export async function upsertCompanies(workspaceId: string, rows: CompanyRow[]): Promise<void> {
+  if (rows.length === 0) return;
+  const handle = await db();
+  await handle.withTransactionAsync(async () => {
+    for (const c of rows) {
+      await handle.runAsync(
+        `INSERT INTO companies
+           (id, workspace_id, name, domain, url, logo_url, favicon_url, industry,
+            location, priority, status_id, is_favorite, is_archived, created_at,
+            updated_at, last_at, pending)
+         VALUES (?,?,?,?,?,?,?,?,?,NULL,NULL,?,?,?,?,?,0)
+         ON CONFLICT(id) DO UPDATE SET
+           name=excluded.name, domain=excluded.domain, url=excluded.url,
+           logo_url=excluded.logo_url, favicon_url=excluded.favicon_url,
+           industry=excluded.industry, location=excluded.location,
+           is_favorite=excluded.is_favorite, is_archived=excluded.is_archived,
+           updated_at=excluded.updated_at, last_at=excluded.last_at`,
+        [
+          c.id, workspaceId, c.name, c.domain, c.url, c.logoUrl, c.faviconUrl,
+          c.industry, c.location, c.isFavorite, c.isArchived, c.createdAt,
+          c.updatedAt, c.lastAt
+        ]
+      );
+    }
+  });
+  notify('companies');
+}
+
+export async function listCompanies(
+  workspaceId: string,
+  opts: { limit?: number; q?: string } = {}
+): Promise<CompanyRow[]> {
+  const handle = await db();
+  const where: string[] = ['workspace_id = ?', 'is_archived = 0'];
+  const args: SQLiteBindValue[] = [workspaceId];
+  if (opts.q) {
+    where.push('(name LIKE ? OR domain LIKE ? OR industry LIKE ?)');
+    const like = `%${opts.q}%`;
+    args.push(like, like, like);
+  }
+  const rows = await handle.getAllAsync<Record<string, unknown>>(
+    `SELECT * FROM companies WHERE ${where.join(' AND ')}
+      ORDER BY created_at DESC, id DESC LIMIT ?`,
+    [...args, opts.limit ?? 50] as SQLiteBindValue[]
+  );
+  return rows.map(toCompany);
+}
+
+function toCompany(r: Record<string, unknown>): CompanyRow {
+  return {
+    id: r.id as string,
+    name: r.name as string,
+    domain: (r.domain as string) ?? null,
+    url: (r.url as string) ?? null,
+    logoUrl: (r.logo_url as string) ?? null,
+    faviconUrl: (r.favicon_url as string) ?? null,
+    industry: (r.industry as string) ?? null,
+    location: (r.location as string) ?? null,
+    isFavorite: (r.is_favorite as number) ?? 0,
+    isArchived: (r.is_archived as number) ?? 0,
+    createdAt: r.created_at as number,
+    updatedAt: r.updated_at as number,
+    lastAt: (r.last_at as number) ?? null,
+    pending: (r.pending as number) ?? 0
+  };
+}
