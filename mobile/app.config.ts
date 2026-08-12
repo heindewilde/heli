@@ -93,6 +93,16 @@ const config: ExpoConfig = {
     // that arrives a beat after first paint reflows every screen once, which is
     // the flash of unstyled text that no native app has.
     ['expo-font', { fonts: ['./assets/fonts/Geist-Regular.ttf', './assets/fonts/Geist-Medium.ttf', './assets/fonts/Geist-SemiBold.ttf', './assets/fonts/Geist-Bold.ttf'] }],
+    // The iOS share extension and the Android ACTION_SEND filter. Requires a
+    // dev build rather than Expo Go — which is why it landed after the core
+    // screens rather than before them.
+    [
+      'expo-share-intent',
+      {
+        iosActivationRules: { NSExtensionActivationSupportsWebURLWithMaxCount: 1, NSExtensionActivationSupportsText: true },
+        androidIntentFilters: ['text/plain']
+      }
+    ],
     [
       'expo-notifications',
       {

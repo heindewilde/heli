@@ -9,6 +9,7 @@ import { loadCredential } from '../src/api/credentials';
 import { setSignedOutHandler } from '../src/api/client';
 import { startReplayer } from '../src/db/sync';
 import { usePushRouting } from '../src/native/push';
+import { useShareIntent } from 'expo-share-intent';
 import '../global.css';
 
 /**
@@ -33,6 +34,10 @@ function Root() {
   // cold — the second is the one that gets forgotten.
   usePushRouting();
 
+  // A share can arrive while the app is running or launch it, and either way
+  // the capture screen has to win over the pairing/tabs redirect below.
+  const { hasShareIntent } = useShareIntent({ resetOnBackground: false });
+
   useEffect(() => {
     loadCredential()
       .then((c) => setPaired(!!c))
@@ -47,9 +52,21 @@ function Root() {
   useEffect(() => {
     if (!ready) return;
     const onPairing = segments[0] === 'pair';
-    if (!paired && !onPairing) router.replace('/pair');
-    if (paired && onPairing) router.replace('/');
-  }, [ready, paired, segments, router]);
+    const onCapture = segments[0] === 'capture';
+
+    // Pairing always wins: a share is useless without a credential, and
+    // dropping someone into a capture form they cannot submit is worse than
+    // asking them to sign in first.
+    if (!paired) {
+      if (!onPairing) router.replace('/pair');
+      return;
+    }
+    if (hasShareIntent && !onCapture) {
+      router.replace('/capture');
+      return;
+    }
+    if (onPairing) router.replace('/');
+  }, [ready, paired, segments, router, hasShareIntent]);
 
   return (
     <>
