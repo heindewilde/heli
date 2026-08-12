@@ -8,6 +8,7 @@ import { Text } from '../../src/ui/Text';
 import { Pressable } from '../../src/ui/Pressable';
 import { Avatar } from '../../src/ui/Avatar';
 import { EmptyState } from '../../src/ui/EmptyState';
+import { Reminders } from '../../src/features/Reminders';
 import { useTheme } from '../../src/theme';
 import { useRows, refreshInteractions, useOnline, usePendingWrites } from '../../src/db/sync';
 import { listInteractions } from '../../src/db/cache';
@@ -75,6 +76,10 @@ export default function HomeScreen() {
         }
       >
         {!online || queued > 0 ? <ConnectionBar online={online} queued={queued} /> : null}
+
+        {/* First, because it is the only thing on this screen that is time-
+            sensitive. Renders nothing when there is nothing due. */}
+        <Reminders />
 
         <Section title="Recent activity" icon={<Clock size={14} color={t.c('--color-subtle')} />}>
           {recent.length === 0 ? (

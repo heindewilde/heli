@@ -94,6 +94,17 @@ const config: ExpoConfig = {
     // the flash of unstyled text that no native app has.
     ['expo-font', { fonts: ['./assets/fonts/Geist-Regular.ttf', './assets/fonts/Geist-Medium.ttf', './assets/fonts/Geist-SemiBold.ttf', './assets/fonts/Geist-Bold.ttf'] }],
     [
+      'expo-notifications',
+      {
+        icon: './assets/splash-icon.png',
+        color: '#15161a',
+        // A default channel importance rather than max: a reminder is something
+        // the user scheduled, not an emergency, and an app that arrives with a
+        // full-screen intent on Android gets its notifications turned off.
+        defaultChannel: 'reminders'
+      }
+    ],
+    [
       'expo-splash-screen',
       {
         image: './assets/splash-icon.png',

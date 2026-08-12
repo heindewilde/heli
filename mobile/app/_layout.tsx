@@ -8,6 +8,7 @@ import { SheetProvider } from '../src/ui/Sheet';
 import { loadCredential } from '../src/api/credentials';
 import { setSignedOutHandler } from '../src/api/client';
 import { startReplayer } from '../src/db/sync';
+import { usePushRouting } from '../src/native/push';
 import '../global.css';
 
 /**
@@ -27,6 +28,10 @@ function Root() {
   const segments = useSegments();
   const [ready, setReady] = useState(false);
   const [paired, setPaired] = useState(false);
+
+  // Handles both a tap while running and a tap that launched the app from
+  // cold — the second is the one that gets forgotten.
+  usePushRouting();
 
   useEffect(() => {
     loadCredential()
