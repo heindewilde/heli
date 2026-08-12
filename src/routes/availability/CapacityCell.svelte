@@ -22,11 +22,18 @@
     capacityMinutes: number;
     memberName: string;
     weekLabel: string;
+    /** Monday of this column, so the popover can open the day-level view. */
+    weekStartsAt: number;
     /** Rules a heavier left border where a month turns over. */
     monthBoundary: boolean;
   };
 
-  let { cell, capacityMinutes, memberName, weekLabel, monthBoundary }: Props = $props();
+  let { cell, capacityMinutes, memberName, weekLabel, weekStartsAt, monthBoundary }: Props =
+    $props();
+
+  const weekHref = $derived(
+    `/availability?view=week&from=${new Date(weekStartsAt).toISOString().slice(0, 10)}`
+  );
 
   const free = $derived(capacityMinutes - cell.allocated);
   const over = $derived(cell.allocated > capacityMinutes);
@@ -118,6 +125,13 @@
         Nothing booked. All {formatHours(capacityMinutes)} available.
       </p>
     {/if}
+
+    <!-- The obvious next question from a cell is "which days?", and that is a
+         different view of the same week. -->
+    <a
+      href={weekHref}
+      class="border-t border-[var(--color-border)] pt-2 text-xs text-[var(--color-muted)] underline hover:text-[var(--color-text)]"
+    >See this week day by day</a>
     </div>
   {/snippet}
 </Popover>
