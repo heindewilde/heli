@@ -1,5 +1,12 @@
 import { db } from './index';
 import type { SQLiteBindValue } from 'expo-sqlite';
+import {
+  UPSERT_COMPANY,
+  UPSERT_INTERACTION,
+  UPSERT_PERSON,
+  companiesQuery,
+  peopleQuery
+} from './statements';
 
 /**
  * Reading and writing the mirror.
@@ -80,22 +87,7 @@ export async function upsertPeople(workspaceId: string, rows: PersonRow[]): Prom
   await handle.withTransactionAsync(async () => {
     for (const p of rows) {
       await handle.runAsync(
-        `INSERT INTO people
-           (id, workspace_id, name, role, company_id, company_name, email, phone,
-            avatar_url, favicon_url, url, priority, status_id, is_favorite,
-            is_archived, created_at, updated_at, last_at, pending)
-         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,0)
-         ON CONFLICT(id) DO UPDATE SET
-           name=excluded.name, role=excluded.role, company_id=excluded.company_id,
-           company_name=excluded.company_name, email=excluded.email, phone=excluded.phone,
-           avatar_url=excluded.avatar_url, favicon_url=excluded.favicon_url, url=excluded.url,
-           priority=excluded.priority, status_id=excluded.status_id,
-           is_favorite=excluded.is_favorite, is_archived=excluded.is_archived,
-           updated_at=excluded.updated_at, last_at=excluded.last_at
-         -- Note: pending is deliberately absent from this SET list. A server row
-         -- landing while an optimistic edit is still queued must not clear the
-         -- marker that says so.
-        `,
+        UPSERT_PERSON,
         [
           p.id, workspaceId, p.name, p.role, p.companyId, p.companyName, p.email, p.phone,
           p.avatarUrl, p.faviconUrl, p.url, p.priority, p.statusId, p.isFavorite,
@@ -112,24 +104,10 @@ export async function listPeople(
   opts: { limit?: number; archived?: boolean; favorite?: boolean; q?: string } = {}
 ): Promise<PersonRow[]> {
   const handle = await db();
-  const where: string[] = ['workspace_id = ?'];
-  const args: SQLiteBindValue[] = [workspaceId];
-
-  where.push(opts.archived ? 'is_archived = 1' : 'is_archived = 0');
-  if (opts.favorite) where.push('is_favorite = 1');
-  if (opts.q) {
-    // A LIKE against the mirror, not FTS. Server-side search stays server-side:
-    // matching the quality of SQLite's FTS5 index here would mean shipping the
-    // workspace to the device to do it worse. This is the offline fallback.
-    where.push('(name LIKE ? OR company_name LIKE ? OR email LIKE ?)');
-    const like = `%${opts.q}%`;
-    args.push(like, like, like);
-  }
-
+  const { sql, args } = peopleQuery(opts);
   const rows = await handle.getAllAsync<Record<string, unknown>>(
-    `SELECT * FROM people WHERE ${where.join(' AND ')}
-      ORDER BY created_at DESC, id DESC LIMIT ?`,
-    [...args, opts.limit ?? 50] as SQLiteBindValue[]
+    sql,
+    [workspaceId, ...args] as SQLiteBindValue[]
   );
   return rows.map(toPerson);
 }
@@ -208,15 +186,7 @@ export async function upsertInteractions(
   await handle.withTransactionAsync(async () => {
     for (const i of rows) {
       await handle.runAsync(
-        `INSERT INTO interactions
-           (id, workspace_id, occurred_at, type, title, body, company_id,
-            company_name, people_json, created_at, updated_at, pending)
-         VALUES (?,?,?,?,?,?,?,?,?,?,?,0)
-         ON CONFLICT(id) DO UPDATE SET
-           occurred_at=excluded.occurred_at, type=excluded.type, title=excluded.title,
-           body=excluded.body, company_id=excluded.company_id,
-           company_name=excluded.company_name, people_json=excluded.people_json,
-           updated_at=excluded.updated_at, pending=0`,
+        UPSERT_INTERACTION,
         [
           i.id, workspaceId, i.occurredAt, i.type, i.title, i.body, i.companyId,
           i.companyName, JSON.stringify(i.people ?? []), i.createdAt, i.updatedAt
@@ -306,17 +276,7 @@ export async function upsertCompanies(workspaceId: string, rows: CompanyRow[]): 
   await handle.withTransactionAsync(async () => {
     for (const c of rows) {
       await handle.runAsync(
-        `INSERT INTO companies
-           (id, workspace_id, name, domain, url, logo_url, favicon_url, industry,
-            location, priority, status_id, is_favorite, is_archived, created_at,
-            updated_at, last_at, pending)
-         VALUES (?,?,?,?,?,?,?,?,?,NULL,NULL,?,?,?,?,?,0)
-         ON CONFLICT(id) DO UPDATE SET
-           name=excluded.name, domain=excluded.domain, url=excluded.url,
-           logo_url=excluded.logo_url, favicon_url=excluded.favicon_url,
-           industry=excluded.industry, location=excluded.location,
-           is_favorite=excluded.is_favorite, is_archived=excluded.is_archived,
-           updated_at=excluded.updated_at, last_at=excluded.last_at`,
+        UPSERT_COMPANY,
         [
           c.id, workspaceId, c.name, c.domain, c.url, c.logoUrl, c.faviconUrl,
           c.industry, c.location, c.isFavorite, c.isArchived, c.createdAt,
@@ -333,17 +293,10 @@ export async function listCompanies(
   opts: { limit?: number; q?: string } = {}
 ): Promise<CompanyRow[]> {
   const handle = await db();
-  const where: string[] = ['workspace_id = ?', 'is_archived = 0'];
-  const args: SQLiteBindValue[] = [workspaceId];
-  if (opts.q) {
-    where.push('(name LIKE ? OR domain LIKE ? OR industry LIKE ?)');
-    const like = `%${opts.q}%`;
-    args.push(like, like, like);
-  }
+  const { sql, args } = companiesQuery(opts);
   const rows = await handle.getAllAsync<Record<string, unknown>>(
-    `SELECT * FROM companies WHERE ${where.join(' AND ')}
-      ORDER BY created_at DESC, id DESC LIMIT ?`,
-    [...args, opts.limit ?? 50] as SQLiteBindValue[]
+    sql,
+    [workspaceId, ...args] as SQLiteBindValue[]
   );
   return rows.map(toCompany);
 }

@@ -1,4 +1,7 @@
 import * as SQLite from 'expo-sqlite';
+// The SQL itself lives in a dependency-free module so tests/mirror.test.ts can
+// run these exact statements against a real SQLite. One copy, not two.
+import { DROP_MIRROR, SCHEMA, SCHEMA_VERSION } from './statements';
 
 /**
  * The local mirror.
@@ -22,104 +25,9 @@ import * as SQLite from 'expo-sqlite';
  * tenant's rows.
  */
 
-const SCHEMA_VERSION = 1;
 
 let dbPromise: Promise<SQLite.SQLiteDatabase> | null = null;
 
-const SCHEMA = `
-CREATE TABLE IF NOT EXISTS people (
-  id TEXT PRIMARY KEY,
-  workspace_id TEXT NOT NULL,
-  name TEXT NOT NULL,
-  role TEXT,
-  company_id TEXT,
-  company_name TEXT,
-  email TEXT,
-  phone TEXT,
-  avatar_url TEXT,
-  favicon_url TEXT,
-  url TEXT,
-  priority INTEGER,
-  status_id TEXT,
-  is_favorite INTEGER NOT NULL DEFAULT 0,
-  is_archived INTEGER NOT NULL DEFAULT 0,
-  created_at INTEGER NOT NULL,
-  updated_at INTEGER NOT NULL,
-  last_at INTEGER,
-  -- Set while an optimistic write for this row is still in the outbox, so the
-  -- UI can mark it pending without joining across tables on every render.
-  pending INTEGER NOT NULL DEFAULT 0
-);
-CREATE INDEX IF NOT EXISTS idx_people_ws ON people(workspace_id, created_at DESC, id DESC);
-
-CREATE TABLE IF NOT EXISTS companies (
-  id TEXT PRIMARY KEY,
-  workspace_id TEXT NOT NULL,
-  name TEXT NOT NULL,
-  domain TEXT,
-  url TEXT,
-  logo_url TEXT,
-  favicon_url TEXT,
-  industry TEXT,
-  location TEXT,
-  priority INTEGER,
-  status_id TEXT,
-  is_favorite INTEGER NOT NULL DEFAULT 0,
-  is_archived INTEGER NOT NULL DEFAULT 0,
-  created_at INTEGER NOT NULL,
-  updated_at INTEGER NOT NULL,
-  last_at INTEGER,
-  pending INTEGER NOT NULL DEFAULT 0
-);
-CREATE INDEX IF NOT EXISTS idx_companies_ws ON companies(workspace_id, created_at DESC, id DESC);
-
-CREATE TABLE IF NOT EXISTS interactions (
-  id TEXT PRIMARY KEY,
-  workspace_id TEXT NOT NULL,
-  occurred_at INTEGER NOT NULL,
-  type TEXT NOT NULL,
-  title TEXT NOT NULL,
-  body TEXT,
-  company_id TEXT,
-  company_name TEXT,
-  -- JSON array of { id, name, avatarUrl }, as v1 returns it. Denormalised
-  -- because it is only ever rendered, never queried.
-  people_json TEXT,
-  created_at INTEGER NOT NULL,
-  updated_at INTEGER NOT NULL,
-  pending INTEGER NOT NULL DEFAULT 0
-);
-CREATE INDEX IF NOT EXISTS idx_interactions_ws ON interactions(workspace_id, occurred_at DESC);
-
-/**
- * Writes the server has not accepted yet.
- *
- * Survives a schema reset, because dropping it would silently discard work
- * somebody did offline.
- */
-CREATE TABLE IF NOT EXISTS outbox (
-  id TEXT PRIMARY KEY,
-  workspace_id TEXT NOT NULL,
-  created_at INTEGER NOT NULL,
-  method TEXT NOT NULL,
-  path TEXT NOT NULL,
-  body TEXT,
-  -- Sent as Idempotency-Key. Generated once, at enqueue time, so a retry after
-  -- an ambiguous timeout cannot create a second record.
-  idempotency_key TEXT NOT NULL,
-  entity_table TEXT,
-  entity_id TEXT,
-  -- JSON snapshot of the row before the optimistic patch, for rollback.
-  prev TEXT,
-  attempts INTEGER NOT NULL DEFAULT 0,
-  next_attempt_at INTEGER NOT NULL DEFAULT 0,
-  last_error TEXT,
-  state TEXT NOT NULL DEFAULT 'pending'
-);
-CREATE INDEX IF NOT EXISTS idx_outbox_ready ON outbox(state, next_attempt_at, created_at);
-
-CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);
-`;
 
 export async function db(): Promise<SQLite.SQLiteDatabase> {
   if (!dbPromise) dbPromise = open();
@@ -142,11 +50,7 @@ async function open(): Promise<SQLite.SQLiteDatabase> {
     // Drop and recreate rather than migrate. Everything here is a copy of
     // server state and can be refetched; the outbox is deliberately excluded
     // because it is the one table holding data the server has never seen.
-    await handle.execAsync(`
-      DROP TABLE IF EXISTS people;
-      DROP TABLE IF EXISTS companies;
-      DROP TABLE IF EXISTS interactions;
-    `);
+    await handle.execAsync(DROP_MIRROR);
     await handle.execAsync(SCHEMA);
     await handle.runAsync(
       `INSERT OR REPLACE INTO meta (key, value) VALUES ('schema_version', ?)`,

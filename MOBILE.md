@@ -55,9 +55,15 @@ native modules:
 | Notifications | no native module | guarded; the app is quiet rather than throwing |
 | **The SQLite mirror** | `expo-sqlite`'s WASM backend needs cross-origin isolation (COOP/COEP), which the dev server does not send | **not handled** — lists stay empty on web |
 
-The last one is the limit of what web can verify. Everything up to it — pairing,
-the API client, auth headers, navigation, layout — is real; anything that reads
-from the mirror is not. Use a simulator or a device for that.
+The last one is the limit of what a browser can show you. It is *not* the limit
+of what is verified: `expo-sqlite` binds to the platform, but the SQL does not,
+so the statements live in `mobile/src/db/statements.ts` with no imports and
+`tests/mirror.test.ts` runs those exact strings against a real SQLite through
+`@libsql/client`. The schema, the upserts, the workspace filtering, the search
+and the outbox queries are covered on every `npm run check`.
+
+What that leaves needing a device is the binding itself — which is the part
+least likely to be wrong, and the part nobody can fix from here anyway.
 
 The app must also be allowed through CORS to talk to a local server, since a
 browser sends an `Origin` and a phone does not:
