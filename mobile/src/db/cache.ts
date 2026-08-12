@@ -265,24 +265,6 @@ export async function insertLocalInteraction(
   notify('interactions');
 }
 
-/**
- * Swap a locally-created row for the one the server returned.
- *
- * The server assigns the real id, so anything holding the local one — a detail
- * screen, another queued write — has to be repointed. Milestone 1 only creates
- * interactions, which nothing references, so this is a delete-and-insert; when
- * offline *person* creation lands, the outbox will need its paths rewritten too.
- */
-export async function replaceLocalInteraction(
-  workspaceId: string,
-  localId: string,
-  row: InteractionRow
-): Promise<void> {
-  const handle = await db();
-  await handle.runAsync(`DELETE FROM interactions WHERE id = ?`, localId);
-  await upsertInteractions(workspaceId, [row]);
-}
-
 function toInteraction(r: Record<string, unknown>): InteractionRow {
   return {
     id: r.id as string,

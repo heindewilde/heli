@@ -1,4 +1,5 @@
 import { db } from './index';
+import { notify } from './cache';
 import { ApiError, request } from '../api/client';
 
 /**
@@ -173,13 +174,29 @@ export async function flush(): Promise<FlushResult> {
       if (!entry) break;
 
       try {
-        await request(entry.path, {
+        const created = await request<Record<string, unknown> | undefined>(entry.path, {
           method: entry.method,
           body: entry.body ? JSON.parse(entry.body) : undefined,
           idempotencyKey: entry.idempotency_key
         });
+
         await handle.runAsync(`DELETE FROM outbox WHERE id = ?`, entry.id);
-        await clearPending(entry.entity_table, entry.entity_id);
+
+        /**
+         * A create has to swap its local row for the server's.
+         *
+         * The row was inserted under a `local_…` id so it could appear
+         * instantly; the server assigns the real one. Without this swap the
+         * next list refresh upserts the server's copy *alongside* the local
+         * one and every interaction logged offline shows up twice — which
+         * looks like the send happened twice, i.e. exactly the failure
+         * `Idempotency-Key` exists to rule out.
+         */
+        if (entry.method === 'POST' && entry.entity_table && entry.entity_id && created?.id) {
+          await replaceLocal(entry.entity_table, entry.entity_id, created);
+        } else {
+          await clearPending(entry.entity_table, entry.entity_id);
+        }
         result.sent++;
       } catch (err) {
         const api = err instanceof ApiError ? err : null;
@@ -220,6 +237,31 @@ async function clearPending(table: string | null, id: string | null): Promise<vo
   if (!table || !id) return;
   const handle = await db();
   await handle.runAsync(`UPDATE ${table} SET pending = 0 WHERE id = ?`, id);
+  notify(table);
+}
+
+/**
+ * Delete the local placeholder now that the server row exists.
+ *
+ * Deliberately a delete rather than an id rewrite: the caller's next refresh
+ * upserts the server's version with every field it knows about, and rewriting
+ * the id here would leave a row carrying whatever the client guessed at insert
+ * time until something overwrote it.
+ *
+ * When offline *person* creation lands this will need to rewrite queued outbox
+ * paths too — an interaction logged against a person who only exists locally
+ * references an id the server has never seen. Interactions are referenced by
+ * nothing, which is why they were safe to do first.
+ */
+async function replaceLocal(
+  table: string,
+  localId: string,
+  serverRow: Record<string, unknown>
+): Promise<void> {
+  const handle = await db();
+  await handle.runAsync(`DELETE FROM ${table} WHERE id = ?`, localId);
+  void serverRow;
+  notify(table);
 }
 
 async function rollback(entry: {
