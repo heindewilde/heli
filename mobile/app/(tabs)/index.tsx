@@ -11,6 +11,7 @@ import { EmptyState } from '../../src/ui/EmptyState';
 import { Reminders } from '../../src/features/Reminders';
 import { useTheme } from '../../src/theme';
 import { useRows, useWorkspace, refreshInteractions, useOnline, usePendingWrites } from '../../src/db/sync';
+import { useRefreshOnFocus } from '../../src/db/useRefreshOnFocus';
 import { listInteractions } from '../../src/db/cache';
 import { dayBucket, formatTime, TYPE_LABELS } from '../../../src/lib/interactionMeta';
 import type { InteractionType } from '../../../src/lib/interactionTypes';
@@ -50,6 +51,8 @@ export default function HomeScreen() {
       setRefreshing(false);
     }
   }, []);
+
+  useRefreshOnFocus(refreshInteractions);
 
   const recent = rows ?? [];
   const greeting = greetingFor(new Date());

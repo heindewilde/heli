@@ -133,7 +133,9 @@ async function createDevice(
   input: { name: string; platform: string; appVersion?: string | null; workspaceId?: string | null }
 ): Promise<{ device: Device; secret: string }> {
   const name = input.name.trim().slice(0, 60) || 'Mobile device';
-  const platform = input.platform === 'android' ? 'android' : 'ios';
+  // 'web' is a real answer during development (`expo start --web`); recording
+  // it as 'android' made a browser session look like a phone in Settings.
+  const platform = ['ios', 'android', 'web'].includes(input.platform) ? input.platform : 'ios';
   const secret = `${PREFIX}_${region}_dev_${randomBytes(SECRET_BYTES).toString('base64url')}`;
   const now = Date.now();
 

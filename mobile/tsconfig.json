@@ -4,20 +4,15 @@
     "strict": true,
     "noEmit": true,
     "jsx": "react-jsx",
-    "types": ["node"],
+    "types": [
+      "node"
+    ],
     "paths": {
-      "@/*": ["./src/*"]
+      "@/*": [
+        "./src/*"
+      ]
     }
   },
-  // The `include` list is the manifest of the shared surface, and it is meant to
-  // be read as one. `extension/tsconfig.json` uses the same trick for its single
-  // reach-across (`../src/lib/cleanUrl.ts`): naming the files explicitly is what
-  // lets a standalone tsconfig type-check code that lives outside its root.
-  //
-  // Adding a line here is the moment to ask whether the module is genuinely
-  // dependency-free — `scripts/check-shared.ts` enforces that it is, because
-  // Metro's `disableHierarchicalLookup` means an import it grows will not
-  // resolve at bundle time.
   "include": [
     "src/**/*.ts",
     "src/**/*.tsx",
@@ -43,6 +38,8 @@
     "../src/lib/commands/fuzzy.ts",
     "../src/lib/outreach/render.ts",
     "../src/lib/outreach/platforms.ts",
-    "../src/lib/outreach/deepLink.ts"
+    "../src/lib/outreach/deepLink.ts",
+    ".expo/types/**/*.ts",
+    "expo-env.d.ts"
   ]
 }

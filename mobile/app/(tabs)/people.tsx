@@ -15,6 +15,7 @@ import { SegmentedControl } from '../../src/ui/SegmentedControl';
 import { useTheme } from '../../src/theme';
 import { haptics } from '../../src/ui/haptics';
 import { useRows, useWorkspace, refreshPeople, refreshCompanies, patchPerson } from '../../src/db/sync';
+import { useRefreshOnFocus } from '../../src/db/useRefreshOnFocus';
 import { listPeople, listCompanies, type PersonRow, type CompanyRow } from '../../src/db/cache';
 import { formatLastSeen } from '../../../src/lib/interactionMeta';
 
@@ -55,6 +56,13 @@ export default function PeopleScreen() {
     [ws, q]
   );
 
+  const onRefreshData = useCallback(async () => {
+    await Promise.all([
+      refreshPeople({ q: q.trim() || undefined }),
+      refreshCompanies({ q: q.trim() || undefined })
+    ]);
+  }, [q]);
+
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
     try {
@@ -69,6 +77,10 @@ export default function PeopleScreen() {
       setRefreshing(false);
     }
   }, [q]);
+
+  // Populates the mirror on first open and on every return to the tab. Without
+  // it the list is empty until someone thinks to pull down on it.
+  useRefreshOnFocus(onRefreshData);
 
   const showingPeople = tab === 'people';
   const loading = showingPeople ? loadingPeople : loadingCompanies;

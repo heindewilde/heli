@@ -40,7 +40,8 @@ export type PushResult = 'granted' | 'denied' | 'unsupported';
  * failure for something that is simply not available.
  */
 export async function registerForPush(): Promise<PushResult> {
-  if (!Device.isDevice) return 'unsupported';
+  // A simulator and a browser both report this, and neither can receive a push.
+  if (Platform.OS === 'web' || !Device.isDevice) return 'unsupported';
 
   if (Platform.OS === 'android') {
     // Android needs a channel before anything will show, and the channel — not
@@ -95,9 +96,15 @@ export function usePushRouting(): void {
       // route that would 404.
     };
 
-    void Notifications.getLastNotificationResponseAsync().then((response) => {
-      route(response?.notification.request.content.data);
-    });
+    // Guarded, because these throw rather than no-op where the native module is
+    // absent — `expo start --web` raised an unhandled UnavailabilityError on
+    // every launch. Notifications are a native affordance; a platform without
+    // them should be quiet about it, not noisy.
+    if (Platform.OS === 'web') return;
+
+    void Notifications.getLastNotificationResponseAsync()
+      .then((response) => route(response?.notification.request.content.data))
+      .catch(() => {});
 
     const sub = Notifications.addNotificationResponseReceivedListener((response) => {
       route(response.notification.request.content.data);

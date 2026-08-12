@@ -311,5 +311,26 @@ const handleRequest: Handle = async ({ event, resolve }) => {
   // malformed Authorization header falls through to the cookie branch above —
   // still have to match the documented envelope.
   const shaped = isPublicApi ? await reshapeApiError(response) : response;
+
+  /**
+   * CORS on the non-bearer path too.
+   *
+   * The bearer branch above returns early and applies this itself, which was
+   * everything /api/v1 needed while every call carried a token. It no longer
+   * is: `POST /api/v1/pairing/claim` is deliberately unauthenticated — the
+   * phone has no credential yet, the code is the proof — so it lands here, and
+   * without this the preflight succeeded while the real response was blocked.
+   *
+   * `/api/health` is included because it is the documented way a client checks
+   * a server URL before pairing against it, and it is entirely public: no auth,
+   * and a body of `{ status, version }`.
+   *
+   * Still gated on the origin allowlist, and `Access-Control-Allow-Credentials`
+   * is still never sent — so a cookie session cannot ride any of this.
+   */
+  if (isPublicApi || event.url.pathname === '/api/health') {
+    withCors(shaped, origin);
+  }
+
   return maybeCompress(shaped, event.request.headers.get('accept-encoding'));
 };

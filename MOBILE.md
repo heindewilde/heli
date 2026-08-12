@@ -42,6 +42,36 @@ and type the code into the app. On the simulator the server URL needs to be
 reachable from it — `http://localhost:5173` works, since the simulator shares
 the host's network.
 
+### Developing against `expo start --web`
+
+`expo start --web` renders the same app through react-native-web and costs a
+fraction of a simulator, which makes it a good way to check screens, routing and
+API wiring. Three things do not work there, all for the same reason — they are
+native modules:
+
+| | Why | Handled |
+|---|---|---|
+| SecureStore | no web implementation | falls back to `localStorage`, **web only**, see `api/credentials.ts` |
+| Notifications | no native module | guarded; the app is quiet rather than throwing |
+| **The SQLite mirror** | `expo-sqlite`'s WASM backend needs cross-origin isolation (COOP/COEP), which the dev server does not send | **not handled** — lists stay empty on web |
+
+The last one is the limit of what web can verify. Everything up to it — pairing,
+the API client, auth headers, navigation, layout — is real; anything that reads
+from the mirror is not. Use a simulator or a device for that.
+
+The app must also be allowed through CORS to talk to a local server, since a
+browser sends an `Origin` and a phone does not:
+
+```bash
+EXTENSION_ORIGINS=http://localhost:8085 node build/index.js
+```
+
+`scripts/dev-pair.ts` mints a pairing code without going through Settings:
+
+```bash
+DB_PATH=/tmp/heli-dev/dev.db npx tsx scripts/dev-pair.ts
+```
+
 **What still needs your accounts:** EAS builds and store submission (Expo,
 Apple, Google), and push *delivery*, which needs APNs/FCM credentials in EAS
 and a physical device — the simulator cannot receive a notification at all.

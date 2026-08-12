@@ -5,7 +5,7 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { ThemeProvider, useTheme } from '../src/theme';
 import { SheetProvider } from '../src/ui/Sheet';
-import { loadCredential } from '../src/api/credentials';
+import { loadCredential, onCredentialChange } from '../src/api/credentials';
 import { setSignedOutHandler } from '../src/api/client';
 import { startReplayer } from '../src/db/sync';
 import { usePushRouting } from '../src/native/push';
@@ -42,7 +42,15 @@ function Root() {
     loadCredential()
       .then((c) => setPaired(!!c))
       .finally(() => setReady(true));
-    return startReplayer();
+
+    // Pairing and signing out both happen on screens that cannot reach this
+    // state directly, so the credential module is what reports them.
+    const unsubscribe = onCredentialChange((c) => setPaired(!!c));
+    const stopReplayer = startReplayer();
+    return () => {
+      unsubscribe();
+      stopReplayer();
+    };
   }, []);
 
   // A 401 anywhere wipes the credential; this is what turns that into a

@@ -60,10 +60,9 @@ export default function PairScreen() {
       }
 
       const result = await claimPairing(origin, code, {
-        name: Application.applicationName
-          ? `${Platform.OS === 'ios' ? 'iPhone' : 'Android'}`
-          : 'Mobile device',
-        platform: Platform.OS === 'ios' ? 'ios' : 'android',
+        name:
+          Platform.OS === 'ios' ? 'iPhone' : Platform.OS === 'android' ? 'Android' : 'Browser',
+        platform: Platform.OS,
         appVersion: Application.nativeApplicationVersion ?? '0.1.0'
       });
 

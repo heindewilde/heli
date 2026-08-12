@@ -1,3 +1,4 @@
+import { Platform } from 'react-native';
 import * as SecureStore from 'expo-secure-store';
 
 /**
@@ -17,6 +18,37 @@ import * as SecureStore from 'expo-secure-store';
 
 const KEY = 'heli.credential.v1';
 
+/**
+ * `expo-secure-store` has no web implementation and throws there.
+ *
+ * That matters because `expo start --web` is a real development surface, and
+ * the failure was worse than "unsupported": the pairing request *succeeded*,
+ * the server created a device and consumed the single-use code, and only then
+ * did storage throw — so the app reported "Could not connect" for a pairing
+ * that had actually happened, and the code could not be reused to try again.
+ *
+ * **localStorage is not secure storage**, and this is deliberately web-only.
+ * The Keychain and Keystore are the whole reason a bearer credential is safe to
+ * keep on a device; a browser tab has no equivalent, and pretending otherwise
+ * by using this on native would be a real downgrade. `Platform.OS === 'web'` is
+ * the guard, and it is not a preference.
+ */
+const web = Platform.OS === 'web';
+
+const store = {
+  async get(key: string): Promise<string | null> {
+    return web ? globalThis.localStorage?.getItem(key) ?? null : SecureStore.getItemAsync(key);
+  },
+  async set(key: string, value: string): Promise<void> {
+    if (web) globalThis.localStorage?.setItem(key, value);
+    else await SecureStore.setItemAsync(key, value);
+  },
+  async remove(key: string): Promise<void> {
+    if (web) globalThis.localStorage?.removeItem(key);
+    else await SecureStore.deleteItemAsync(key);
+  }
+};
+
 export type Credential = {
   /** Origin only, no trailing slash — e.g. `https://heli.so`. */
   server: string;
@@ -28,21 +60,50 @@ export type Credential = {
 
 let cached: Credential | null | undefined;
 
+/**
+ * Who to tell when the credential appears or disappears.
+ *
+ * The root layout decides between the pairing screen and the tabs, and it used
+ * to read the credential once at mount. That is wrong the moment pairing
+ * succeeds: the pair screen saved a token and navigated to `/`, the gate still
+ * believed there was none, and it redirected straight back — so a *successful*
+ * pairing landed you on the pairing screen, which reads as a failure.
+ *
+ * A listener rather than polling, because the two events that matter are both
+ * things this module already does.
+ */
+type Listener = (credential: Credential | null) => void;
+const listeners = new Set<Listener>();
+
+export function onCredentialChange(fn: Listener): () => void {
+  listeners.add(fn);
+  return () => listeners.delete(fn);
+}
+
+function announce(credential: Credential | null): void {
+  for (const fn of listeners) fn(credential);
+}
+
 export async function loadCredential(): Promise<Credential | null> {
   if (cached !== undefined) return cached;
-  const raw = await SecureStore.getItemAsync(KEY);
+  const raw = await store.get(KEY);
   cached = raw ? (JSON.parse(raw) as Credential) : null;
   return cached;
 }
 
 export async function saveCredential(c: Credential): Promise<void> {
+  const first = !cached;
   cached = c;
-  await SecureStore.setItemAsync(KEY, JSON.stringify(c));
+  await store.set(KEY, JSON.stringify(c));
+  // Only on appearing, not on every workspace echo — the gate cares about
+  // "is there a credential", and announcing each header update would churn it.
+  if (first) announce(c);
 }
 
 export async function clearCredential(): Promise<void> {
   cached = null;
-  await SecureStore.deleteItemAsync(KEY);
+  await store.remove(KEY);
+  announce(null);
 }
 
 /**
