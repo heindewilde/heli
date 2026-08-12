@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useRef, useState } from 'react';
 import { Linking, ScrollView, View } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -14,6 +14,7 @@ import { Text } from '../../src/ui/Text';
 import { Pressable } from '../../src/ui/Pressable';
 import { Avatar } from '../../src/ui/Avatar';
 import { Button } from '../../src/ui/Button';
+import { LogSheet, type LogSheetRef } from '../../src/features/LogSheet';
 import { useTheme } from '../../src/theme';
 import { haptics } from '../../src/ui/haptics';
 import { useRows, patchPerson, logInteraction } from '../../src/db/sync';
@@ -40,6 +41,7 @@ export default function PersonScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const [ws, setWs] = useState<string | null>(null);
+  const logSheet = useRef<LogSheetRef>(null);
 
   useRows('people', async () => {
     setWs((await loadCredential())?.workspaceId ?? null);
@@ -172,7 +174,7 @@ export default function PersonScreen() {
               size="sm"
               variant="ghost"
               icon={<Plus size={15} color={t.c('--color-interactive')} />}
-              onPress={() => void quickLog('note')}
+              onPress={() => logSheet.current?.open()}
               haptic="none"
             >
               Log
@@ -221,6 +223,8 @@ export default function PersonScreen() {
           )}
         </View>
       </ScrollView>
+
+      <LogSheet ref={logSheet} personId={person.id} personName={person.name} />
     </View>
   );
 }

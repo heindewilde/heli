@@ -81,9 +81,10 @@ export default function PeopleScreen() {
         </Pressable>
       }
     >
-      <View style={{ paddingHorizontal: 16, paddingVertical: 8 }}>
+      <View style={{ paddingHorizontal: 16, paddingVertical: 8, flexDirection: 'row', gap: 8 }}>
         <View
           style={{
+            flex: 1,
             flexDirection: 'row',
             alignItems: 'center',
             gap: 8,
@@ -97,7 +98,7 @@ export default function PeopleScreen() {
           <TextInput
             value={q}
             onChangeText={setQ}
-            placeholder="Search people"
+            placeholder="Filter this list"
             placeholderTextColor={t.c('--color-subtle')}
             autoCorrect={false}
             returnKeyType="search"
@@ -105,6 +106,26 @@ export default function PeopleScreen() {
             style={{ flex: 1, color: t.c('--color-text'), fontSize: 16, padding: 0 }}
           />
         </View>
+        {/* Filtering the list and searching the workspace are different acts:
+            one narrows what is already here (and works offline), the other asks
+            the server about everything. Conflating them is why a lot of apps
+            have a search box that sometimes finds things and sometimes does
+            not. */}
+        <Pressable
+          press="button"
+          onPress={() => router.push('/search')}
+          accessibilityLabel="Search everything"
+          style={{
+            width: 38,
+            height: 38,
+            alignItems: 'center',
+            justifyContent: 'center',
+            borderRadius: t.radius.md,
+            backgroundColor: t.c('--color-surface-2')
+          }}
+        >
+          <Search size={17} color={t.c('--color-interactive')} strokeWidth={2.2} />
+        </Pressable>
       </View>
 
       {loading && people.length === 0 ? (
