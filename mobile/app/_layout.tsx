@@ -4,6 +4,7 @@ import { StatusBar } from 'expo-status-bar';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { ThemeProvider, useTheme } from '../src/theme';
+import { SheetProvider } from '../src/ui/Sheet';
 import { loadCredential } from '../src/api/credentials';
 import { setSignedOutHandler } from '../src/api/client';
 import { startReplayer } from '../src/db/sync';
@@ -67,7 +68,11 @@ export default function RootLayout() {
     <GestureHandlerRootView style={{ flex: 1 }}>
       <SafeAreaProvider>
         <ThemeProvider>
-          <Root />
+          {/* Mounted once, so any screen can present a sheet without each one
+              carrying its own portal host. */}
+          <SheetProvider>
+            <Root />
+          </SheetProvider>
         </ThemeProvider>
       </SafeAreaProvider>
     </GestureHandlerRootView>
