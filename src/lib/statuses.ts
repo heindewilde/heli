@@ -15,13 +15,31 @@ export type StatusRow = {
   sortOrder: number;
 };
 
-// Resolved colors for each tone — text + dot share the same hue but at
+type ToneParts = { dot: string; text: string; bg: string; border: string };
+
+// The tokens each tone resolves to — text + dot share the same hue but at
 // different intensities so the pill reads from across the table without
 // shouting. Each maps to existing semantic tokens so dark mode follows.
-export const TONE_STYLES: Record<StatusTone, { dot: string; text: string; bg: string; border: string }> = {
-  gray:  { dot: 'var(--color-subtle)',  text: 'var(--color-muted)',   bg: 'var(--color-surface-2)',     border: 'var(--color-border)' },
-  blue:  { dot: 'var(--color-info)',    text: 'var(--color-info)',    bg: 'var(--color-info-bg)',       border: 'var(--color-info-border)' },
-  green: { dot: 'var(--color-success)', text: 'var(--color-success)', bg: 'var(--color-success-bg)',    border: 'var(--color-success-border)' },
-  amber: { dot: 'var(--color-warning)', text: 'var(--color-warning)', bg: 'var(--color-warning-bg)',    border: 'var(--color-warning-border)' },
-  red:   { dot: 'var(--color-danger)',  text: 'var(--color-danger)',  bg: 'var(--color-danger-bg)',     border: 'var(--color-danger-border)' }
+//
+// The names are the shared layer, for the same reason as `stageColors.ts`: a
+// `var()` reference needs a cascade and React Native has none, so the mobile
+// app resolves these names against the theme generated from src/app.css.
+// `TONE_STYLES` is derived, so a renamed token cannot reach one platform only.
+export const TONE_TOKENS: Record<StatusTone, ToneParts> = {
+  gray:  { dot: '--color-subtle',  text: '--color-muted',   bg: '--color-surface-2',   border: '--color-border' },
+  blue:  { dot: '--color-info',    text: '--color-info',    bg: '--color-info-bg',     border: '--color-info-border' },
+  green: { dot: '--color-success', text: '--color-success', bg: '--color-success-bg',  border: '--color-success-border' },
+  amber: { dot: '--color-warning', text: '--color-warning', bg: '--color-warning-bg',  border: '--color-warning-border' },
+  red:   { dot: '--color-danger',  text: '--color-danger',  bg: '--color-danger-bg',   border: '--color-danger-border' }
 };
+
+// Resolved colors for each tone, as inline `style=` values.
+export const TONE_STYLES: Record<StatusTone, ToneParts> = Object.fromEntries(
+  STATUS_TONE_LIST.map((tone) => {
+    const t = TONE_TOKENS[tone];
+    return [
+      tone,
+      { dot: `var(${t.dot})`, text: `var(${t.text})`, bg: `var(${t.bg})`, border: `var(${t.border})` }
+    ];
+  })
+) as Record<StatusTone, ToneParts>;

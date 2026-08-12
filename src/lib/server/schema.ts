@@ -140,6 +140,107 @@ export const apiTokens = sqliteTable(
   ]
 );
 
+/**
+ * A paired phone or tablet.
+ *
+ * Closer to `sessions` than to `api_tokens`, and the difference is the whole
+ * design. A personal access token is *workspace*-scoped: `api_tokens` carries a
+ * NOT NULL `workspace_id`, sits in both TENANT_TABLES and PERSONAL_TABLES, and
+ * is deleted when its owner leaves that workspace. A phone is a property of a
+ * *person* — it has to follow them across every workspace they belong to, the
+ * way a browser session does, and leaving one workspace must not unpair it.
+ *
+ * So there is deliberately **no `workspace_id` column at all**, and this table
+ * is in neither TENANT_TABLES nor PERSONAL_TABLES. Which workspace a request
+ * acts in is decided per request from the `X-Heli-Workspace` header, validated
+ * against the membership row exactly as `validateSession` does — so revocation
+ * for one workspace is the membership row disappearing, and needs no write here.
+ *
+ * `user_id` keeps its ON DELETE CASCADE, so `deleteAccount` still cleans up.
+ */
+export const devices = sqliteTable(
+  'devices',
+  {
+    id: text('id').primaryKey(),
+    userId: text('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    /** Shown in Settings → Devices, e.g. "Hein's iPhone". */
+    name: text('name').notNull(),
+    platform: text('platform').notNull(),
+    appVersion: text('app_version'),
+    /** Display-only leading segment. Never the secret. */
+    prefix: text('prefix').notNull(),
+    tokenHash: text('token_hash').notNull(),
+    /** Comma-separated TokenScope list. A device is minted `read,write`. */
+    scopes: text('scopes').notNull(),
+    /**
+     * Expo push token. On this row rather than its own table because its
+     * lifetime is exactly the device's: revoking the device must stop its
+     * notifications with no second write and no join.
+     */
+    pushToken: text('push_token'),
+    /**
+     * Which workspace the app last looked at, so a cold start lands where the
+     * user left off. Nullable and — like `sessions.active_workspace_id` —
+     * carrying no foreign key on purpose: a device outlives the workspaces it
+     * has visited, and an FK here would make `deleteAccount`'s workspace purge
+     * fail with a constraint error.
+     */
+    lastWorkspaceId: text('last_workspace_id'),
+    lastUsedAt: integer('last_used_at'),
+    expiresAt: integer('expires_at'),
+    revokedAt: integer('revoked_at'),
+    createdAt: integer('created_at').notNull()
+  },
+  (t) => [
+    uniqueIndex('uq_devices_hash').on(t.tokenHash),
+    index('idx_devices_user').on(t.userId, t.createdAt)
+  ]
+);
+
+/**
+ * A short-lived, single-use code that turns a signed-in browser into a paired
+ * device.
+ *
+ * Hashed, for the same reason `api_tokens.token_hash` is: the row is the only
+ * thing an attacker with database access gets, and it must not be a credential.
+ * Single-use is enforced by a conditional UPDATE on `claimed_at` checked via
+ * `rowsAffected`, so two phones scanning one QR cannot both win — the same
+ * pattern the scheduler lease uses.
+ *
+ * `workspace_id` is the workspace the pairing was started from, carried through
+ * so the new device opens where the user was. No foreign key, for the reason
+ * above.
+ */
+/**
+ * Cached responses for replayed writes. See `idempotency.ts`.
+ *
+ * Not in TENANT_TABLES: it holds no CRM data, only a response body, and is
+ * swept by age rather than by ownership. The `workspace_id` here is part of the
+ * lookup key — it stops a key reused across tenants surfacing another
+ * workspace's response — not tenancy in the sense the backfill means.
+ */
+export const idempotencyKeys = sqliteTable('idempotency_keys', {
+  keyHash: text('key_hash').primaryKey(),
+  workspaceId: text('workspace_id').notNull(),
+  status: integer('status').notNull(),
+  response: text('response').notNull(),
+  createdAt: integer('created_at').notNull()
+});
+
+export const devicePairings = sqliteTable('device_pairings', {
+  codeHash: text('code_hash').primaryKey(),
+  userId: text('user_id')
+    .notNull()
+    .references(() => users.id, { onDelete: 'cascade' }),
+  workspaceId: text('workspace_id'),
+  expiresAt: integer('expires_at').notNull(),
+  claimedAt: integer('claimed_at'),
+  deviceId: text('device_id'),
+  createdAt: integer('created_at').notNull()
+});
+
 export const workspaceMembers = sqliteTable(
   'workspace_members',
   {
@@ -439,6 +540,16 @@ export const reminders = sqliteTable(
     kind: text('kind').notNull(),
     refId: text('ref_id').notNull(),
     remindAt: integer('remind_at').notNull(),
+    /**
+     * When a push was sent for this reminder, or null.
+     *
+     * The whole delivery guarantee is this column plus the scheduler's lease:
+     * the sweep claims rows by stamping it *before* sending, so a second
+     * process — or the same one on the next tick — cannot pick up the same
+     * reminder. That makes a missed push possible and a duplicate push
+     * impossible, which is the right way round for a notification.
+     */
+    notifiedAt: integer('notified_at'),
     createdAt: integer('created_at').notNull()
   },
   // Reminders are PERSONAL: "remind me about this person". `workspace_id` exists

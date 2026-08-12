@@ -587,10 +587,14 @@ export async function deleteAccount(userId: string, region: string): Promise<voi
     await purgeWorkspace(region, workspaceId);
   }
 
-  // Cascades sessions, oauth_accounts and password_reset_tokens. Note it also
-  // cascades invites this user sent into *other* people's workspaces
-  // (invited_by_user_id ON DELETE CASCADE) — acceptable, but it means a
-  // pending invite can vanish when its sender deletes their account.
+  // Cascades sessions, oauth_accounts, password_reset_tokens, and — because
+  // both are user-scoped rather than workspace-scoped — devices and
+  // device_pairings. That is the whole cleanup for a paired phone: it holds no
+  // tenant data, so unlike api_tokens there is nothing for reassignAuthorship
+  // to have dealt with first. Note this also cascades invites this user sent
+  // into *other* people's workspaces (invited_by_user_id ON DELETE CASCADE) —
+  // acceptable, but it means a pending invite can vanish when its sender
+  // deletes their account.
   await db(region).delete(users).where(eq(users.id, userId));
   await primaryDb().delete(emailRouting).where(eq(emailRouting.email, user.email));
 }

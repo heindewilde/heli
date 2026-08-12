@@ -11,6 +11,7 @@ import { listMembers } from '$lib/server/workspaces';
 import { listPendingInvites } from '$lib/server/invites';
 import { isAdmin } from '$lib/server/scope';
 import { listTokens } from '$lib/server/tokens';
+import { listDevices } from '$lib/server/devices';
 import { listFeeds, redactFeed } from '$lib/server/calendar';
 import { env } from '$env/dynamic/private';
 
@@ -33,7 +34,7 @@ export const load: PageServerLoad = async ({ locals, url, cookies }) => {
    * for the workspace switcher, and page data inherits from layout data, so
    * asking again was a duplicated round trip on every settings load.
    */
-  const [p, c, i, u, members, invites, apiTokens, feeds] = await Promise.all([
+  const [p, c, i, u, members, invites, apiTokens, feeds, devices] = await Promise.all([
     d.select({ n: sql<number>`COUNT(*)` }).from(people).where(eq(people.workspaceId, s.workspaceId)).get(),
     d.select({ n: sql<number>`COUNT(*)` }).from(companies).where(eq(companies.workspaceId, s.workspaceId)).get(),
     d.select({ n: sql<number>`COUNT(*)` }).from(interactions).where(eq(interactions.workspaceId, s.workspaceId)).get(),
@@ -42,7 +43,11 @@ export const load: PageServerLoad = async ({ locals, url, cookies }) => {
     // Pending invites carry a live join link, so only admins may see them.
     isAdmin(s) ? listPendingInvites(s.region, s.workspaceId, origin) : Promise.resolve([]),
     listTokens(s),
-    listFeeds(s)
+    listFeeds(s),
+    // Devices are user-scoped, not workspace-scoped — they follow their owner
+    // across every workspace, so this is keyed by (region, user) with no
+    // workspace filter. See the `devices` table in schema.ts.
+    listDevices(s.region, s.userId)
   ]);
 
   const googleAuthEnabled = !!(env.GOOGLE_CLIENT_ID && env.GOOGLE_CLIENT_SECRET);
@@ -69,6 +74,7 @@ export const load: PageServerLoad = async ({ locals, url, cookies }) => {
   return {
     calendars,
     apiTokens,
+    devices,
     user: locals.user,
     workspace: {
       id: s.workspaceId,

@@ -1,0 +1,48 @@
+{
+  "extends": "expo/tsconfig.base",
+  "compilerOptions": {
+    "strict": true,
+    "noEmit": true,
+    "jsx": "react-jsx",
+    "types": ["node"],
+    "paths": {
+      "@/*": ["./src/*"]
+    }
+  },
+  // The `include` list is the manifest of the shared surface, and it is meant to
+  // be read as one. `extension/tsconfig.json` uses the same trick for its single
+  // reach-across (`../src/lib/cleanUrl.ts`): naming the files explicitly is what
+  // lets a standalone tsconfig type-check code that lives outside its root.
+  //
+  // Adding a line here is the moment to ask whether the module is genuinely
+  // dependency-free — `scripts/check-shared.ts` enforces that it is, because
+  // Metro's `disableHierarchicalLookup` means an import it grows will not
+  // resolve at bundle time.
+  "include": [
+    "src/**/*.ts",
+    "src/**/*.tsx",
+    "app.config.ts",
+    "nativewind-env.d.ts",
+    "../src/lib/cleanUrl.ts",
+    "../src/lib/duration.ts",
+    "../src/lib/weeks.ts",
+    "../src/lib/dates.ts",
+    "../src/lib/initials.ts",
+    "../src/lib/url.ts",
+    "../src/lib/polling.ts",
+    "../src/lib/branding.ts",
+    "../src/lib/richText.ts",
+    "../src/lib/priority.ts",
+    "../src/lib/statuses.ts",
+    "../src/lib/stageColors.ts",
+    "../src/lib/projectColor.ts",
+    "../src/lib/projectTypes.ts",
+    "../src/lib/interactionTypes.ts",
+    "../src/lib/interactionMeta.ts",
+    "../src/lib/collectionIconNames.ts",
+    "../src/lib/commands/fuzzy.ts",
+    "../src/lib/outreach/render.ts",
+    "../src/lib/outreach/platforms.ts",
+    "../src/lib/outreach/deepLink.ts"
+  ]
+}

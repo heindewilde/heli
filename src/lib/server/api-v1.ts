@@ -75,6 +75,11 @@ export function withCors(res: Response, origin: string | null): Response {
   if (origin && allowedOrigins().includes(origin)) {
     res.headers.set('Access-Control-Allow-Origin', origin);
     res.headers.append('Vary', 'Origin');
+    // The response header is only readable cross-origin if it is named here.
+    // A native app is not subject to CORS at all, but `expo web` is, and a
+    // client that cannot read back the workspace it acted in has to make a
+    // second call to /me to find out.
+    res.headers.set('Access-Control-Expose-Headers', 'x-heli-workspace');
   }
   return res;
 }
@@ -82,7 +87,29 @@ export function withCors(res: Response, origin: string | null): Response {
 export function preflight(origin: string | null): Response {
   const res = new Response(null, { status: 204 });
   res.headers.set('Access-Control-Allow-Methods', 'GET, POST, PATCH, DELETE, OPTIONS');
-  res.headers.set('Access-Control-Allow-Headers', 'authorization, content-type');
+  res.headers.set(
+    'Access-Control-Allow-Headers',
+    'authorization, content-type, x-heli-workspace, idempotency-key'
+  );
   res.headers.set('Access-Control-Max-Age', '86400');
   return withCors(res, origin);
+}
+
+/**
+ * Reject a bearer credential outright.
+ *
+ * Used on the endpoints that mint or manage credentials: a leaked token — or a
+ * stolen phone — must not be able to issue its own replacement, or to revoke
+ * the device its owner would use to lock it out. Both kinds are blocked, so
+ * these routes are cookie-session only.
+ */
+export function denyBearer(locals: App.Locals): Response | null {
+  if (!locals.token) return null;
+  return apiError(
+    'forbidden',
+    locals.token.kind === 'device'
+      ? 'A paired device cannot manage credentials. Sign in on the web.'
+      : 'Tokens cannot manage tokens. Sign in to the app.',
+    403
+  );
 }

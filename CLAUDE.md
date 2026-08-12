@@ -340,6 +340,20 @@ endpoint public.
 - **`api_tokens` is in `TENANT_TABLES` *and* `PERSONAL_TABLES`.** A token
   authenticates as its owner, so `reassignAuthorship` must delete it, never hand
   it to the workspace owner.
+  - **`devices` is in *neither*, and that is the whole difference.** A personal
+    access token is workspace-scoped; a paired phone is user-scoped and has to
+    follow its owner across every workspace they belong to, so the table has no
+    `workspace_id` column at all and the acting workspace arrives per request in
+    `X-Heli-Workspace`. Removing a member therefore does **not** unpair their
+    phone — the membership row disappears and the per-request lookup fails for
+    that workspace only. `deleteAccount` cleans up through the `user_id`
+    cascade. Full reasoning in `MOBILE.md`; don't "fix" the asymmetry.
+  - **No bearer credential can manage credentials.** `denyBearer` in `api-v1.ts`
+    rejects both kinds on `/api/v1/tokens*`, `/api/v1/pairing*` and
+    `/api/v1/devices` — a stolen phone is exactly the case where the web must be
+    the only thing that can revoke it. `/api/v1/devices/self` is the one
+    exception and takes no id parameter, so a device can only ever act on
+    itself.
 - **Role is read from the membership row at validation time**, exactly as for a
   session. A token can never outrank its owner, and a demotion takes effect
   without touching their tokens. Scopes only ever *narrow* — `requireApiScope`
@@ -674,6 +688,21 @@ guards exist to keep out. `esbuild` strips types without checking them, so for a
 while nothing checked them at all. `.github/workflows/ci.yml` runs
 `npm run typecheck` (plain `tsc --noEmit`) as a separate job; keep it there.
 
+**`mobile/` is the same arrangement, one size up — see `MOBILE.md`.** Same three
+guards, same separate CI job, same reason. Two rules from it belong here because
+they constrain code in `src/`:
+
+- **Modules listed in `mobile/tsconfig.json`'s `include` must stay
+  dependency-free.** Metro blocks the repo root's `node_modules`, so a shared
+  module that grows an import — a package, or a `$lib`/`$app`/`$env` alias — does
+  not resolve there. `scripts/check-shared.ts` runs in `npm run check` and fails
+  next to the web code being edited, because otherwise the break surfaces only in
+  the mobile CI job, long after a change that looks fine in the web app.
+- **`TYPE_META`'s tone strings in `interactions.ts` deliberately duplicate
+  `TYPE_TONE_TOKEN` in `interactionMeta.ts`.** Tailwind v4 extracts classes by
+  scanning source text, so deriving `text-[var(${token})]` from the map would
+  type-check, pass the tests, and ship every icon with no colour.
+
 - **Tokens, not cookies.** The session cookie is `SameSite=Lax`, so a fetch from
   `chrome-extension://…` will never carry it. That is a browser guarantee, not
   an obstacle — the extension pastes a `capture`-scoped personal access token
@@ -935,6 +964,11 @@ Every push to `main` triggers two workflows:
 - `package.json` version must stay in sync with the latest `v*` tag. Bump it whenever you'd bump the tag.
 - Both `:latest` and `:stable` are pushed on every tag build — don't remove either.
 - `VERSION` in the Dockerfile is set at build time via `--build-arg`. The value flows through to `PUBLIC_HELI_VERSION` (read in `src/lib/version.ts`). Don't add a runtime env var for this — it's intentionally baked in at build time.
+- **`mobile/package.json` and `extension/package.json` carry their own versions,
+  deliberately unlinked from this one.** A web deploy happens on every push to
+  `main`; a store submission must not. Mobile releases are tagged `mobile-v*`,
+  which matches neither `fly-deploy.yml`'s `v[0-9]*.[0-9]*.[0-9]*` filter nor
+  `docker.yml`'s `v*` — check that still holds before adding a tag trigger.
 
 ## Visual conventions
 

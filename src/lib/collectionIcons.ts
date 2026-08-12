@@ -61,8 +61,24 @@ import Stethoscope from 'lucide-svelte/icons/stethoscope';
 import GraduationCap from 'lucide-svelte/icons/graduation-cap';
 import TreePine from 'lucide-svelte/icons/tree-pine';
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export const COLLECTION_ICON_MAP: Record<string, any> = {
+import type { CollectionIconName } from './collectionIconNames';
+
+// The name list lives in a dependency-free module, because it is what gets
+// stored in `collections.icon` / `projects.icon` and what a consumer without
+// lucide-svelte — the mobile app, which renders the same picker from
+// lucide-react-native — needs in order to agree with this one.
+export {
+  COLLECTION_ICON_NAMES,
+  isCollectionIconName,
+  type CollectionIconName
+} from './collectionIconNames';
+
+// `satisfies` rather than a type annotation, deliberately: it checks that every
+// name in COLLECTION_ICON_NAMES has a component here (a missing one is a
+// compile error, not a blank square in the picker) while leaving the exported
+// map indexable by a plain string — `projects.icon` is `string | null` off the
+// wire and several call sites look up with it directly.
+const ICONS = {
   Users, User, UserCheck, UserPlus, Heart, HeartHandshake,
   Globe, Home, MapPin, Building2,
   Briefcase, Rocket, Target, Trophy, Award, Crown, Gem, Zap,
@@ -74,6 +90,8 @@ export const COLLECTION_ICON_MAP: Record<string, any> = {
   Gift, Coffee, Music, Camera, Mic, Flag, Layers, Link,
   Key, Shield, Hash, Network, Handshake, Megaphone,
   Plane, Stethoscope, GraduationCap, TreePine
-};
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+} satisfies Record<CollectionIconName, any>;
 
-export const COLLECTION_ICON_NAMES = Object.keys(COLLECTION_ICON_MAP) as string[];
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export const COLLECTION_ICON_MAP: Record<string, any> = ICONS;

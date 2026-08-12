@@ -18,7 +18,16 @@ export function priorityMeta(p: Priority) {
   return PRIORITIES.find((x) => x.value === p) ?? PRIORITIES[3];
 }
 
+// The custom property a tone resolves to. The name is the shared layer: a
+// `var()` reference only means something where there is a cascade, and React
+// Native has none, so the mobile app resolves this name against the theme
+// object generated from src/app.css. `toneColor` is derived from it so the two
+// spellings cannot drift.
+export function toneToken(tone: PriorityTone): string {
+  return `--color-${tone}`;
+}
+
 // Resolve a tone to the CSS variable consumers should paint with.
 export function toneColor(tone: PriorityTone): string {
-  return `var(--color-${tone})`;
+  return `var(${toneToken(tone)})`;
 }

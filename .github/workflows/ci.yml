@@ -53,3 +53,33 @@ jobs:
       # The build reaches outside extension/ for the app's icon source and
       # app.css palette, so it also proves those paths still resolve.
       - run: npm run build
+
+  mobile:
+    name: Mobile
+    runs-on: ubuntu-latest
+    # Its own install, for the same reason as the extension job and more so:
+    # Expo's dependency tree is an order of magnitude larger than esbuild's, so
+    # hoisting it into the root node_modules would put react and react-native
+    # into the closure `adapter-node` externalises against and
+    # `scripts/check-budget.ts` measures.
+    defaults:
+      run:
+        working-directory: mobile
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: mobile/package-lock.json
+      - run: npm ci
+      # Reaches into ../src/app.css, so it proves that path still resolves and
+      # that every value there is one React Native can parse — the script throws
+      # on an unconvertible colour or an unimplemented shadow role.
+      - run: npm run tokens
+      - run: npx tsc --noEmit
+      # The real guard. Metro is configured to see ../src/lib while the repo
+      # root's node_modules is blocked, and only a bundle proves both: a shared
+      # module that grows a dependency, or a package that silently resolved out
+      # of the app's closure on someone's laptop, fails here and nowhere else.
+      - run: npx expo export --platform ios --no-bytecode --output-dir /tmp/expo-ci

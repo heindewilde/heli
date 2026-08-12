@@ -1,28 +1,25 @@
 import type { RequestHandler } from './$types';
 import { requireScope } from '$lib/server/scope';
-import { apiError, apiOk } from '$lib/server/api-v1';
+import { apiError, apiOk, denyBearer } from '$lib/server/api-v1';
 import { createToken, listTokens, isTokenScope, type TokenScope } from '$lib/server/tokens';
 
 /**
- * Token management is cookie-session only, on purpose: a token must not be able
- * to mint another token, or revoking the one you know about would not be enough
- * to lock an attacker out.
+ * Token management is cookie-session only, on purpose: a bearer credential must
+ * not be able to mint another one, or revoking the one you know about would not
+ * be enough to lock an attacker out. `denyBearer` rejects paired devices for the
+ * same reason — a stolen phone is exactly the case where you want the web to be
+ * the only place that can issue a replacement.
  */
-function denyTokenAuth(locals: App.Locals): Response | null {
-  return locals.token
-    ? apiError('forbidden', 'Tokens cannot manage tokens. Sign in to the app.', 403)
-    : null;
-}
 
 export const GET: RequestHandler = async ({ locals }) => {
-  const denied = denyTokenAuth(locals);
+  const denied = denyBearer(locals);
   if (denied) return denied;
   const s = requireScope(locals);
   return apiOk(await listTokens(s));
 };
 
 export const POST: RequestHandler = async ({ request, locals }) => {
-  const denied = denyTokenAuth(locals);
+  const denied = denyBearer(locals);
   if (denied) return denied;
   const s = requireScope(locals);
 

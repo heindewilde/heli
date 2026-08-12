@@ -127,6 +127,70 @@ CREATE TABLE IF NOT EXISTS sessions (
 );
 CREATE INDEX IF NOT EXISTS idx_sessions_user ON sessions(user_id);
 
+-- A paired phone or tablet. Sits here beside sessions rather than near
+-- api_tokens because that is what it is: a per-person credential that follows
+-- its owner across workspaces. Note the absence of a workspace_id column — the
+-- acting workspace comes from the X-Heli-Workspace header on each request and
+-- is checked against the membership row, so losing a membership revokes access
+-- to that workspace without touching this table. See schema.ts for the full
+-- reasoning, and CLAUDE.md for why it is in neither TENANT_TABLES nor
+-- PERSONAL_TABLES.
+CREATE TABLE IF NOT EXISTS devices (
+  id TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  name TEXT NOT NULL,
+  platform TEXT NOT NULL,
+  app_version TEXT,
+  prefix TEXT NOT NULL,
+  token_hash TEXT NOT NULL,
+  scopes TEXT NOT NULL,
+  push_token TEXT,
+  -- Deliberately no REFERENCES: a device outlives the workspaces it visits, and
+  -- an FK here would make deleteAccount's workspace purge fail. Mirrors
+  -- sessions.active_workspace_id.
+  last_workspace_id TEXT,
+  last_used_at INTEGER,
+  expires_at INTEGER,
+  revoked_at INTEGER,
+  created_at INTEGER NOT NULL
+);
+CREATE UNIQUE INDEX IF NOT EXISTS uq_devices_hash ON devices(token_hash);
+CREATE INDEX IF NOT EXISTS idx_devices_user ON devices(user_id, created_at);
+
+-- Short-lived, single-use, hashed. Swept by the boot janitor alongside expired
+-- invites — hygiene, not a correctness mechanism, since expiry is checked on
+-- read.
+CREATE TABLE IF NOT EXISTS device_pairings (
+  code_hash TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  workspace_id TEXT,
+  expires_at INTEGER NOT NULL,
+  claimed_at INTEGER,
+  device_id TEXT,
+  created_at INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_device_pairings_expires ON device_pairings(expires_at);
+
+-- Replayed writes.
+--
+-- An offline client retries, and a retry after an ambiguous timeout — the
+-- request arrived, the response did not — would otherwise create a second
+-- record. People and companies already dedup on (workspace_id, url) and
+-- calendar interactions on external_id; this covers everything that does not,
+-- which is most of what a phone creates.
+--
+-- The stored response is replayed verbatim, so the client sees exactly what it
+-- would have seen. Swept by the boot janitor after 24h: a key older than that
+-- belongs to a request nobody is still waiting on.
+CREATE TABLE IF NOT EXISTS idempotency_keys (
+  key_hash TEXT PRIMARY KEY,
+  workspace_id TEXT NOT NULL,
+  status INTEGER NOT NULL,
+  response TEXT NOT NULL,
+  created_at INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_idempotency_created ON idempotency_keys(created_at);
+
 CREATE TABLE IF NOT EXISTS password_reset_tokens (
   token TEXT PRIMARY KEY,
   user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -643,6 +707,9 @@ async function execMany(c: Client, sql: string) {
 }
 
 const ALTERS: string[] = [
+  // Push delivery marker. Adding a statement here moves the sha1 that gates the
+  // one-shot DDL block, so it re-runs exactly once on the next boot.
+  `ALTER TABLE reminders ADD COLUMN notified_at INTEGER`,
   `ALTER TABLE people ADD COLUMN suggested_company_name TEXT`,
   `ALTER TABLE people ADD COLUMN suggested_company_url TEXT`,
   // Priority + per-user statuses for People & Companies (database-grid redesign)
@@ -1100,6 +1167,22 @@ async function janitor(c: Client) {
           sql: `UPDATE workspace_invites SET revoked_at = ?
                 WHERE accepted_at IS NULL AND revoked_at IS NULL AND expires_at < ?`,
           args: [now, now]
+        },
+        // Spent and expired pairing codes. Hygiene rather than correctness —
+        // claimPairing checks expiry and single-use on read, so a row surviving
+        // here grants nothing. Deleted outright rather than tombstoned: unlike a
+        // token hash there is nothing worth reserving, the code is 50 bits and
+        // lives 120 seconds.
+        {
+          sql: `DELETE FROM device_pairings WHERE expires_at < ? OR claimed_at IS NOT NULL`,
+          args: [now]
+        },
+        // Idempotency keys older than a day. Nobody is still retrying a request
+        // from yesterday, and the table would otherwise grow with every write a
+        // phone has ever made.
+        {
+          sql: `DELETE FROM idempotency_keys WHERE created_at < ?`,
+          args: [now - 24 * 60 * 60 * 1000]
         }
       ],
       'write'

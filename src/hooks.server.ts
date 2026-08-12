@@ -5,7 +5,8 @@ import { migrate } from '$lib/server/migrate';
 import { startScheduler } from '$lib/server/scheduler';
 import { validateSession, SESSION_COOKIE } from '$lib/server/auth';
 import { checkRateLimit, LIMITS, RateLimitError } from '$lib/server/rate-limit';
-import { validateToken } from '$lib/server/tokens';
+import { validateToken, type TokenScope } from '$lib/server/tokens';
+import { isDeviceSecret, validateDevice } from '$lib/server/devices';
 import { apiError, preflight, withCors } from '$lib/server/api-v1';
 import { setPrivate, setPrivateRevalidate, maybeCompress } from '$lib/server/cache';
 import { withTiming, current as currentTiming } from '$lib/server/timing';
@@ -138,19 +139,63 @@ const handleRequest: Handle = async ({ event, resolve }) => {
   // and answered 401 with no hint that a token had been seen at all.
   const auth = isPublicApi ? event.request.headers.get('authorization') : null;
   if (/^bearer\s+heli_/i.test(auth ?? '')) {
-    const validated = await validateToken((auth ?? '').replace(/^bearer\s+/i, '').trim());
-    if (!validated) {
-      return withCors(apiError('unauthorized', 'Invalid or expired token.', 401), origin);
+    const secret = (auth ?? '').replace(/^bearer\s+/i, '').trim();
+
+    // Two kinds of bearer credential share the `heli_<region>_` envelope. A
+    // paired device carries a `dev_` marker; see devices.ts for why that is
+    // unambiguous. Dispatching here rather than probing both tables means a
+    // device token never costs a wasted lookup in `api_tokens`, and a failure
+    // names the right thing.
+    let credential: { id: string; scopes: TokenScope[]; kind: 'pat' | 'device' };
+    if (isDeviceSecret(secret)) {
+      // A device picks its workspace per request; the role comes from the
+      // membership row, exactly as it does for a session.
+      const result = await validateDevice(
+        secret,
+        event.request.headers.get('x-heli-workspace')
+      );
+      if ('error' in result) {
+        const status = result.error === 'forbidden' ? 403 : 401;
+        return withCors(apiError(result.error, result.message, status), origin);
+      }
+      event.locals.user = result.user;
+      credential = { id: result.deviceId, scopes: result.scopes, kind: 'device' };
+    } else {
+      const validated = await validateToken(secret);
+      if (!validated) {
+        return withCors(apiError('unauthorized', 'Invalid or expired token.', 401), origin);
+      }
+      // A PAT is pinned to one workspace. Naming a different one is a mistake
+      // worth reporting rather than silently ignoring — a client that thinks it
+      // switched workspace and did not would read the wrong tenant's data as
+      // the right one.
+      const wanted = event.request.headers.get('x-heli-workspace');
+      if (wanted && wanted !== validated.user.workspaceId) {
+        return withCors(
+          apiError('forbidden', 'This token is bound to another workspace.', 403),
+          origin
+        );
+      }
+      event.locals.user = validated.user;
+      credential = { id: validated.tokenId, scopes: validated.scopes, kind: 'pat' };
     }
+
     // Identical AuthUser shape to a session, so requireScope and every query
     // helper below it work unchanged.
-    event.locals.user = validated.user;
     event.locals.sessionId = null;
-    event.locals.token = { id: validated.tokenId, scopes: validated.scopes };
+    event.locals.token = credential;
 
     try {
       const write = event.request.method !== 'GET';
-      checkRateLimit(write ? LIMITS.apiTokenWrite : LIMITS.apiToken, validated.tokenId);
+      const limit =
+        credential.kind === 'device'
+          ? write
+            ? LIMITS.deviceWrite
+            : LIMITS.device
+          : write
+            ? LIMITS.apiTokenWrite
+            : LIMITS.apiToken;
+      checkRateLimit(limit, credential.id);
     } catch (err) {
       if (err instanceof RateLimitError) {
         const res = apiError('rate_limited', 'Too many requests.', 429);
@@ -161,6 +206,9 @@ const handleRequest: Handle = async ({ event, resolve }) => {
     }
 
     const response = await resolve(event);
+    // Echo the workspace this request actually acted in, so a freshly paired
+    // app learns its default without a second round trip to /me.
+    response.headers.set('X-Heli-Workspace', event.locals.user.workspaceId);
     setPrivate(response);
     // A thrown `error()` — from requireScope, requireRole, a 404 on an unknown
     // route — serialises as SvelteKit's own `{ message }`. Reshape it, so the

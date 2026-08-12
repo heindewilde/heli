@@ -26,10 +26,26 @@ const ALLOW_FILES = new Set([
   'src/lib/server/scope.ts', // the doc comment
   'src/lib/server/tasks.ts', // SELECTs user_id as an output column, not a filter
   'src/lib/server/reminders-query.ts', // reminders are personal by design
+  // Dismissing a reminder filters (workspace_id, user_id) together, matching
+  // the read in reminders-query.ts. Without the user_id half, a member holding
+  // someone else's reminder id could delete it — reminders are in
+  // PERSONAL_TABLES precisely because they are not the workspace's to touch.
+  'src/routes/api/reminders/[id]/+server.ts',
+  'src/routes/api/v1/reminders/[id]/+server.ts',
   // API tokens are a personal credential: they authenticate as one user, so a
   // member must only ever see and revoke their own. Filtered on
   // (workspace_id, user_id) together — see PERSONAL_TABLES in migrate.ts.
   'src/lib/server/tokens.ts',
+  // A paired device is a personal credential that follows its owner across
+  // every workspace they belong to, so unlike api_tokens there is no
+  // workspace_id column here to filter on at all — the acting workspace comes
+  // from the X-Heli-Workspace header and is checked against the membership row
+  // on each request. See the `devices` table in schema.ts.
+  'src/lib/server/devices.ts',
+  // Reminders are personal and devices are user-scoped, so a push goes to its
+  // owner's devices and to nobody else's — filtering by workspace here would
+  // notify colleagues about someone else's private reminder.
+  'src/lib/server/push.ts',
   // A calendar feed's URL is a bearer credential for someone's personal
   // calendar, so feeds are listed per (workspace_id, user_id) — see
   // PERSONAL_TABLES in migrate.ts.
@@ -241,9 +257,52 @@ const MEMBER_ALLOWED = new Map<string, string>([
   ['v1/people/+server.ts', 'routine CRM work; token additionally needs the write scope'],
   ['v1/people/[id]/+server.ts', 'routine CRM work; token additionally needs the write scope'],
   ['v1/companies/+server.ts', 'routine CRM work; token additionally needs the write scope'],
+  ['v1/companies/[id]/+server.ts', 'routine CRM work; token additionally needs the write scope'],
+  ['v1/interactions/+server.ts', 'routine CRM work; token additionally needs the write scope'],
+  ['v1/interactions/[id]/+server.ts', 'routine CRM work; token additionally needs the write scope'],
+  ['v1/interactions/[id]/people/+server.ts', 'linking a person to an interaction'],
+  ['v1/reminders/+server.ts', 'reminders are personal'],
+  ['v1/reminders/[id]/+server.ts', 'reminders are personal; the delete filters user_id too'],
+  ['v1/tasks/+server.ts', 'tasks are shared and routine'],
+  ['v1/tasks/[id]/+server.ts', 'tasks are shared and routine'],
+  ['v1/tags/+server.ts', 'attaching and detaching a tag on one record'],
+  ['v1/time/+server.ts', 'logging your own time'],
+  ['v1/time/[id]/+server.ts', "your own entries; a colleague's calls requireRole in time.ts"],
+  ['v1/time/start/+server.ts', 'starting your own timer'],
+  ['v1/time/stop/+server.ts', 'stopping your own timer'],
+  ['v1/projects/+server.ts', 'routine CRM work; token additionally needs the write scope'],
+  ['v1/projects/[id]/+server.ts', 'routine CRM work; token additionally needs the write scope'],
+  ['v1/collections/+server.ts', 'creating a list is routine CRM work'],
+  ['v1/collections/[id]/+server.ts', 'a collection is a saved view, not shared config'],
+  ['v1/collections/[id]/items/+server.ts', 'adding a record to a list'],
+  ['v1/pipelines/+server.ts', 'creating a pipeline is routine; deleting one is guarded'],
+  ['v1/pipelines/[id]/items/+server.ts', 'moving deals through a board is the job'],
+  ['v1/pipelines/[id]/items/[itemId]/move/+server.ts', 'moving deals through a board is the job'],
+  ['v1/outreach/+server.ts', 'writing a message template is routine CRM work'],
+  ['v1/outreach/[id]/+server.ts', 'editing a template you can see; private ones are only ever your own'],
+  ['v1/outreach/sent/+server.ts', 'logging outreach you sent yourself'],
+  [
+    'v1/workspace/capacity/+server.ts',
+    'your own working week is yours; setting a colleague’s calls requireRole in the handler'
+  ],
+  [
+    'v1/account/+server.ts',
+    'acts on your own account only, re-authenticated by password or typed email'
+  ],
   ['v1/capture/+server.ts', 'the extension entry point; capture-scoped and rate-limited instead'],
   ['v1/tokens/+server.ts', 'manages your own credentials, cookie-session only'],
   ['v1/tokens/[id]/+server.ts', 'manages your own credentials, cookie-session only'],
+  // Pairing and devices are account management, not workspace management: they
+  // act on one person's own credentials and carry no workspace_id at all, so a
+  // role check would be asking the wrong question. What guards them instead is
+  // `denyBearer` — all four are cookie-session only, so no bearer credential can
+  // mint or revoke another. `claim` is the one unauthenticated endpoint in the
+  // app and is bounded by LIMITS.deviceClaim plus a 120-second single-use code.
+  ['v1/pairing/+server.ts', 'mints your own pairing code, cookie-session only'],
+  ['v1/pairing/[code]/+server.ts', 'polls and cancels your own code, cookie-session only'],
+  ['v1/pairing/claim/+server.ts', 'unauthenticated by necessity; the code is the proof, IP rate-limited'],
+  ['v1/devices/[id]/+server.ts', 'unpairs your own device, cookie-session only'],
+  ['v1/devices/self/+server.ts', 'a device registering its push token or signing itself out'],
   ['workspace/switch/+server.ts', 'membership is checked inside switchWorkspace'],
   ['workspace/members/+server.ts', 'GET only'],
   ['workspace/+server.ts', 'POST creates your own workspace; PATCH and DELETE call requireRole']

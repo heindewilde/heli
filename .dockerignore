@@ -7,6 +7,11 @@ graphify-out
 # and node_modules. The Dockerfile does `COPY . .`, so without this its source
 # and dependencies would ride into the builder layer for nothing.
 extension
+# The mobile app, for the same reason and more so: Expo's dependency tree is an
+# order of magnitude larger than esbuild's, so leaving it out of the ignore list
+# would drag several hundred megabytes into the builder layer and bust its cache
+# on every mobile change.
+mobile
 *.db
 *.db-wal
 *.db-shm

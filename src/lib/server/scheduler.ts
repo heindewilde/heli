@@ -6,6 +6,7 @@ import { db } from './db';
 import { and, eq, isNull, lt, or } from 'drizzle-orm';
 import { requireScope, type Scope } from './scope';
 import { MIN_REFRESH_MS, syncFeed, type CalendarFeed } from './calendar';
+import { pushTick } from './push';
 
 /**
  * The smallest correct background loop.
@@ -130,6 +131,16 @@ export async function runOnce(): Promise<{ region: string; synced: number }[]> {
     } catch (err) {
       console.error('[scheduler] tick failed', (err as Error).message);
     }
+
+    // Due reminders, under the same lease. Bounded and batched deliberately:
+    // this shares the tick's single `running` guard, so an unbounded sweep or a
+    // request per reminder would hold calendar sync behind it.
+    try {
+      await pushTick(lower, now);
+    } catch (err) {
+      console.error('[scheduler] push tick failed', (err as Error).message);
+    }
+
     out.push({ region: lower, synced });
   }
 

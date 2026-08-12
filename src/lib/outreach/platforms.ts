@@ -1,4 +1,7 @@
-import type { InteractionType } from '$lib/interactionTypes';
+// Relative, not `$lib`: this module is imported directly by the mobile app,
+// which has no SvelteKit alias to resolve. Every module on the shared list
+// follows the same rule.
+import type { InteractionType } from '../interactionTypes';
 
 /**
  * The outreach platform vocabulary, with no dependencies.

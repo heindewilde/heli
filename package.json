@@ -10,7 +10,7 @@
     "dev": "vite dev",
     "build": "vite build && tsx scripts/check-externals.ts",
     "preview": "vite preview",
-    "check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json && tsx scripts/check-tenancy.ts && tsx scripts/check-overlays.ts && tsx scripts/check-budget.ts && vitest run",
+    "check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json && tsx scripts/check-tenancy.ts && tsx scripts/check-overlays.ts && tsx scripts/check-shared.ts && tsx scripts/check-parity.ts && tsx scripts/check-budget.ts && vitest run",
     "check:watch": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --watch",
     "test": "vitest run",
     "test:watch": "vitest"

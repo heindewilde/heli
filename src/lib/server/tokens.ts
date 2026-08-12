@@ -141,8 +141,15 @@ export type ValidatedToken = {
  * for any token that happened to contain one — about three in four of them —
  * and those were rejected as malformed. Region names are lowercase ASCII
  * (`local`, `eu`, `us`, `apac`), so the boundary is unambiguous.
+ *
+ * The tail length is pinned at 43 rather than left as `+`, and that is what
+ * keeps it distinct from a paired device's `heli_<region>_dev_<43>`. base64url
+ * contains both `d` and `_`, so a PAT body *can* begin "dev_" — but a PAT body
+ * is 43 characters in total and a device body is 47. Every secret ever minted
+ * is exactly 43 (32 CSPRNG bytes, base64url), so this rejects nothing that used
+ * to work. Do not loosen it back to `+`.
  */
-const SECRET_RE = /^heli_([a-z]{2,8})_[A-Za-z0-9_-]+$/;
+const SECRET_RE = /^heli_([a-z]{2,8})_([A-Za-z0-9_-]{43})$/;
 
 function parseRegion(secret: string): string | null {
   return SECRET_RE.exec(secret)?.[1] ?? null;

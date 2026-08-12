@@ -1,5 +1,7 @@
 <script lang="ts">
   import Select from '$lib/ui/Select.svelte';
+  import Smartphone from 'lucide-svelte/icons/smartphone';
+  import DevicesSection from '$lib/components/DevicesSection.svelte';
 
   const ROLE_OPTIONS = [
     { value: 'member', label: 'Member' },
@@ -735,6 +737,10 @@
       class="inline-flex items-center gap-1.5 rounded-full border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-1 text-xs font-medium text-[var(--color-muted)] transition-colors hover:border-[var(--color-interactive-ring)] hover:text-[var(--color-text)]"
     ><CalendarDays size={13} strokeWidth={2} class="text-[var(--color-subtle)]" /> Calendars</a>
     <a
+      href="#devices"
+      class="inline-flex items-center gap-1.5 rounded-full border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-1 text-xs font-medium text-[var(--color-muted)] transition-colors hover:border-[var(--color-interactive-ring)] hover:text-[var(--color-text)]"
+    ><Smartphone size={13} strokeWidth={2} class="text-[var(--color-subtle)]" /> Devices</a>
+    <a
       href="#tokens"
       class="inline-flex items-center gap-1.5 rounded-full border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-1 text-xs font-medium text-[var(--color-muted)] transition-colors hover:border-[var(--color-interactive-ring)] hover:text-[var(--color-text)]"
     ><KeyRound size={13} strokeWidth={2} class="text-[var(--color-subtle)]" /> Access tokens</a>
@@ -1160,6 +1166,8 @@
       <p class="text-xs text-[var(--color-subtle)]">No calendars yet.</p>
     {/if}
   </section>
+
+  <DevicesSection devices={data.devices} />
 
   <section id="tokens" style="scroll-margin-top:1rem"
     class="flex flex-col gap-3 rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)] p-5"

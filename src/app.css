@@ -9,12 +9,16 @@
  * handful of `dark:` utilities in PipelineRow/PipelineStageChip rendered wrong
  * whenever the in-app toggle disagreed with the OS.
  *
- * Keep the double quotes. extension/scripts/tokens.mjs finds the dark palette
- * by searching for the single-quoted spelling of this attribute selector, and
- * a single-quoted match here would sit above the real block and hand the
- * extension the light palette as its dark theme. The parser now strips
+ * Keep the double quotes. scripts/tokens.mjs finds the dark palette by
+ * searching for the single-quoted spelling of this attribute selector, and a
+ * single-quoted match here would sit above the real block and hand every
+ * consumer the light palette as its dark theme. The parser now strips
  * comments, skips non-block matches and brace-counts, so this is belt and
  * braces — but there is no reason to lean on that.
+ *
+ * "Every consumer" is now the browser extension *and* the mobile app, and the
+ * mobile one has no cascade to fall back through: a token it fails to read
+ * resolves to undefined rather than to the wrong shade.
  */
 @custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
 

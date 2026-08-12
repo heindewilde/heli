@@ -9,7 +9,18 @@
     "skipLibCheck": true,
     "sourceMap": true
   },
+  // Both are separate build artifacts with their own package.json, node_modules
+  // and TypeScript version. Note this array *replaces* the one in the extended
+  // config rather than merging with it.
+  //
+  // Belt-and-braces: the effective file set comes from
+  // `.svelte-kit/tsconfig.json`, whose `include` is only src/, test/, tests/ and
+  // vite.config.*. What that does not stop is TS following an *import* — so any
+  // file under tests/ that imports from extension/ or mobile/ is still checked
+  // here, which is why the shared surface has to stay plain TS with no
+  // chrome/React/Expo types in it.
   "exclude": [
-    "extension"
+    "extension",
+    "mobile"
   ]
 }

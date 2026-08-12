@@ -18,10 +18,15 @@ declare global {
       user: AuthUser | null;
       // Needed by /api/workspace/switch, which rotates the session id.
       sessionId: string | null;
-      // Set only when the request authenticated with a personal access token
-      // on /api/v1. Null for cookie sessions, which are the trusted UI and are
-      // never scope-limited.
-      token: { id: string; scopes: TokenScope[] } | null;
+      // Set only when the request authenticated with a bearer credential on
+      // /api/v1 — a personal access token or a paired device. Null for cookie
+      // sessions, which are the trusted UI and are never scope-limited.
+      //
+      // `kind` matters at exactly two places: `denyTokenAuth` rejects both, so
+      // neither can mint another credential; and `/api/v1/devices/self` accepts
+      // only `device`, so a phone can register its push token and unpair itself
+      // without being able to touch any other device.
+      token: { id: string; scopes: TokenScope[]; kind: 'pat' | 'device' } | null;
     }
   }
 }

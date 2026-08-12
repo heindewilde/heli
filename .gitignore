@@ -15,3 +15,9 @@ data
 graphify-out
 .claude/settings.local.json
 PLAN.md
+# Mobile: generated from src/app.css and src/lib at build time, the same posture
+# as extension/dist. `npm run tokens` rebuilds them; prestart and typecheck run it.
+mobile/src/theme/tokens.ts
+mobile/.expo
+mobile/ios
+mobile/android

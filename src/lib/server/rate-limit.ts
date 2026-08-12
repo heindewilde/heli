@@ -22,7 +22,22 @@ export const LIMITS: Record<string, Limit> = {
   // Keyed by *token id*, not user: a leaked token should be throttleable
   // without locking its owner's browser session out of the app.
   apiToken: { name: 'api_token', max: 120, windowMs: 60 * 1000 },
-  apiTokenWrite: { name: 'api_token_write', max: 30, windowMs: 60 * 1000 }
+  apiTokenWrite: { name: 'api_token_write', max: 30, windowMs: 60 * 1000 },
+  // Keyed by *device id*, and deliberately looser than the token limits above.
+  // A token is a script, where a runaway loop is the thing to catch. A device is
+  // one person's app: opening it after a week offline replays an outbox and
+  // fetches several lists at once, which is a legitimate burst rather than
+  // abuse. Keying by device means one phone can never throttle its owner's
+  // browser session or their other phone.
+  device: { name: 'device', max: 600, windowMs: 60 * 1000 },
+  deviceWrite: { name: 'device_write', max: 120, windowMs: 60 * 1000 },
+  // Minting a pairing code is a deliberate human act; keyed by user.
+  devicePair: { name: 'device_pair', max: 10, windowMs: 60 * 60 * 1000 },
+  // Claiming is unauthenticated, so this is the only thing standing between a
+  // guessed code and a credential. Keyed by IP, same shape as `login`. Ten
+  // attempts per quarter-hour against 50 bits of entropy inside a 120s window
+  // is not a guessing game worth playing.
+  deviceClaim: { name: 'device_claim', max: 10, windowMs: 15 * 60 * 1000 }
 };
 
 /**
