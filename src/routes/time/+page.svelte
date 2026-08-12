@@ -14,7 +14,15 @@
   import { onMount } from 'svelte';
   import { goto, invalidateAll } from '$app/navigation';
   import { page } from '$app/state';
-  import { Timer, Plus, ChevronLeft, ChevronRight } from 'lucide-svelte';
+  import {
+    Timer,
+    Plus,
+    ChevronLeft,
+    ChevronRight,
+    CalendarDays,
+    Filter,
+    CircleDollarSign
+  } from 'lucide-svelte';
   import { APP_NAME } from '$lib/branding';
   import EmptyState from '$lib/ui/EmptyState.svelte';
   import Button from '$lib/ui/Button.svelte';
@@ -297,16 +305,21 @@
     <TimerBar running={data.running} projects={data.projects} />
   </div>
 
-  <!-- Range -->
-  <div class="flex flex-wrap items-center gap-2">
+  <!--
+    One toolbar, not seven floating controls. **When** on the left, **which**
+    on the right, a rule between them: the two are different questions and
+    laying them out at one weight was most of why the page was hard to read.
+  -->
+  <div class="flex flex-wrap items-center gap-x-2 gap-y-2 rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)] px-2.5 py-2">
+    <CalendarDays size={14} strokeWidth={2} class="shrink-0 text-[var(--color-subtle)]" />
     <Select
-      size="md"
+      size="sm"
       label="Date range"
       value={activePreset}
       options={PRESETS}
       onchange={applyPreset}
     />
-    <div class="flex items-center gap-0.5 rounded-[var(--radius-md)] border border-[var(--color-border)] p-0.5">
+    <div class="flex items-center gap-0.5">
       <Button variant="ghost" size="sm" onclick={() => shiftRange(-1)} aria-label="Previous period">
         <ChevronLeft size={14} strokeWidth={2} />
       </Button>
@@ -330,9 +343,12 @@
       class={fieldClass}
     />
 
-    <div class="ml-auto flex flex-wrap items-center gap-2">
+    <span class="mx-1 hidden h-6 w-px bg-[var(--color-border)] sm:block"></span>
+
+    <div class="flex flex-wrap items-center gap-2">
+      <Filter size={14} strokeWidth={2} class="shrink-0 text-[var(--color-subtle)]" />
       <Select
-        size="md"
+        size="sm"
         label="Person"
         value={data.filters.userId}
         options={[
@@ -343,7 +359,7 @@
         onchange={(user) => go({ user })}
       />
       <Select
-        size="md"
+        size="sm"
         label="Project filter"
         value={data.filters.projectId}
         options={[
@@ -353,7 +369,7 @@
         onchange={(project) => go({ project })}
       />
       <Select
-        size="md"
+        size="sm"
         label="Billable filter"
         value={data.filters.billable}
         options={[
@@ -435,22 +451,29 @@
         {/snippet}
       </EmptyState>
     {:else}
-      <div class="flex flex-col gap-5">
+      <!--
+        Each day is its own card. A shared border and a heading were not enough
+        containment — with four days on screen the rows ran together and it was
+        genuinely unclear which total belonged to which group.
+      -->
+      <div class="flex flex-col gap-3">
         {#each days as [key, day] (key)}
-          <section class="flex flex-col">
-            <!-- Day header carries the day's totals, so a day reads as a unit
-                 rather than as a run of rows. -->
-            <div class="flex items-baseline justify-between gap-2 border-b border-[var(--color-border)] pb-1.5">
+          <section class="overflow-hidden rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)]">
+            <div class="flex items-center justify-between gap-2 border-b border-[var(--color-border)] bg-[var(--color-bg)] px-3 py-2">
               <h2 class="text-sm font-semibold text-[var(--color-text)]">{day.label}</h2>
-              <span class="text-xs tabular-nums text-[var(--color-muted)]">
-                {#if day.billable > 0 && day.billable !== day.minutes}
-                  <span class="text-[var(--color-success)]">{formatMinutes(day.billable)} billable</span>
-                  <span class="text-[var(--color-subtle)]"> · </span>
+              <span class="flex items-center gap-2 text-xs tabular-nums">
+                {#if day.billable > 0}
+                  <span
+                    class="inline-flex items-center gap-1 rounded-full border border-[var(--color-success-border)] bg-[var(--color-success-bg)] px-1.5 py-0.5 text-[var(--color-success)]"
+                  >
+                    <CircleDollarSign size={11} strokeWidth={2} />
+                    {formatMinutes(day.billable)}
+                  </span>
                 {/if}
-                {formatMinutes(day.minutes)}
+                <span class="font-medium text-[var(--color-text)]">{formatMinutes(day.minutes)}</span>
               </span>
             </div>
-            <div class="flex flex-col pt-0.5">
+            <div class="flex flex-col divide-y divide-[var(--color-border)] px-1.5 py-1">
               {#each day.items as entry (entry.id)}
                 <EntryRow
                   {entry}

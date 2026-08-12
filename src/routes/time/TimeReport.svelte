@@ -11,7 +11,14 @@
    * dependency, and `dependencies` has deliberately had two entries for the
    * app's whole life. The trade is a print dialog instead of a direct download.
    */
-  import { Download, Printer } from 'lucide-svelte';
+  import {
+    Download,
+    Printer,
+    Clock,
+    CircleDollarSign,
+    Receipt,
+    ArrowUpNarrowWide
+  } from 'lucide-svelte';
   import Select from '$lib/ui/Select.svelte';
   import StatTile from '$lib/ui/StatTile.svelte';
   import EmptyState from '$lib/ui/EmptyState.svelte';
@@ -116,95 +123,119 @@
       <p class="text-sm">{rangeLabel}</p>
     </div>
 
-    <div class="flex flex-wrap gap-x-8 gap-y-3 rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)] px-4 py-3">
-      <StatTile label="Tracked" value={formatMinutes(summary.totalMinutes)} sub={rangeLabel} />
+    <div class="flex flex-wrap gap-2">
       <StatTile
+        icon={Clock}
+        label="Tracked"
+        value={formatMinutes(summary.totalMinutes)}
+        sub={rangeLabel}
+      />
+      <StatTile
+        icon={CircleDollarSign}
+        tone="good"
         label="Billable"
         value={formatMinutes(summary.billableMinutes)}
         sub={summary.totalMinutes > 0
           ? `${Math.round((summary.billableMinutes / summary.totalMinutes) * 100)}% of tracked`
           : undefined}
-        tone="good"
       />
       {#each Object.entries(summary.amountByCurrency) as [cur, cents] (cur)}
-        <StatTile label="Amount" value={money(cents, cur)} />
+        <StatTile icon={Receipt} tone="info" label="Amount" value={money(cents, cur)} sub={cur} />
       {/each}
       {#if roundingDelta !== 0}
         <StatTile
+          icon={ArrowUpNarrowWide}
+          tone="warn"
           label="Rounding"
           value="+{formatMinutes(roundingDelta)}"
           sub="{formatMinutes(summary.rawMinutes)} exact"
-          tone="warn"
         />
       {/if}
     </div>
 
-    <table class="w-full text-sm">
-      <thead>
-        <tr class="border-b border-[var(--color-border)] text-left">
-          <th class="pb-2 font-medium text-[var(--color-subtle)]">
-            {GROUPS.find((g) => g.value === summary.groupBy)?.label.replace('By ', '') ?? ''}
-          </th>
-          <th class="no-print w-1/3 pb-2"></th>
-          <th class="pb-2 text-right font-medium text-[var(--color-subtle)]">Entries</th>
-          <th class="pb-2 text-right font-medium text-[var(--color-subtle)]">Billable</th>
-          <th class="pb-2 text-right font-medium text-[var(--color-subtle)]">Tracked</th>
-          <th class="pb-2 text-right font-medium text-[var(--color-subtle)]">Amount</th>
-        </tr>
-      </thead>
-      <tbody>
-        {#each summary.groups as g (g.key)}
-          <tr class="border-b border-[var(--color-border)] last:border-0">
-            <td class="py-2 pr-3">
-              <span class="flex items-center gap-2">
-                {#if summary.groupBy === 'project'}
-                  <span
-                    class="size-2 shrink-0 rounded-full"
-                    style="background: {projectSwatch(g.key || null)}"
-                  ></span>
-                {/if}
-                {#if g.href}
-                  <a href={g.href} class="truncate hover:underline">{g.label}</a>
+    <!-- The table is a card, like the day groups on the entries view, so both
+         halves of this page are built from the same object. -->
+    <div class="overflow-hidden rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)]">
+      <table class="w-full text-sm">
+        <thead>
+          <tr class="border-b border-[var(--color-border)] bg-[var(--color-bg)] text-left">
+            <th class="px-3 py-2 text-[0.6875rem] font-medium uppercase tracking-wide text-[var(--color-subtle)]">
+              {GROUPS.find((g) => g.value === summary.groupBy)?.label.replace('By ', '') ?? ''}
+            </th>
+            <th class="no-print w-1/4 px-3 py-2"></th>
+            <th class="px-3 py-2 text-right text-[0.6875rem] font-medium uppercase tracking-wide text-[var(--color-subtle)]">Entries</th>
+            <th class="px-3 py-2 text-right text-[0.6875rem] font-medium uppercase tracking-wide text-[var(--color-subtle)]">Billable</th>
+            <th class="px-3 py-2 text-right text-[0.6875rem] font-medium uppercase tracking-wide text-[var(--color-subtle)]">Tracked</th>
+            <th class="px-3 py-2 text-right text-[0.6875rem] font-medium uppercase tracking-wide text-[var(--color-subtle)]">Amount</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-[var(--color-border)]">
+          {#each summary.groups as g (g.key)}
+            <tr class="hover:bg-[var(--color-surface-2)]">
+              <td class="px-3 py-2">
+                <span class="flex items-center gap-2">
+                  {#if summary.groupBy === 'project' || summary.groupBy === 'client'}
+                    <span
+                      class="h-5 w-1 shrink-0 rounded-full"
+                      style="background: {g.key
+                        ? projectSwatch(g.key)
+                        : 'var(--color-border-strong)'}"
+                    ></span>
+                  {/if}
+                  {#if g.href}
+                    <a href={g.href} class="truncate hover:underline">{g.label}</a>
+                  {:else}
+                    <span class="truncate {g.key === '' ? 'italic text-[var(--color-muted)]' : ''}">
+                      {g.label}
+                    </span>
+                  {/if}
+                </span>
+              </td>
+              <td class="no-print px-3 py-2">
+                <span class="track"
+                  ><span
+                    class="fill"
+                    style="--p: {(g.minutes / maxMinutes) * 100}%; background: {g.key
+                      ? projectSwatch(g.key)
+                      : 'var(--color-border-strong)'}"
+                  ></span></span
+                >
+              </td>
+              <td class="px-3 py-2 text-right tabular-nums text-[var(--color-muted)]">{g.entries}</td>
+              <td class="px-3 py-2 text-right tabular-nums">
+                {#if g.billableMinutes === 0}
+                  <span class="text-[var(--color-subtle)]">—</span>
                 {:else}
-                  <span class="truncate {g.key === '' ? 'italic text-[var(--color-muted)]' : ''}">
-                    {g.label}
-                  </span>
+                  <span class="text-[var(--color-success)]">{formatMinutes(g.billableMinutes)}</span>
                 {/if}
-              </span>
+              </td>
+              <td class="px-3 py-2 text-right font-medium tabular-nums">{formatMinutes(g.minutes)}</td>
+              <td class="px-3 py-2 text-right tabular-nums">
+                {g.amount > 0 ? money(g.amount, g.currency ?? '') : '—'}
+              </td>
+            </tr>
+          {/each}
+        </tbody>
+        <tfoot>
+          <tr class="border-t border-[var(--color-border-strong)] bg-[var(--color-bg)] font-medium">
+            <td class="px-3 py-2">Total</td>
+            <td class="no-print"></td>
+            <td class="px-3 py-2 text-right tabular-nums">
+              {summary.groups.reduce((n, g) => n + g.entries, 0)}
             </td>
-            <td class="no-print py-2 pr-3">
-              <span class="track"
-                ><span class="fill" style="--p: {(g.minutes / maxMinutes) * 100}%"></span></span
-              >
+            <td class="px-3 py-2 text-right tabular-nums text-[var(--color-success)]">
+              {formatMinutes(summary.billableMinutes)}
             </td>
-            <td class="py-2 text-right tabular-nums text-[var(--color-muted)]">{g.entries}</td>
-            <td class="py-2 text-right tabular-nums text-[var(--color-muted)]">
-              {g.billableMinutes === 0 ? '—' : formatMinutes(g.billableMinutes)}
-            </td>
-            <td class="py-2 text-right tabular-nums">{formatMinutes(g.minutes)}</td>
-            <td class="py-2 text-right tabular-nums">
-              {g.amount > 0 ? money(g.amount, g.currency ?? '') : '—'}
+            <td class="px-3 py-2 text-right tabular-nums">{formatMinutes(summary.totalMinutes)}</td>
+            <td class="px-3 py-2 text-right tabular-nums">
+              {Object.entries(summary.amountByCurrency)
+                .map(([c, v]) => money(v, c))
+                .join(' · ') || '—'}
             </td>
           </tr>
-        {/each}
-      </tbody>
-      <tfoot>
-        <tr class="border-t-2 border-[var(--color-border-strong)] font-medium">
-          <td class="pt-2">Total</td>
-          <td class="no-print"></td>
-          <td class="pt-2 text-right tabular-nums">
-            {summary.groups.reduce((n, g) => n + g.entries, 0)}
-          </td>
-          <td class="pt-2 text-right tabular-nums">{formatMinutes(summary.billableMinutes)}</td>
-          <td class="pt-2 text-right tabular-nums">{formatMinutes(summary.totalMinutes)}</td>
-          <td class="pt-2 text-right tabular-nums">
-            {Object.entries(summary.amountByCurrency)
-              .map(([c, v]) => money(v, c))
-              .join(' · ') || '—'}
-          </td>
-        </tr>
-      </tfoot>
-    </table>
+        </tfoot>
+      </table>
+    </div>
 
     {#if summary.roundTo > 0}
       <p class="text-xs text-[var(--color-muted)]">
@@ -229,7 +260,7 @@
     display: block;
     height: 100%;
     width: var(--p);
-    background: var(--color-accent);
+    /* Colour is set inline, from the row's own project hue. */
   }
   .print-only {
     display: none;

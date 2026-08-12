@@ -20,7 +20,6 @@
   import Button from '$lib/ui/Button.svelte';
   import Select from '$lib/ui/Select.svelte';
   import SegmentedControl from '$lib/ui/SegmentedControl.svelte';
-  import StatTile from '$lib/ui/StatTile.svelte';
   import { registerCommands } from '$lib/commands/registry.svelte';
   import { formatHours } from '$lib/duration';
   import { weekLabel, monthLabel, startsMonth, MS_PER_WEEK } from '$lib/weeks';
@@ -97,29 +96,6 @@
     })
   );
 
-  /**
-   * Headline numbers for the window: what is sellable, what is booked, and the
-   * first week that is actually free. That last one is the question people open
-   * this page with, and it was previously only answerable by scanning.
-   */
-  const summary = $derived.by(() => {
-    if (!win || win.rows.length === 0) return null;
-    const capacity = win.rows.reduce((n, r) => n + r.capacityMinutes, 0);
-    const booked = totals.reduce((n, t) => n + t.allocated, 0) / Math.max(1, win.weeks.length);
-    const overWeeks = win.rows.reduce(
-      (n, r) => n + r.cells.filter((c) => c.allocated > r.capacityMinutes).length,
-      0
-    );
-    const firstFree = win.weeks.findIndex((_, i) => (totals[i]?.free ?? 0) > 0);
-    return {
-      capacity,
-      booked: Math.round(booked),
-      free: Math.max(0, capacity - Math.round(booked)),
-      overWeeks,
-      firstFree: firstFree >= 0 ? win.weeks[firstFree] : null
-    };
-  });
-
   onMount(() =>
     registerCommands([
       {
@@ -156,29 +132,6 @@
       <h1 class="text-2xl font-semibold tracking-tight">Availability</h1>
       <span class="text-sm text-[var(--color-muted)]">{rangeLabel}</span>
     </div>
-
-    <!-- Summary. Only the capacity view has window-wide numbers worth stating;
-         the week and timeline views carry their own totals inline. -->
-    {#if data.view === 'grid' && summary}
-      <div class="flex flex-wrap gap-x-8 gap-y-3 rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)] px-4 py-3">
-        <StatTile label="Capacity" value="{formatHours(summary.capacity)}/wk" />
-        <StatTile label="Booked" value="{formatHours(summary.booked)}/wk" sub="average over the window" />
-        <StatTile
-          label="Free"
-          value="{formatHours(summary.free)}/wk"
-          tone={summary.free === 0 ? 'warn' : 'good'}
-        />
-        <StatTile
-          label="Overbooked"
-          value={summary.overWeeks === 0 ? 'None' : `${summary.overWeeks}`}
-          sub={summary.overWeeks === 0 ? 'no one is over capacity' : 'person-weeks over capacity'}
-          tone={summary.overWeeks === 0 ? 'default' : 'danger'}
-        />
-        {#if summary.firstFree}
-          <StatTile label="First opening" value={weekLabel(summary.firstFree.start)} />
-        {/if}
-      </div>
-    {/if}
 
     <!-- Controls -->
     <div class="flex flex-wrap items-center gap-2">

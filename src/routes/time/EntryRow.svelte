@@ -12,6 +12,7 @@
   import Tooltip from '$lib/ui/Tooltip.svelte';
   import Select from '$lib/ui/Select.svelte';
   import { formatMinutes, parseDuration } from '$lib/duration';
+  import { projectSwatch } from '$lib/projectColor';
   import { formatTime } from '$lib/interactions';
   import type { TimeEntryRow } from '$lib/server/time';
 
@@ -79,7 +80,15 @@
     'rounded-[var(--radius-sm)] border border-transparent bg-transparent px-1.5 py-1 text-sm hover:border-[var(--color-border)] focus:border-[var(--color-accent)] focus:outline-none';
 </script>
 
-<div class="group flex items-center gap-2 rounded-[var(--radius-sm)] px-1 py-1 hover:bg-[var(--color-surface)]">
+<div class="group flex items-center gap-2 rounded-[var(--radius-sm)] py-1 pl-0 pr-1 hover:bg-[var(--color-surface-2)]">
+  <!-- Project as colour before it is text. A day is usually two or three
+       engagements, and the rail groups them without making you read the
+       dropdown on every row. Unfiled entries get a hairline, not a hue. -->
+  <span
+    class="ml-1 h-6 w-1 shrink-0 rounded-full"
+    style="background: {entry.projectId ? projectSwatch(entry.projectId) : 'var(--color-border)'}"
+    aria-hidden="true"
+  ></span>
   <input
     bind:value={description}
     onblur={() => description !== (entry.description ?? '') && patch({ description: description.trim() || null })}
