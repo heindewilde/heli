@@ -1,6 +1,6 @@
 import { requireScope } from '$lib/server/scope';
 import { error, json, type RequestHandler } from '@sveltejs/kit';
-import { addLink, removeLink, updateLink } from '$lib/server/saveProject';
+import { createGoal, deleteGoal, listGoals, updateGoal } from '$lib/server/project-plan';
 
 async function readBody(request: Request): Promise<Record<string, unknown>> {
   try {
@@ -10,21 +10,29 @@ async function readBody(request: Request): Promise<Record<string, unknown>> {
   }
 }
 
+function fail(err: unknown): never {
+  const code = (err as Error).message;
+  throw error(code === 'not_found' ? 404 : 400, code);
+}
+
+export const GET: RequestHandler = async ({ params, locals }) => {
+  if (!locals.user) throw error(401, 'unauthorized');
+  const s = requireScope(locals);
+  try {
+    return json({ items: await listGoals(s, params.id!) });
+  } catch (err) {
+    fail(err);
+  }
+};
+
 export const POST: RequestHandler = async ({ request, params, locals }) => {
   if (!locals.user) throw error(401, 'unauthorized');
   const s = requireScope(locals);
   const body = await readBody(request);
   try {
-    const result = await addLink(
-      s,
-      params.id!,
-      body.url,
-      body.label,
-      body.kind
-    );
-    return json(result, { status: 201 });
+    return json(await createGoal(s, params.id!, body), { status: 201 });
   } catch (err) {
-    throw error((err as Error).message === 'not_found' ? 404 : 400, (err as Error).message);
+    fail(err);
   }
 };
 
@@ -34,16 +42,9 @@ export const PATCH: RequestHandler = async ({ request, params, locals }) => {
   const body = await readBody(request);
   if (typeof body.id !== 'string') throw error(400, 'missing_id');
   try {
-    await updateLink(
-      s,
-      params.id!,
-      body.id,
-      body.url,
-      body.label,
-      body.kind
-    );
+    await updateGoal(s, params.id!, body.id, body);
   } catch (err) {
-    throw error((err as Error).message === 'not_found' ? 404 : 400, (err as Error).message);
+    fail(err);
   }
   return new Response(null, { status: 204 });
 };
@@ -54,9 +55,9 @@ export const DELETE: RequestHandler = async ({ request, params, locals }) => {
   const body = await readBody(request);
   if (typeof body.id !== 'string') throw error(400, 'missing_id');
   try {
-    await removeLink(s, params.id!, body.id);
+    await deleteGoal(s, params.id!, body.id);
   } catch (err) {
-    throw error((err as Error).message === 'not_found' ? 404 : 400, (err as Error).message);
+    fail(err);
   }
   return new Response(null, { status: 204 });
 };

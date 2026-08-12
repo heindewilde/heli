@@ -4,7 +4,16 @@
   import PersonPicker from '$lib/components/PersonPicker.svelte';
   import CompanyPicker from '$lib/components/CompanyPicker.svelte';
   import { COLLECTION_ICON_MAP, COLLECTION_ICON_NAMES } from '$lib/collectionIcons';
-  import type { BillingType, ProjectStatus } from '$lib/server/schema';
+  import type { ProjectStatus } from '$lib/server/schema';
+  import {
+    BILLING_TYPES,
+    BILLING_TYPE_LABELS,
+    BILLING_MONEY_FIELD,
+    PROJECT_TYPES,
+    PROJECT_TYPE_LABELS,
+    type BillingType,
+    type ProjectType
+  } from '$lib/projectTypes';
   import { autofocus } from '$lib/actions';
 
   let { form } = $props();
@@ -13,13 +22,23 @@
   let billingType = $state<BillingType>('none');
   let showBilling = $state(false);
   let status = $state<ProjectStatus>('active');
-  let hourlyRate = $state('');
-  let fixedFee = $state('');
+  let projectType = $state<ProjectType | ''>('');
+  /** One amount field; the billing type decides which column it becomes. */
+  let amount = $state('');
   let currency = $state('USD');
   let selectedIcon = $state<string | null>(null);
 
   const STATUSES: ProjectStatus[] = ['active', 'paused', 'completed', 'archived'];
-  const BILLING_TYPES_UI: BillingType[] = ['none', 'hourly', 'fixed'];
+
+  const AMOUNT_META = {
+    hourlyRate: { label: 'Hourly rate', placeholder: '200.00', width: 'w-32' },
+    fixedFee: { label: 'Fixed fee', placeholder: '10000.00', width: 'w-40' },
+    monthlyFee: { label: 'Monthly fee', placeholder: '4000.00', width: 'w-40' }
+  } as const;
+  const amountMeta = $derived.by(() => {
+    const field = BILLING_MONEY_FIELD[billingType];
+    return field ? AMOUNT_META[field] : null;
+  });
 
   type Person = { id: string; name: string; avatarUrl: string | null; role: string | null };
   type Company = { id: string; name: string; logoUrl: string | null; faviconUrl: string | null; domain: string | null };
@@ -131,6 +150,16 @@
       {/each}
     </fieldset>
 
+    <label class="flex flex-col gap-1 text-sm">
+      <span class="text-[var(--color-muted)]">Type</span>
+      <select name="projectType" bind:value={projectType} class={inputClass}>
+        <option value="">Unset</option>
+        {#each PROJECT_TYPES as t (t)}
+          <option value={t}>{PROJECT_TYPE_LABELS[t]}</option>
+        {/each}
+      </select>
+    </label>
+
     <div class="grid grid-cols-2 gap-3">
       <label class="flex flex-col gap-1 text-sm">
         <span class="text-[var(--color-muted)]">Start date</span>
@@ -160,7 +189,7 @@
           >Remove</button>
         </div>
         <div class="flex flex-wrap items-center gap-3">
-          {#each BILLING_TYPES_UI as t (t)}
+          {#each BILLING_TYPES as t (t)}
             <label class="inline-flex items-center gap-1.5">
               <input
                 type="radio"
@@ -168,41 +197,25 @@
                 value={t}
                 bind:group={billingType}
               />
-              <span>{t}</span>
+              <span>{BILLING_TYPE_LABELS[t]}</span>
             </label>
           {/each}
         </div>
-        {#if billingType !== 'none'}
+        {#if amountMeta}
           <div class="flex flex-wrap items-end gap-3">
-            {#if billingType === 'hourly'}
-              <label class="flex flex-col gap-1 text-sm">
-                <span class="text-[var(--color-muted)]">Hourly rate</span>
-                <input
-                  name="hourlyRate"
-                  type="number"
-                  inputmode="decimal"
-                  step="0.01"
-                  min="0"
-                  bind:value={hourlyRate}
-                  placeholder="200.00"
-                  class="w-32 rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-bg)] px-3 py-2"
-                />
-              </label>
-            {:else if billingType === 'fixed'}
-              <label class="flex flex-col gap-1 text-sm">
-                <span class="text-[var(--color-muted)]">Fixed fee</span>
-                <input
-                  name="fixedFee"
-                  type="number"
-                  inputmode="decimal"
-                  step="0.01"
-                  min="0"
-                  bind:value={fixedFee}
-                  placeholder="10000.00"
-                  class="w-40 rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-bg)] px-3 py-2"
-                />
-              </label>
-            {/if}
+            <label class="flex flex-col gap-1 text-sm">
+              <span class="text-[var(--color-muted)]">{amountMeta.label}</span>
+              <input
+                name="amount"
+                type="number"
+                inputmode="decimal"
+                step="0.01"
+                min="0"
+                bind:value={amount}
+                placeholder={amountMeta.placeholder}
+                class="{amountMeta.width} rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-bg)] px-3 py-2"
+              />
+            </label>
             <label class="flex flex-col gap-1 text-sm">
               <span class="text-[var(--color-muted)]">Currency</span>
               <input

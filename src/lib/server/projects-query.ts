@@ -5,12 +5,17 @@ import {
   projectLinks,
   projectPeople,
   projectCompanies,
+  projectMilestones,
+  projectGoals,
   interactionProjects,
   people,
   companies,
   interactions,
   type Project,
-  type ProjectStatus
+  type ProjectStatus,
+  type ProjectType,
+  type ProjectMilestone,
+  type ProjectGoal
 } from './schema';
 import { ftsQuery } from './search';
 import type { Scope } from './scope';
@@ -20,11 +25,13 @@ export type ProjectListRow = {
   name: string;
   description: string | null;
   status: ProjectStatus;
+  projectType: ProjectType | null;
   startDate: number | null;
   endDate: number | null;
   billingType: string;
   hourlyRate: number | null;
   fixedFee: number | null;
+  monthlyFee: number | null;
   currency: string | null;
   nextStep: string | null;
   icon: string | null;
@@ -37,11 +44,68 @@ export type ProjectListRow = {
 export type ListFilters = {
   q?: string;
   status?: ProjectStatus | 'all';
+  projectType?: ProjectType | 'all';
   personId?: string;
   companyId?: string;
   sort?: 'recent' | 'updated' | 'name' | 'endDate' | 'lastInteraction';
   limit?: number;
 };
+
+/**
+ * The WHERE clauses shared by `listProjects` and `countProjects`.
+ *
+ * Extracted so the two cannot drift: the list page renders one and counts with
+ * the other, and a filter honoured by only one of them shows "50 of 12".
+ */
+function filterClauses(s: Scope, filters: ListFilters) {
+  const fts = filters.q ? ftsQuery(filters.q) : null;
+  // Status: default 'active' unless caller explicitly asks otherwise.
+  const status = filters.status ?? 'active';
+  const type = filters.projectType ?? 'all';
+  return {
+    fts,
+    statusClause: status === 'all' ? sql`` : sql`AND p.status = ${status}`,
+    typeClause: type === 'all' ? sql`` : sql`AND p.project_type = ${type}`,
+    personClause: filters.personId
+      ? sql`AND EXISTS (SELECT 1 FROM project_people pp WHERE pp.project_id = p.id AND pp.person_id = ${filters.personId})`
+      : sql``,
+    companyClause: filters.companyId
+      ? sql`AND EXISTS (SELECT 1 FROM project_companies pc WHERE pc.project_id = p.id AND pc.company_id = ${filters.companyId})`
+      : sql``,
+    ftsClause: fts
+      ? sql`AND p.id IN (
+          SELECT pp.id FROM projects pp
+          JOIN projects_fts f ON f.rowid = pp.rowid
+          WHERE pp.workspace_id = ${s.workspaceId} AND f.projects_fts MATCH ${fts}
+        )`
+      : sql``
+  };
+}
+
+/**
+ * How many projects match these filters, ignoring the limit.
+ *
+ * The list page used to answer this by running `listProjects({limit: 500})` a
+ * second time — a full second scan, with all the correlated member-count and
+ * last-interaction subqueries, to read `.length`.
+ */
+export async function countProjects(s: Scope, filters: ListFilters = {}): Promise<number> {
+  const { statusClause, typeClause, personClause, companyClause, ftsClause } = filterClauses(
+    s,
+    filters
+  );
+  const row = await db(s.region).get<{ n: number }>(sql`
+    SELECT COUNT(*) AS n
+    FROM projects p
+    WHERE p.workspace_id = ${s.workspaceId}
+      ${statusClause}
+      ${typeClause}
+      ${personClause}
+      ${companyClause}
+      ${ftsClause}
+  `);
+  return Number(row?.n ?? 0);
+}
 
 export async function listProjects(
   s: Scope,
@@ -49,24 +113,10 @@ export async function listProjects(
 ): Promise<ProjectListRow[]> {
   const d = db(s.region);
   const limit = Math.min(filters.limit ?? 200, 500);
-  const fts = filters.q ? ftsQuery(filters.q) : null;
-
-  // Status: default 'active' unless caller explicitly asks otherwise.
-  const status = filters.status ?? 'active';
-  const statusClause = status === 'all' ? sql`` : sql`AND p.status = ${status}`;
-  const personClause = filters.personId
-    ? sql`AND EXISTS (SELECT 1 FROM project_people pp WHERE pp.project_id = p.id AND pp.person_id = ${filters.personId})`
-    : sql``;
-  const companyClause = filters.companyId
-    ? sql`AND EXISTS (SELECT 1 FROM project_companies pc WHERE pc.project_id = p.id AND pc.company_id = ${filters.companyId})`
-    : sql``;
-  const ftsClause = fts
-    ? sql`AND p.id IN (
-        SELECT pp.id FROM projects pp
-        JOIN projects_fts f ON f.rowid = pp.rowid
-        WHERE pp.workspace_id = ${s.workspaceId} AND f.projects_fts MATCH ${fts}
-      )`
-    : sql``;
+  const { fts, statusClause, typeClause, personClause, companyClause, ftsClause } = filterClauses(
+    s,
+    filters
+  );
 
   const sort = filters.sort ?? (fts ? 'relevance' : 'updated');
   let orderClause;
@@ -88,10 +138,11 @@ export async function listProjects(
 
   const rows = await d.all<ProjectListRow>(sql`
     SELECT
-      p.id, p.name, p.description, p.status,
+      p.id, p.name, p.description, p.status, p.project_type AS projectType,
       p.start_date AS startDate, p.end_date AS endDate,
       p.billing_type AS billingType, p.hourly_rate AS hourlyRate,
-      p.fixed_fee AS fixedFee, p.currency, p.next_step AS nextStep, p.icon,
+      p.fixed_fee AS fixedFee, p.monthly_fee AS monthlyFee,
+      p.currency, p.next_step AS nextStep, p.icon,
       p.created_at AS createdAt, p.updated_at AS updatedAt,
       (SELECT COUNT(*) FROM project_people WHERE project_id = p.id)
         + (SELECT COUNT(*) FROM project_companies WHERE project_id = p.id) AS memberCount,
@@ -102,6 +153,7 @@ export async function listProjects(
     FROM projects p
     WHERE p.workspace_id = ${s.workspaceId}
       ${statusClause}
+      ${typeClause}
       ${personClause}
       ${companyClause}
       ${ftsClause}
@@ -112,13 +164,21 @@ export async function listProjects(
   return rows.map((r) => ({
     ...r,
     status: r.status as ProjectStatus,
+    projectType: (r.projectType ?? null) as ProjectType | null,
     memberCount: Number(r.memberCount ?? 0),
     lastInteractionAt: r.lastInteractionAt == null ? null : Number(r.lastInteractionAt)
   }));
 }
 
 export type ProjectMember = { id: string; name: string; avatarUrl?: string | null; logoUrl?: string | null; faviconUrl?: string | null; domain?: string | null };
-export type ProjectLinkRow = { id: string; url: string; label: string | null; createdAt: number };
+export type ProjectLinkRow = {
+  id: string;
+  url: string;
+  label: string | null;
+  kind: string | null;
+  position: number | null;
+  createdAt: number;
+};
 export type ProjectInteractionRow = {
   id: string;
   occurredAt: number;
@@ -131,67 +191,154 @@ export type ProjectDetail = Project & {
   people: ProjectMember[];
   companies: ProjectMember[];
   interactions: ProjectInteractionRow[];
+  milestones: ProjectMilestone[];
+  goals: ProjectGoal[];
 };
 
-export async function getProject(
-  s: Scope,
-  id: string
-): Promise<ProjectDetail | null> {
-  const d = db(s.region);
-  const project = await d
+/**
+ * The detail page renders at most this many interactions.
+ *
+ * It used to fetch every interaction ever linked to a project with no limit at
+ * all — fine on a week-old workspace, a slow unbounded payload on a two-year
+ * client engagement.
+ */
+export const PROJECT_INTERACTIONS_LIMIT = 100;
+
+/**
+ * Just the project row. This is the only thing `/projects/[id]` awaits — the
+ * six lists below are returned to the page as unawaited promises so the name
+ * and status ship in the first bytes of HTML.
+ */
+export async function getProjectHeader(s: Scope, id: string): Promise<Project | null> {
+  const row = await db(s.region)
     .select()
     .from(projects)
     .where(and(eq(projects.id, id), eq(projects.workspaceId, s.workspaceId)))
     .get();
+  return row ?? null;
+}
+
+/**
+ * Links, newest ordering last.
+ *
+ * Rows created before `position` existed have it NULL; `position IS NULL`
+ * sorts them after the ordered ones rather than ahead of everything, and
+ * createdAt breaks the tie among them.
+ */
+export function getProjectLinks(s: Scope, id: string): Promise<ProjectLinkRow[]> {
+  return db(s.region)
+    .select({
+      id: projectLinks.id,
+      url: projectLinks.url,
+      label: projectLinks.label,
+      kind: projectLinks.kind,
+      position: projectLinks.position,
+      createdAt: projectLinks.createdAt
+    })
+    .from(projectLinks)
+    .where(eq(projectLinks.projectId, id))
+    .orderBy(
+      sql`${projectLinks.position} IS NULL`,
+      asc(projectLinks.position),
+      asc(projectLinks.createdAt)
+    );
+}
+
+export function getProjectPeople(s: Scope, id: string): Promise<ProjectMember[]> {
+  return db(s.region)
+    .select({ id: people.id, name: people.name, avatarUrl: people.avatarUrl })
+    .from(projectPeople)
+    .innerJoin(people, eq(people.id, projectPeople.personId))
+    .where(and(eq(projectPeople.projectId, id), eq(people.workspaceId, s.workspaceId)))
+    .orderBy(asc(people.name));
+}
+
+export function getProjectCompanies(s: Scope, id: string): Promise<ProjectMember[]> {
+  return db(s.region)
+    .select({
+      id: companies.id,
+      name: companies.name,
+      logoUrl: companies.logoUrl,
+      faviconUrl: companies.faviconUrl,
+      domain: companies.domain
+    })
+    .from(projectCompanies)
+    .innerJoin(companies, eq(companies.id, projectCompanies.companyId))
+    .where(and(eq(projectCompanies.projectId, id), eq(companies.workspaceId, s.workspaceId)))
+    .orderBy(asc(companies.name));
+}
+
+export function getProjectInteractions(
+  s: Scope,
+  id: string,
+  limit = PROJECT_INTERACTIONS_LIMIT
+): Promise<ProjectInteractionRow[]> {
+  return db(s.region)
+    .select({
+      id: interactions.id,
+      occurredAt: interactions.occurredAt,
+      type: interactions.type,
+      title: interactions.title
+    })
+    .from(interactionProjects)
+    .innerJoin(interactions, eq(interactions.id, interactionProjects.interactionId))
+    .where(and(eq(interactionProjects.projectId, id), eq(interactions.workspaceId, s.workspaceId)))
+    .orderBy(desc(interactions.occurredAt))
+    .limit(limit);
+}
+
+/**
+ * Milestones and goals read directly here rather than through
+ * `project-plan.ts`, whose exports re-verify the project with an extra query.
+ * By this point the caller already holds the project row, which *is* the
+ * workspace check.
+ */
+export function getProjectMilestones(s: Scope, id: string): Promise<ProjectMilestone[]> {
+  return db(s.region)
+    .select()
+    .from(projectMilestones)
+    .where(eq(projectMilestones.projectId, id))
+    .orderBy(asc(projectMilestones.position), asc(projectMilestones.createdAt));
+}
+
+export function getProjectGoals(s: Scope, id: string): Promise<ProjectGoal[]> {
+  return db(s.region)
+    .select()
+    .from(projectGoals)
+    .where(eq(projectGoals.projectId, id))
+    .orderBy(asc(projectGoals.position), asc(projectGoals.createdAt));
+}
+
+/**
+ * The whole entity in one object. Used by the API (`GET`/`PATCH` return the
+ * fresh entity); the page load composes the parts above instead so it can
+ * stream them.
+ */
+export async function getProject(
+  s: Scope,
+  id: string
+): Promise<ProjectDetail | null> {
+  const project = await getProjectHeader(s, id);
   if (!project) return null;
 
-  const [links, peopleRows, companyRows, interactionRows] = await Promise.all([
-    d
-      .select({
-        id: projectLinks.id,
-        url: projectLinks.url,
-        label: projectLinks.label,
-        createdAt: projectLinks.createdAt
-      })
-      .from(projectLinks)
-      .where(eq(projectLinks.projectId, id))
-      .orderBy(asc(projectLinks.createdAt)),
-    d
-      .select({
-        id: people.id,
-        name: people.name,
-        avatarUrl: people.avatarUrl
-      })
-      .from(projectPeople)
-      .innerJoin(people, eq(people.id, projectPeople.personId))
-      .where(and(eq(projectPeople.projectId, id), eq(people.workspaceId, s.workspaceId)))
-      .orderBy(asc(people.name)),
-    d
-      .select({
-        id: companies.id,
-        name: companies.name,
-        logoUrl: companies.logoUrl,
-        faviconUrl: companies.faviconUrl,
-        domain: companies.domain
-      })
-      .from(projectCompanies)
-      .innerJoin(companies, eq(companies.id, projectCompanies.companyId))
-      .where(and(eq(projectCompanies.projectId, id), eq(companies.workspaceId, s.workspaceId)))
-      .orderBy(asc(companies.name)),
-    d
-      .select({
-        id: interactions.id,
-        occurredAt: interactions.occurredAt,
-        type: interactions.type,
-        title: interactions.title
-      })
-      .from(interactionProjects)
-      .innerJoin(interactions, eq(interactions.id, interactionProjects.interactionId))
-      .where(and(eq(interactionProjects.projectId, id), eq(interactions.workspaceId, s.workspaceId)))
-      .orderBy(desc(interactions.occurredAt))
+  const [links, peopleRows, companyRows, interactionRows, milestones, goals] = await Promise.all([
+    getProjectLinks(s, id),
+    getProjectPeople(s, id),
+    getProjectCompanies(s, id),
+    getProjectInteractions(s, id),
+    getProjectMilestones(s, id),
+    getProjectGoals(s, id)
   ]);
 
-  return { ...project, links, people: peopleRows, companies: companyRows, interactions: interactionRows };
+  return {
+    ...project,
+    links,
+    people: peopleRows,
+    companies: companyRows,
+    interactions: interactionRows,
+    milestones,
+    goals
+  };
 }
 
 /** Active projects where this person is a member. */

@@ -10,6 +10,7 @@
   import { Search, Plus, ArrowDownUp } from 'lucide-svelte';
   import ProjectCard from '$lib/components/ProjectCard.svelte';
   import { registerCommands } from '$lib/commands/registry.svelte';
+  import { PROJECT_TYPES, PROJECT_TYPE_LABELS } from '$lib/projectTypes';
   import type { ProjectStatus } from '$lib/server/schema';
 
   let { data } = $props();
@@ -77,6 +78,15 @@
   ];
 </script>
 
+{#snippet filterPill(href: string, label: string, active: boolean)}
+  <a
+    {href}
+    class="rounded-full border px-2.5 py-1 {active
+      ? 'border-[var(--color-highlight-border)] bg-[var(--color-highlight-bg)] text-[var(--color-text)]'
+      : 'border-[var(--color-border)] text-[var(--color-muted)] hover:bg-[var(--color-surface)]'}"
+  >{label}</a>
+{/snippet}
+
 <svelte:head>
   <title>Projects — {APP_NAME}</title>
 </svelte:head>
@@ -129,12 +139,18 @@
 
   <div class="flex flex-wrap items-center gap-2 text-xs">
     {#each STATUS_FILTERS as f (f.value)}
-      <a
-        href={buildUrl({ status: f.value === 'active' ? null : f.value })}
-        class="rounded-full border px-2.5 py-1 {data.status === f.value
-          ? 'border-[var(--color-highlight-border)] bg-[var(--color-highlight-bg)] text-[var(--color-text)]'
-          : 'border-[var(--color-border)] text-[var(--color-muted)] hover:bg-[var(--color-surface)]'}"
-      >{f.label}</a>
+      {@render filterPill(
+        buildUrl({ status: f.value === 'active' ? null : f.value }),
+        f.label,
+        data.status === f.value
+      )}
+    {/each}
+
+    <span class="mx-1 h-4 w-px bg-[var(--color-border)]"></span>
+
+    {@render filterPill(buildUrl({ type: null }), 'Any type', data.projectType === 'all')}
+    {#each PROJECT_TYPES as t (t)}
+      {@render filterPill(buildUrl({ type: t }), PROJECT_TYPE_LABELS[t], data.projectType === t)}
     {/each}
   </div>
 
@@ -144,9 +160,15 @@
       <EmptyState icon={Search} title="No matches" description={`Nothing here matches “${data.q}”.`}>
         {#snippet actions()}<Button href="/projects" variant="secondary">Clear search</Button>{/snippet}
       </EmptyState>
-    {:else if data.status !== 'active'}
-      <EmptyState icon={Briefcase} title="Nothing here" description={`No ${data.status} projects.`}>
-        {#snippet actions()}<Button href="/projects" variant="secondary">Show active</Button>{/snippet}
+    {:else if data.status !== 'active' || data.projectType !== 'all'}
+      <EmptyState
+        icon={Briefcase}
+        title="Nothing here"
+        description={`No ${data.status === 'all' ? '' : data.status + ' '}${
+          data.projectType === 'all' ? '' : PROJECT_TYPE_LABELS[data.projectType].toLowerCase() + ' '
+        }projects.`}
+      >
+        {#snippet actions()}<Button href="/projects" variant="secondary">Clear filters</Button>{/snippet}
       </EmptyState>
     {:else}
       <EmptyState icon={Briefcase} title="No projects yet" description={"Track a fundraise, a launch or a consulting engagement, with the people and companies attached."}>
@@ -163,6 +185,7 @@
             name={p.name}
             description={p.description}
             status={p.status}
+            projectType={p.projectType}
             startDate={p.startDate}
             endDate={p.endDate}
             memberCount={p.memberCount}

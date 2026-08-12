@@ -196,6 +196,8 @@ const MEMBER_ALLOWED = new Map<string, string>([
   ['projects/+server.ts', 'routine CRM work'],
   ['projects/[id]/+server.ts', 'routine CRM work'],
   ['projects/[id]/companies/+server.ts', 'linking records'],
+  ['projects/[id]/milestones/+server.ts', "planning a project you can already edit"],
+  ['projects/[id]/goals/+server.ts', "planning a project you can already edit"],
   ['projects/[id]/interactions/+server.ts', 'linking records'],
   ['projects/[id]/links/+server.ts', 'linking records'],
   ['projects/[id]/people/+server.ts', 'linking records'],

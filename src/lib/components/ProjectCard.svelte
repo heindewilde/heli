@@ -3,6 +3,8 @@
   import StatusChip from './StatusChip.svelte';
   import CompanyLogo from './CompanyLogo.svelte';
   import CollectionIcon from '$lib/components/CollectionIcon.svelte';
+  import Badge from '$lib/ui/Badge.svelte';
+  import { PROJECT_TYPE_LABELS, type ProjectType } from '$lib/projectTypes';
   import type { ProjectStatus } from '$lib/server/schema';
 
   type Company = { id: string; name: string; domain: string | null; logoUrl: string | null; faviconUrl: string | null };
@@ -12,6 +14,7 @@
     name: string;
     description?: string | null;
     status: ProjectStatus;
+    projectType?: ProjectType | null;
     startDate?: number | null;
     endDate?: number | null;
     memberCount: number;
@@ -25,6 +28,7 @@
     name,
     description,
     status,
+    projectType = null,
     startDate,
     endDate,
     memberCount,
@@ -75,7 +79,10 @@
         <Briefcase size={20} strokeWidth={1.75} />
       {/if}
     </span>
-    <span class="mt-1">
+    <span class="mt-1 flex items-center gap-1.5">
+      {#if projectType}
+        <Badge tone="neutral" size="sm">{PROJECT_TYPE_LABELS[projectType]}</Badge>
+      {/if}
       <StatusChip {status} size="sm" />
     </span>
   </div>

@@ -477,11 +477,15 @@ export const projects = sqliteTable(
     name: text('name').notNull(),
     description: text('description'),
     status: text('status').notNull().default('active'),
+    /** One of PROJECT_TYPES. Nullable: existing rows predate the column. */
+    projectType: text('project_type'),
     startDate: integer('start_date'),
     endDate: integer('end_date'),
     billingType: text('billing_type').notNull().default('none'),
     hourlyRate: integer('hourly_rate'),
     fixedFee: integer('fixed_fee'),
+    /** Cents. Only meaningful when billingType === 'retainer'. */
+    monthlyFee: integer('monthly_fee'),
     currency: text('currency'),
     nextStep: text('next_step'),
     icon: text('icon'),
@@ -504,9 +508,64 @@ export const projectLinks = sqliteTable(
       .references(() => projects.id, { onDelete: 'cascade' }),
     url: text('url').notNull(),
     label: text('label'),
+    /** One of LINK_KINDS. Nullable — an unclassified link groups under 'other'. */
+    kind: text('kind'),
+    position: integer('position'),
     createdAt: integer('created_at').notNull()
   },
   (t) => [index('idx_project_links_project').on(t.projectId)]
+);
+
+/**
+ * Dated checkpoints on a project — the plan, as opposed to the chores.
+ *
+ * No `workspace_id`: reached through the parent project, exactly like
+ * `pipeline_stages`. Tenancy comes from `projectExists(s, projectId)` in
+ * saveProject.ts, which every write in `project-plan.ts` calls first.
+ */
+export const projectMilestones = sqliteTable(
+  'project_milestones',
+  {
+    id: text('id').primaryKey(),
+    projectId: text('project_id')
+      .notNull()
+      .references(() => projects.id, { onDelete: 'cascade' }),
+    title: text('title').notNull(),
+    description: text('description'),
+    dueAt: integer('due_at'),
+    completedAt: integer('completed_at'),
+    position: integer('position').notNull().default(0),
+    createdAt: integer('created_at').notNull(),
+    updatedAt: integer('updated_at').notNull()
+  },
+  (t) => [index('idx_project_milestones_project').on(t.projectId, t.position)]
+);
+
+/**
+ * Measurable targets on a project — "ship 12 posts", 7 done.
+ *
+ * Kept separate from milestones rather than folded in as nullable columns:
+ * "deliver the design system by 1 March" and "ship 12 posts" are different
+ * questions and read badly interleaved in one list.
+ */
+export const projectGoals = sqliteTable(
+  'project_goals',
+  {
+    id: text('id').primaryKey(),
+    projectId: text('project_id')
+      .notNull()
+      .references(() => projects.id, { onDelete: 'cascade' }),
+    title: text('title').notNull(),
+    /** Free-text unit label ('posts', 'hours', '%'). Display only. */
+    unit: text('unit'),
+    targetValue: integer('target_value').notNull(),
+    currentValue: integer('current_value').notNull().default(0),
+    dueAt: integer('due_at'),
+    position: integer('position').notNull().default(0),
+    createdAt: integer('created_at').notNull(),
+    updatedAt: integer('updated_at').notNull()
+  },
+  (t) => [index('idx_project_goals_project').on(t.projectId, t.position)]
 );
 
 export const projectPeople = sqliteTable(
@@ -807,6 +866,8 @@ export type Reminder = typeof reminders.$inferSelect;
 export type Task = typeof tasks.$inferSelect;
 export type Project = typeof projects.$inferSelect;
 export type ProjectLink = typeof projectLinks.$inferSelect;
+export type ProjectMilestone = typeof projectMilestones.$inferSelect;
+export type ProjectGoal = typeof projectGoals.$inferSelect;
 export type Collection = typeof collections.$inferSelect;
 export type CollectionItem = typeof collectionItems.$inferSelect;
 export type OAuthAccount = typeof oauthAccounts.$inferSelect;
@@ -830,8 +891,24 @@ export type ReminderKind = (typeof REMINDER_KINDS)[number];
 
 export const PROJECT_STATUSES = ['active', 'paused', 'completed', 'archived'] as const;
 export type ProjectStatus = (typeof PROJECT_STATUSES)[number];
-export const BILLING_TYPES = ['none', 'hourly', 'fixed'] as const;
-export type BillingType = (typeof BILLING_TYPES)[number];
+
+// Project type, billing shape and link kinds live in `$lib/projectTypes` so the
+// browser can import them without pulling Drizzle in. Re-exported here so every
+// existing `from './schema'` import keeps resolving.
+export {
+  PROJECT_TYPES,
+  PROJECT_TYPE_LABELS,
+  isProjectType,
+  BILLING_TYPES,
+  BILLING_TYPE_LABELS,
+  isBillingType,
+  BILLING_MONEY_FIELD,
+  LINK_KINDS,
+  LINK_KIND_LABELS,
+  isLinkKind,
+  linkKindOf
+} from '$lib/projectTypes';
+export type { ProjectType, BillingType, LinkKind } from '$lib/projectTypes';
 
 export const MEMBER_KINDS = ['person', 'company'] as const;
 export type MemberKind = (typeof MEMBER_KINDS)[number];

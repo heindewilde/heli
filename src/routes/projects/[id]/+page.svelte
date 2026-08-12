@@ -15,7 +15,18 @@
   import { COLLECTION_ICON_MAP } from '$lib/collectionIcons';
   import { TYPE_META, dayBucket, formatTime, type InteractionType } from '$lib/interactions';
   import { toast } from '$lib/toasts.svelte';
+  import MilestonesCard from '$lib/components/MilestonesCard.svelte';
+  import GoalsCard from '$lib/components/GoalsCard.svelte';
+  import Skeleton from '$lib/ui/Skeleton.svelte';
+  import {
+    PROJECT_TYPES,
+    PROJECT_TYPE_LABELS,
+    BILLING_TYPES,
+    BILLING_TYPE_LABELS,
+    BILLING_MONEY_FIELD
+  } from '$lib/projectTypes';
   import type { ProjectStatus } from '$lib/server/schema';
+  import type { ProjectInteractionRow } from '$lib/server/projects-query';
 
   let { data } = $props();
   const project = $derived(data.project);
@@ -139,17 +150,38 @@
     project.endDate < Date.now()
   );
 
-  const interactionGroups = $derived.by(() => {
+  // A function rather than a $derived: interactions now arrive as a streamed
+  // promise, so the grouping runs inside the {#await} block.
+  function groupInteractions(items: ProjectInteractionRow[]) {
     const today = new Date();
-    const map = new Map<string, { label: string; items: typeof project.interactions }>();
-    for (const item of project.interactions) {
+    const map = new Map<string, { label: string; items: ProjectInteractionRow[] }>();
+    for (const item of items) {
       const b = dayBucket(item.occurredAt, today);
       const g = map.get(b.key);
       if (g) g.items.push(item);
       else map.set(b.key, { label: b.label, items: [item] });
     }
     return [...map.entries()].sort((a, b) => (a[0] < b[0] ? 1 : -1));
-  });
+  }
+
+  /**
+   * The money row follows the billing type rather than repeating itself per
+   * branch — three billing types with a money field meant three copies of the
+   * same currency input, kept in sync by hand.
+   */
+  const moneyField = $derived(BILLING_MONEY_FIELD[project.billingType as keyof typeof BILLING_MONEY_FIELD]);
+  const MONEY_LABELS = { hourlyRate: 'Rate', fixedFee: 'Fee', monthlyFee: 'Monthly' } as const;
+  const MONEY_SUFFIX = { hourlyRate: '/hr', fixedFee: '', monthlyFee: '/mo' } as const;
+  const moneyValue = $derived(
+    moneyField ? ((project[moneyField] as number | null) ?? 0) : 0
+  );
+
+  async function saveMoney(raw: string) {
+    if (!moneyField) return;
+    const cents = Math.round(parseFloat(raw || '0') * 100);
+    if (!Number.isFinite(cents) || cents === moneyValue) return;
+    await patch({ [moneyField]: cents });
+  }
 
   let pickerPerson = $state<{ id: string; name: string; avatarUrl: string | null; role: string | null }[]>([]);
   let pickerCompany = $state<{ id: string; name: string; logoUrl: string | null; faviconUrl: string | null; domain: string | null } | null>(null);
@@ -228,16 +260,35 @@
         />
       </div>
 
+      {#await data.milestones}
+        <Skeleton variant="rows" lines={3} />
+      {:then milestones}
+        <MilestonesCard projectId={project.id} {milestones} />
+      {/await}
+
+      {#await data.goals}
+        <Skeleton variant="rows" lines={2} />
+      {:then goals}
+        <GoalsCard projectId={project.id} {goals} />
+      {/await}
+
       <div class="flex flex-col gap-2">
         <h2 class="text-sm font-semibold text-[var(--color-text)]">Links</h2>
-        <LinksEditor projectId={project.id} links={project.links} />
+        {#await data.links}
+          <Skeleton variant="rows" lines={2} />
+        {:then links}
+          <LinksEditor projectId={project.id} {links} />
+        {/await}
       </div>
 
       <div class="flex flex-col gap-2">
         <h2 class="text-sm font-semibold text-[var(--color-text)]">People</h2>
-        {#if project.people.length > 0}
+        {#await data.people}
+          <Skeleton variant="rows" lines={2} />
+        {:then projectPeople}
+        {#if projectPeople.length > 0}
           <ul class="flex flex-col gap-0.5">
-            {#each project.people as p (p.id)}
+            {#each projectPeople as p (p.id)}
               <li>
                 <div class="group flex items-center gap-2 rounded-[var(--radius-sm)] px-2 py-1.5 hover:bg-[var(--color-surface)]">
                   <a href={`/people/${p.id}`} class="flex min-w-0 flex-1 items-center gap-2">
@@ -265,15 +316,19 @@
           selected={pickerPerson}
           onAdd={onAddPerson}
           onRemove={() => (pickerPerson = [])}
-          placeholder={project.people.length > 0 ? 'Add another person…' : 'Add a person…'}
+          placeholder={projectPeople.length > 0 ? 'Add another person…' : 'Add a person…'}
         />
+        {/await}
       </div>
 
       <div class="flex flex-col gap-2">
         <h2 class="text-sm font-semibold text-[var(--color-text)]">Companies</h2>
-        {#if project.companies.length > 0}
+        {#await data.companies}
+          <Skeleton variant="rows" lines={2} />
+        {:then projectCompanies}
+        {#if projectCompanies.length > 0}
           <ul class="flex flex-col gap-0.5">
-            {#each project.companies as c (c.id)}
+            {#each projectCompanies as c (c.id)}
               <li>
                 <div class="group flex items-center gap-2 rounded-[var(--radius-sm)] px-2 py-1.5 hover:bg-[var(--color-surface)]">
                   <a href={`/companies/${c.id}`} class="flex min-w-0 flex-1 items-center gap-2">
@@ -299,8 +354,9 @@
         <CompanyPicker
           selected={pickerCompany}
           onPick={onPickCompany}
-          placeholder={project.companies.length > 0 ? 'Add another company…' : 'Add a company…'}
+          placeholder={projectCompanies.length > 0 ? 'Add another company…' : 'Add a company…'}
         />
+        {/await}
       </div>
 
       <div class="flex flex-col gap-2">
@@ -314,13 +370,16 @@
             Log interaction
           </a>
         </div>
-        {#if project.interactions.length === 0}
+        {#await data.interactions}
+          <Skeleton variant="rows" lines={4} />
+        {:then projectInteractions}
+        {#if projectInteractions.length === 0}
           <p class="rounded-[var(--radius-sm)] border border-dashed border-[var(--color-border)] bg-[var(--color-surface)] p-4 text-center text-xs text-[var(--color-muted)]">
             No interactions logged for {project.name} yet.
           </p>
         {:else}
           <div class="flex flex-col gap-3">
-            {#each interactionGroups as [key, g] (key)}
+            {#each groupInteractions(projectInteractions) as [key, g] (key)}
               <section class="flex flex-col gap-1">
                 <h3 class="text-xs font-medium uppercase tracking-wide text-[var(--color-subtle)]">{g.label}</h3>
                 <ul class="flex flex-col gap-0.5">
@@ -343,6 +402,7 @@
             {/each}
           </div>
         {/if}
+        {/await}
       </div>
     </section>
 
@@ -353,6 +413,19 @@
         <h3 class="text-xs font-medium uppercase tracking-wide text-[var(--color-subtle)]">Details</h3>
 
         <div class="flex flex-col gap-1.5">
+          <label class="flex items-center justify-between gap-2">
+            <span class="shrink-0 text-xs text-[var(--color-muted)]">Type</span>
+            <select
+              value={project.projectType ?? ''}
+              onchange={(e) => patch({ projectType: e.currentTarget.value || null })}
+              class={inputRowClass}
+            >
+              <option value="">Unset</option>
+              {#each PROJECT_TYPES as t (t)}
+                <option value={t}>{PROJECT_TYPE_LABELS[t]}</option>
+              {/each}
+            </select>
+          </label>
           <label class="flex items-center justify-between gap-2">
             <span class="shrink-0 text-xs text-[var(--color-muted)]">Start</span>
             <input
@@ -383,59 +456,28 @@
               onchange={(e) => patch({ billingType: e.currentTarget.value })}
               class={inputRowClass}
             >
-              <option value="none">None</option>
-              <option value="hourly">Hourly</option>
-              <option value="fixed">Fixed</option>
+              {#each BILLING_TYPES as b (b)}
+                <option value={b}>{BILLING_TYPE_LABELS[b]}</option>
+              {/each}
             </select>
           </label>
-          {#if project.billingType === 'hourly'}
+          {#if moneyField}
             <label class="flex items-center justify-between gap-2">
-              <span class="shrink-0 text-xs text-[var(--color-muted)]">Rate</span>
+              <span class="shrink-0 text-xs text-[var(--color-muted)]">{MONEY_LABELS[moneyField]}</span>
               <div class="flex items-center gap-1">
                 <input
                   type="number"
                   inputmode="decimal"
                   step="0.01"
                   min="0"
-                  value={(project.hourlyRate ?? 0) / 100}
-                  onblur={(e) => {
-                    const cents = Math.round(parseFloat(e.currentTarget.value || '0') * 100);
-                    if (cents !== (project.hourlyRate ?? 0)) patch({ hourlyRate: cents });
-                  }}
-                  class="w-20 {inputRowClass}"
+                  value={moneyValue / 100}
+                  onblur={(e) => saveMoney(e.currentTarget.value)}
+                  class="w-24 {inputRowClass}"
                 />
-                <span class="text-xs text-[var(--color-muted)]">/hr</span>
+                {#if MONEY_SUFFIX[moneyField]}
+                  <span class="text-xs text-[var(--color-muted)]">{MONEY_SUFFIX[moneyField]}</span>
+                {/if}
               </div>
-            </label>
-            <label class="flex items-center justify-between gap-2">
-              <span class="shrink-0 text-xs text-[var(--color-muted)]">Currency</span>
-              <input
-                type="text"
-                maxlength="3"
-                value={project.currency ?? ''}
-                placeholder="USD"
-                onblur={(e) => {
-                  const val = e.currentTarget.value.trim().toUpperCase() || null;
-                  if (val !== project.currency) patch({ currency: val });
-                }}
-                class="w-14 uppercase {inputRowClass}"
-              />
-            </label>
-          {:else if project.billingType === 'fixed'}
-            <label class="flex items-center justify-between gap-2">
-              <span class="shrink-0 text-xs text-[var(--color-muted)]">Fee</span>
-              <input
-                type="number"
-                inputmode="decimal"
-                step="0.01"
-                min="0"
-                value={(project.fixedFee ?? 0) / 100}
-                onblur={(e) => {
-                  const cents = Math.round(parseFloat(e.currentTarget.value || '0') * 100);
-                  if (cents !== (project.fixedFee ?? 0)) patch({ fixedFee: cents });
-                }}
-                class="w-24 {inputRowClass}"
-              />
             </label>
             <label class="flex items-center justify-between gap-2">
               <span class="shrink-0 text-xs text-[var(--color-muted)]">Currency</span>

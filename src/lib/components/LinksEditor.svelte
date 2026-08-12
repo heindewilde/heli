@@ -3,8 +3,15 @@
   import { readErrorCode } from '$lib/api-error';
   import { Plus, Trash2, ExternalLink, Pencil, Check, X } from 'lucide-svelte';
   import { toast } from '$lib/toasts.svelte';
+  import {
+    LINK_KINDS,
+    LINK_KIND_LABELS,
+    guessLinkKind,
+    linkKindOf,
+    type LinkKind
+  } from '$lib/projectTypes';
 
-  type Link = { id: string; url: string; label: string | null };
+  type Link = { id: string; url: string; label: string | null; kind: string | null };
 
   type Props = {
     projectId: string;
@@ -16,21 +23,52 @@
   let adding = $state(false);
   let newUrl = $state('');
   let newLabel = $state('');
+  let newKind = $state<LinkKind>('other');
+  /**
+   * Once the user picks a kind by hand, stop re-guessing from the URL. Without
+   * this, typing the URL after choosing "Design" would silently reset it.
+   */
+  let kindTouched = $state(false);
   let saving = $state(false);
   let editingId = $state<string | null>(null);
   let editUrl = $state('');
   let editLabel = $state('');
+  let editKind = $state<LinkKind>('other');
+
+  /** Links group under their kind; the order here is the order on screen. */
+  const grouped = $derived.by(() => {
+    const map = new Map<LinkKind, Link[]>();
+    for (const link of links) {
+      const k = linkKindOf(link.kind);
+      const list = map.get(k);
+      if (list) list.push(link);
+      else map.set(k, [link]);
+    }
+    return LINK_KINDS.filter((k) => map.has(k)).map((k) => ({ kind: k, items: map.get(k)! }));
+  });
+
+  /** More than one group is what makes the headings worth their vertical space. */
+  const showHeadings = $derived(grouped.length > 1);
+
+  function onNewUrlInput(value: string) {
+    newUrl = value;
+    if (!kindTouched) newKind = guessLinkKind(value.trim());
+  }
 
   function startAdding() {
     adding = true;
     newUrl = '';
     newLabel = '';
+    newKind = 'other';
+    kindTouched = false;
   }
 
   function cancelAdding() {
     adding = false;
     newUrl = '';
     newLabel = '';
+    newKind = 'other';
+    kindTouched = false;
   }
 
   async function add() {
@@ -42,7 +80,7 @@
       const res = await fetch(`/api/projects/${projectId}/links`, {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ url, label: newLabel.trim() || null })
+        body: JSON.stringify({ url, label: newLabel.trim() || null, kind: newKind })
       });
       if (!res.ok) {
         const code = await readErrorCode(res);
@@ -66,12 +104,14 @@
     editingId = link.id;
     editUrl = link.url;
     editLabel = link.label ?? '';
+    editKind = linkKindOf(link.kind);
   }
 
   function cancelEditing() {
     editingId = null;
     editUrl = '';
     editLabel = '';
+    editKind = 'other';
   }
 
   async function commitEdit() {
@@ -81,7 +121,12 @@
       const res = await fetch(`/api/projects/${projectId}/links`, {
         method: 'PATCH',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ id: editingId, url: editUrl.trim(), label: editLabel.trim() || null })
+        body: JSON.stringify({
+          id: editingId,
+          url: editUrl.trim(),
+          label: editLabel.trim() || null,
+          kind: editKind
+        })
       });
       if (!res.ok) {
         toast.danger('Could not update link.');
@@ -129,8 +174,15 @@
     </p>
   {/if}
   {#if links.length > 0}
+    <div class="flex flex-col gap-3">
+    {#each grouped as group (group.kind)}
+    {#if showHeadings}
+      <h3 class="text-xs font-medium uppercase tracking-wide text-[var(--color-subtle)]">
+        {LINK_KIND_LABELS[group.kind]}
+      </h3>
+    {/if}
     <ul class="flex flex-col gap-1">
-      {#each links as link (link.id)}
+      {#each group.items as link (link.id)}
         <li>
           {#if editingId === link.id}
             <div class="flex flex-col gap-2 rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-surface)] p-2">
@@ -144,6 +196,15 @@
                 placeholder="Label (optional)"
                 class="rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-bg)] px-2 py-1 text-sm"
               />
+              <select
+                bind:value={editKind}
+                aria-label="Link type"
+                class="rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-bg)] px-2 py-1 text-sm"
+              >
+                {#each LINK_KINDS as k (k)}
+                  <option value={k}>{LINK_KIND_LABELS[k]}</option>
+                {/each}
+              </select>
               <div class="flex items-center gap-1">
                 <button
                   type="button"
@@ -192,12 +253,15 @@
         </li>
       {/each}
     </ul>
+    {/each}
+    </div>
   {/if}
   {#if adding}
     <div class="flex flex-col gap-2 rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-surface)] p-2">
       <!-- svelte-ignore a11y_autofocus -->
       <input
-        bind:value={newUrl}
+        value={newUrl}
+        oninput={(e) => onNewUrlInput(e.currentTarget.value)}
         type="url"
         placeholder="https://…"
         autofocus
@@ -210,6 +274,16 @@
         onkeydown={(e) => { if (e.key === 'Enter') { e.preventDefault(); add(); } if (e.key === 'Escape') cancelAdding(); }}
         class="rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-bg)] px-2 py-1 text-sm"
       />
+      <select
+        bind:value={newKind}
+        onchange={() => (kindTouched = true)}
+        aria-label="Link type"
+        class="rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-bg)] px-2 py-1 text-sm"
+      >
+        {#each LINK_KINDS as k (k)}
+          <option value={k}>{LINK_KIND_LABELS[k]}</option>
+        {/each}
+      </select>
       <div class="flex items-center gap-1">
         <button
           type="button"

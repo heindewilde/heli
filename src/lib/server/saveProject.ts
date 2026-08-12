@@ -1,4 +1,4 @@
-import { and, eq } from 'drizzle-orm';
+import { and, eq, sql } from 'drizzle-orm';
 import { createId } from '@paralleldrive/cuid2';
 import { db } from './db';
 import {
@@ -8,18 +8,28 @@ import {
   projectCompanies,
   interactionProjects,
   PROJECT_STATUSES,
-  BILLING_TYPES,
-  type ProjectStatus,
-  type BillingType
+  type ProjectStatus
 } from './schema';
+import {
+  BILLING_MONEY_FIELD,
+  isBillingType,
+  isLinkKind,
+  isProjectType,
+  type BillingType,
+  type LinkKind,
+  type ProjectType
+} from '$lib/projectTypes';
 import { sanitize, sanitizePlainText } from './sanitize';
 import type { Scope } from './scope';
 import { bumpSearchEpoch } from './search';
+
+export { isBillingType, isProjectType, isLinkKind };
 
 export type ManualProjectInput = {
   name: string;
   description?: string | null;
   status?: ProjectStatus;
+  projectType?: ProjectType | null;
   // Dates accept ISO strings (`'2026-05-01'`) or epoch ms — the form path
   // submits strings, the API path can pass either. Coercion happens in
   // sanitizeDate.
@@ -28,6 +38,7 @@ export type ManualProjectInput = {
   billingType?: BillingType;
   hourlyRate?: number | null;
   fixedFee?: number | null;
+  monthlyFee?: number | null;
   currency?: string | null;
   nextStep?: string | null;
   icon?: string | null;
@@ -37,10 +48,6 @@ export type UpdateProjectInput = Partial<ManualProjectInput>;
 
 export function isProjectStatus(v: unknown): v is ProjectStatus {
   return typeof v === 'string' && (PROJECT_STATUSES as readonly string[]).includes(v);
-}
-
-export function isBillingType(v: unknown): v is BillingType {
-  return typeof v === 'string' && (BILLING_TYPES as readonly string[]).includes(v);
 }
 
 const ALLOWED_CURRENCY = /^[A-Z]{3}$/;
@@ -89,6 +96,13 @@ function coerceFields(input: UpdateProjectInput): Partial<typeof projects.$infer
     if (!isProjectStatus(input.status)) throw new Error('invalid_status');
     out.status = input.status;
   }
+  if (input.projectType !== undefined) {
+    if (input.projectType == null) out.projectType = null;
+    else {
+      if (!isProjectType(input.projectType)) throw new Error('invalid_project_type');
+      out.projectType = input.projectType;
+    }
+  }
   if (input.startDate !== undefined) out.startDate = sanitizeDate(input.startDate);
   if (input.endDate !== undefined) out.endDate = sanitizeDate(input.endDate);
   if (input.billingType !== undefined) {
@@ -97,6 +111,7 @@ function coerceFields(input: UpdateProjectInput): Partial<typeof projects.$infer
   }
   if (input.hourlyRate !== undefined) out.hourlyRate = sanitizeMoneyCents(input.hourlyRate);
   if (input.fixedFee !== undefined) out.fixedFee = sanitizeMoneyCents(input.fixedFee);
+  if (input.monthlyFee !== undefined) out.monthlyFee = sanitizeMoneyCents(input.monthlyFee);
   if (input.currency !== undefined) out.currency = sanitizeCurrency(input.currency);
   if (input.nextStep !== undefined) {
     out.nextStep = input.nextStep == null ? null : sanitizePlainText(String(input.nextStep), 200) || null;
@@ -107,23 +122,29 @@ function coerceFields(input: UpdateProjectInput): Partial<typeof projects.$infer
   return out;
 }
 
+const MONEY_FIELDS = ['hourlyRate', 'fixedFee', 'monthlyFee'] as const;
+
+/**
+ * Cross-field consistency: a billing type owns exactly one money column, so
+ * every other one is blanked whenever the type is set. Driven by
+ * BILLING_MONEY_FIELD rather than an if/else chain — with four billing types
+ * the chain had to be right in two places, and adding a fifth would have meant
+ * remembering both.
+ */
+function applyBillingRule(fields: Partial<typeof projects.$inferInsert>, billingType: BillingType) {
+  const keep = BILLING_MONEY_FIELD[billingType];
+  for (const f of MONEY_FIELDS) if (f !== keep) fields[f] = null;
+  if (billingType === 'none') fields.currency = null;
+}
+
 export async function createProject(
   s: Scope,
   input: ManualProjectInput
 ): Promise<{ id: string }> {
   const fields = coerceFields(input);
   if (!fields.name) throw new Error('missing_name');
-  // Cross-field consistency: clear money fields when not relevant.
   const billingType = (fields.billingType as BillingType | undefined) ?? 'none';
-  if (billingType === 'none') {
-    fields.hourlyRate = null;
-    fields.fixedFee = null;
-    fields.currency = null;
-  } else if (billingType === 'hourly') {
-    fields.fixedFee = null;
-  } else if (billingType === 'fixed') {
-    fields.hourlyRate = null;
-  }
+  applyBillingRule(fields, billingType);
   const id = createId();
   const now = Date.now();
   await db(s.region).insert(projects).values({
@@ -133,11 +154,13 @@ export async function createProject(
     name: fields.name,
     description: fields.description ?? null,
     status: (fields.status as ProjectStatus | undefined) ?? 'active',
+    projectType: fields.projectType ?? null,
     startDate: fields.startDate ?? null,
     endDate: fields.endDate ?? null,
     billingType,
     hourlyRate: fields.hourlyRate ?? null,
     fixedFee: fields.fixedFee ?? null,
+    monthlyFee: fields.monthlyFee ?? null,
     currency: fields.currency ?? null,
     nextStep: fields.nextStep ?? null,
     icon: fields.icon ?? null,
@@ -155,18 +178,10 @@ export async function updateProject(
 ): Promise<void> {
   const fields = coerceFields(input);
   if (Object.keys(fields).length === 0) throw new Error('no_updates');
-  // Same cross-field rules as create: when billingType changes, blank out
-  // the irrelevant money fields so we never end up with a stale rate.
-  if ('billingType' in fields) {
-    if (fields.billingType === 'none') {
-      fields.hourlyRate = null;
-      fields.fixedFee = null;
-      fields.currency = null;
-    } else if (fields.billingType === 'hourly') {
-      fields.fixedFee = null;
-    } else if (fields.billingType === 'fixed') {
-      fields.hourlyRate = null;
-    }
+  // Same cross-field rule as create: when billingType changes, blank out the
+  // irrelevant money fields so we never end up with a stale rate.
+  if (fields.billingType !== undefined) {
+    applyBillingRule(fields, fields.billingType as BillingType);
   }
   await db(s.region)
     .update(projects)
@@ -180,7 +195,9 @@ export async function deleteProject(
   id: string
 ): Promise<void> {
   // Cascades: project_links, project_people, project_companies,
-  // interaction_projects, project_tags all FK with ON DELETE CASCADE.
+  // interaction_projects, project_milestones and project_goals all FK with
+  // ON DELETE CASCADE. Note time_entries.project_id is SET NULL, not CASCADE —
+  // deleting a project must not erase the record of hours billed against it.
   await db(s.region).delete(projects).where(and(eq(projects.id, id), eq(projects.workspaceId, s.workspaceId)));
   bumpSearchEpoch(s.workspaceId);
 }
@@ -274,21 +291,31 @@ function sanitizeLinkUrl(raw: unknown): string {
   return s;
 }
 
+function sanitizeLinkKind(v: unknown): LinkKind | null {
+  if (v == null || v === '') return null;
+  if (!isLinkKind(v)) throw new Error('invalid_link_kind');
+  return v;
+}
+
 export async function addLink(
   s: Scope,
   projectId: string,
   rawUrl: unknown,
-  rawLabel: unknown
+  rawLabel: unknown,
+  rawKind?: unknown
 ): Promise<{ id: string }> {
   if (!(await projectExists(s, projectId))) throw new Error('not_found');
   const url = sanitizeLinkUrl(rawUrl);
   const label = rawLabel == null ? null : sanitizePlainText(String(rawLabel), LINK_LABEL_MAX) || null;
+  const kind = sanitizeLinkKind(rawKind);
   const id = createId();
   await db(s.region).insert(projectLinks).values({
     id,
     projectId,
     url,
     label,
+    kind,
+    position: await nextLinkPosition(s, projectId),
     createdAt: Date.now()
   });
   return { id };
@@ -299,7 +326,8 @@ export async function updateLink(
   projectId: string,
   linkId: string,
   rawUrl: unknown,
-  rawLabel: unknown
+  rawLabel: unknown,
+  rawKind?: unknown
 ): Promise<void> {
   if (!(await projectExists(s, projectId))) throw new Error('not_found');
   const updates: Partial<typeof projectLinks.$inferInsert> = {};
@@ -307,11 +335,26 @@ export async function updateLink(
   if (rawLabel !== undefined) {
     updates.label = rawLabel == null ? null : sanitizePlainText(String(rawLabel), LINK_LABEL_MAX) || null;
   }
+  if (rawKind !== undefined) updates.kind = sanitizeLinkKind(rawKind);
   if (Object.keys(updates).length === 0) throw new Error('no_updates');
   await db(s.region)
     .update(projectLinks)
     .set(updates)
     .where(and(eq(projectLinks.id, linkId), eq(projectLinks.projectId, projectId)));
+}
+
+/**
+ * Append position. Links created before the column exists have position NULL
+ * and sort last-by-createdAt behind the numbered ones — see the ORDER BY in
+ * getProject. COALESCE keeps a mixed table monotonic.
+ */
+async function nextLinkPosition(s: Scope, projectId: string): Promise<number> {
+  const row = await db(s.region)
+    .select({ max: sql<number | null>`MAX(COALESCE(${projectLinks.position}, -1))` })
+    .from(projectLinks)
+    .where(eq(projectLinks.projectId, projectId))
+    .get();
+  return (row?.max ?? -1) + 1;
 }
 
 export async function removeLink(
@@ -327,7 +370,15 @@ export async function removeLink(
 
 // ----- Helpers -------------------------------------------------------------
 
-async function projectExists(s: Scope, projectId: string): Promise<boolean> {
+/**
+ * The workspace check for everything hanging off a project.
+ *
+ * Exported because `project-plan.ts` (milestones, goals) and
+ * `allocations.ts` need exactly this and must not grow a second copy — those
+ * child tables carry no workspace_id of their own, so this is the only thing
+ * standing between them and a cross-tenant write.
+ */
+export async function projectExists(s: Scope, projectId: string): Promise<boolean> {
   const row = await db(s.region)
     .select({ id: projects.id })
     .from(projects)

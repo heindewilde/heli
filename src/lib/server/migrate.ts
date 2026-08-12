@@ -296,6 +296,35 @@ CREATE TABLE IF NOT EXISTS interaction_projects (
 );
 CREATE INDEX IF NOT EXISTS idx_ip_project ON interaction_projects(project_id);
 
+-- Milestones and goals carry no workspace_id: like pipeline_stages, they are
+-- reached through the parent and every write guards on projectExists().
+CREATE TABLE IF NOT EXISTS project_milestones (
+  id TEXT PRIMARY KEY,
+  project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+  title TEXT NOT NULL,
+  description TEXT,
+  due_at INTEGER,
+  completed_at INTEGER,
+  position INTEGER NOT NULL DEFAULT 0,
+  created_at INTEGER NOT NULL,
+  updated_at INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_project_milestones_project ON project_milestones(project_id, position);
+
+CREATE TABLE IF NOT EXISTS project_goals (
+  id TEXT PRIMARY KEY,
+  project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+  title TEXT NOT NULL,
+  unit TEXT,
+  target_value INTEGER NOT NULL,
+  current_value INTEGER NOT NULL DEFAULT 0,
+  due_at INTEGER,
+  position INTEGER NOT NULL DEFAULT 0,
+  created_at INTEGER NOT NULL,
+  updated_at INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_project_goals_project ON project_goals(project_id, position);
+
 CREATE TABLE IF NOT EXISTS collections (
   id TEXT PRIMARY KEY,
   user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -593,6 +622,14 @@ const ALTERS: string[] = [
   `ALTER TABLE collections ADD COLUMN icon TEXT`,
   // Icon picker for projects.
   `ALTER TABLE projects ADD COLUMN icon TEXT`,
+  // Project depth: what the work is, and the retainer billing shape.
+  // `monthly_fee` is cents, like hourly_rate and fixed_fee, and is only
+  // meaningful when billing_type = 'retainer'.
+  `ALTER TABLE projects ADD COLUMN project_type TEXT`,
+  `ALTER TABLE projects ADD COLUMN monthly_fee INTEGER`,
+  // Links get grouped and ordered rather than being one undifferentiated list.
+  `ALTER TABLE project_links ADD COLUMN kind TEXT`,
+  `ALTER TABLE project_links ADD COLUMN position INTEGER`,
   // Stage color picker on pipeline creation.
   `ALTER TABLE pipeline_stages ADD COLUMN color TEXT`,
   // ── Workspace tenancy ──────────────────────────────────────────────────────
