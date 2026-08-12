@@ -15,6 +15,7 @@
     type ProjectType
   } from '$lib/projectTypes';
   import { autofocus } from '$lib/actions';
+  import Select from '$lib/ui/Select.svelte';
 
   let { form } = $props();
   let submitting = $state(false);
@@ -152,12 +153,18 @@
 
     <label class="flex flex-col gap-1 text-sm">
       <span class="text-[var(--color-muted)]">Type</span>
-      <select name="projectType" bind:value={projectType} class={inputClass}>
-        <option value="">Unset</option>
-        {#each PROJECT_TYPES as t (t)}
-          <option value={t}>{PROJECT_TYPE_LABELS[t]}</option>
-        {/each}
-      </select>
+      <!-- `name` renders a hidden input: this page is a form action, so the
+           value has to reach formData. -->
+      <Select
+        size="md"
+        name="projectType"
+        label="Type"
+        bind:value={projectType}
+        options={[
+          { value: '', label: 'Unset' },
+          ...PROJECT_TYPES.map((t) => ({ value: t, label: PROJECT_TYPE_LABELS[t] }))
+        ]}
+      />
     </label>
 
     <div class="grid grid-cols-2 gap-3">

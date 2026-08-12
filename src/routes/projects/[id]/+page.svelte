@@ -19,6 +19,7 @@
   import GoalsCard from '$lib/components/GoalsCard.svelte';
   import AllocationsCard from '$lib/components/AllocationsCard.svelte';
   import Skeleton from '$lib/ui/Skeleton.svelte';
+  import Select from '$lib/ui/Select.svelte';
   import { formatHours, formatMinutes } from '$lib/duration';
   import type { AllocationRow } from '$lib/server/allocations';
   import {
@@ -441,19 +442,19 @@
         <h3 class="text-xs font-medium uppercase tracking-wide text-[var(--color-subtle)]">Details</h3>
 
         <div class="flex flex-col gap-1.5">
-          <label class="flex items-center justify-between gap-2">
+          <div class="flex items-center justify-between gap-2">
             <span class="shrink-0 text-xs text-[var(--color-muted)]">Type</span>
-            <select
+            <Select
+              ghost
+              label="Project type"
               value={project.projectType ?? ''}
-              onchange={(e) => patch({ projectType: e.currentTarget.value || null })}
-              class={inputRowClass}
-            >
-              <option value="">Unset</option>
-              {#each PROJECT_TYPES as t (t)}
-                <option value={t}>{PROJECT_TYPE_LABELS[t]}</option>
-              {/each}
-            </select>
-          </label>
+              options={[
+                { value: '', label: 'Unset' },
+                ...PROJECT_TYPES.map((t) => ({ value: t, label: PROJECT_TYPE_LABELS[t] }))
+              ]}
+              onchange={(v) => patch({ projectType: v || null })}
+            />
+          </div>
           <label class="flex items-center justify-between gap-2">
             <span class="shrink-0 text-xs text-[var(--color-muted)]">Start</span>
             <input
@@ -477,18 +478,16 @@
         <div class="border-t border-[var(--color-border)]"></div>
 
         <div class="flex flex-col gap-1.5">
-          <label class="flex items-center justify-between gap-2">
+          <div class="flex items-center justify-between gap-2">
             <span class="shrink-0 text-xs text-[var(--color-muted)]">Billing</span>
-            <select
+            <Select
+              ghost
+              label="Billing type"
               value={project.billingType}
-              onchange={(e) => patch({ billingType: e.currentTarget.value })}
-              class={inputRowClass}
-            >
-              {#each BILLING_TYPES as b (b)}
-                <option value={b}>{BILLING_TYPE_LABELS[b]}</option>
-              {/each}
-            </select>
-          </label>
+              options={BILLING_TYPES.map((b) => ({ value: b, label: BILLING_TYPE_LABELS[b] }))}
+              onchange={(billingType) => patch({ billingType })}
+            />
+          </div>
           {#if moneyField}
             <label class="flex items-center justify-between gap-2">
               <span class="shrink-0 text-xs text-[var(--color-muted)]">{MONEY_LABELS[moneyField]}</span>

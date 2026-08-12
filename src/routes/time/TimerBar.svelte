@@ -11,6 +11,7 @@
   import { invalidateAll } from '$app/navigation';
   import { toast } from '$lib/toasts.svelte';
   import Button from '$lib/ui/Button.svelte';
+  import Select from '$lib/ui/Select.svelte';
   import { formatMinutes } from '$lib/duration';
   import type { TimeEntryRow } from '$lib/server/time';
 
@@ -111,17 +112,16 @@
     class="min-w-0 flex-1 rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-bg)] px-3 py-2 text-sm"
   />
 
-  <select
+  <Select
+    size="md"
+    label="Project"
     bind:value={projectId}
+    options={[
+      { value: '', label: 'No project' },
+      ...projects.map((p) => ({ value: p.id, label: p.name }))
+    ]}
     onchange={() => running && patchRunning({ projectId: projectId || null })}
-    aria-label="Project"
-    class="rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-bg)] px-2 py-2 text-sm"
-  >
-    <option value="">No project</option>
-    {#each projects as p (p.id)}
-      <option value={p.id}>{p.name}</option>
-    {/each}
-  </select>
+  />
 
   <span
     class="min-w-[5.5rem] text-right text-lg tabular-nums {running

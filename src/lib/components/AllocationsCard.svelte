@@ -12,6 +12,7 @@
   import { toast } from '$lib/toasts.svelte';
   import EmptyState from '$lib/ui/EmptyState.svelte';
   import Button from '$lib/ui/Button.svelte';
+  import Select from '$lib/ui/Select.svelte';
   import { formatHours, hoursToMinutes, minutesToHours } from '$lib/duration';
   import type { AllocationRow, MemberCapacity } from '$lib/server/allocations';
 
@@ -236,11 +237,11 @@
             <div class="flex flex-wrap items-end gap-2 rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-surface)] p-2">
               <label class="flex flex-col gap-1 text-xs">
                 <span class="text-[var(--color-muted)]">Who</span>
-                <select bind:value={dAssignee} class={fieldClass}>
-                  {#each members as m (m.userId)}
-                    <option value={m.userId}>{m.name}</option>
-                  {/each}
-                </select>
+                <Select
+                  label="Who"
+                  bind:value={dAssignee}
+                  options={members.map((m) => ({ value: m.userId, label: m.name }))}
+                />
               </label>
               <label class="flex flex-col gap-1 text-xs">
                 <span class="text-[var(--color-muted)]">From</span>
@@ -299,11 +300,11 @@
     <div class="flex flex-wrap items-end gap-2 rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-surface)] p-2">
       <label class="flex flex-col gap-1 text-xs">
         <span class="text-[var(--color-muted)]">Who</span>
-        <select bind:value={dAssignee} class={fieldClass}>
-          {#each members as m (m.userId)}
-            <option value={m.userId}>{m.name}</option>
-          {/each}
-        </select>
+        <Select
+          label="Who"
+          bind:value={dAssignee}
+          options={members.map((m) => ({ value: m.userId, label: m.name }))}
+        />
       </label>
       <label class="flex flex-col gap-1 text-xs">
         <span class="text-[var(--color-muted)]">From</span>

@@ -100,18 +100,20 @@
     <div class="ml-auto flex items-center gap-2">
       <Select
         size="md"
-        aria-label="Sort by"
+        label="Sort by"
         value={data.sort}
-        onchange={(e) => goto(buildUrl({ sort: (e.currentTarget as HTMLSelectElement).value }), { replaceState: true, keepFocus: true, noScroll: true })}
+        options={[
+          { value: 'updated', label: 'Recently updated' },
+          { value: 'recent', label: 'Recently added' },
+          { value: 'endDate', label: 'End date' },
+          { value: 'name', label: 'Name' },
+          { value: 'lastInteraction', label: 'Last interaction' }
+        ]}
+        onchange={(sort) => goto(buildUrl({ sort }), { replaceState: true, keepFocus: true, noScroll: true })}
         disabled={!!data.q}
         title={data.q ? 'Sort is fixed to relevance while searching' : 'Sort by'}
       >
         {#snippet icon()}<ArrowDownUp size={14} strokeWidth={2} />{/snippet}
-        <option value="updated">Recently updated</option>
-        <option value="recent">Recently added</option>
-        <option value="endDate">End date</option>
-        <option value="name">Name</option>
-        <option value="lastInteraction">Last interaction</option>
       </Select>
       <a
         href="/projects/new"

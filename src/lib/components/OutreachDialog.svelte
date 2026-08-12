@@ -1,7 +1,7 @@
 <script lang="ts">
   import Dialog from '$lib/ui/Dialog.svelte';
   import MessageComposer from '$lib/components/MessageComposer.svelte';
-  import { ChevronDown } from 'lucide-svelte';
+  import Select from '$lib/ui/Select.svelte';
   import { toast } from '$lib/toasts.svelte';
   import { PLATFORMS, isRichPlatform, type OutreachPlatform } from '$lib/outreach/platforms';
   import { type LinkTarget } from '$lib/outreach/deepLink';
@@ -144,28 +144,24 @@
             <a href="/outreach/new" class="underline">Write one</a>.
           </p>
         {:else}
-          <label class="flex flex-col gap-1">
+          <div class="flex flex-col gap-1">
             <span class="text-xs font-medium uppercase tracking-wide text-[var(--color-subtle)]"
               >Template</span
             >
-            <span class="relative">
-              <select
-                value={selectedId ?? ''}
-                onchange={(e) => choose((e.currentTarget as HTMLSelectElement).value)}
-                class="h-9 w-full appearance-none rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)] px-3 pr-8 text-sm"
-              >
-                <option value="" disabled>Pick a template…</option>
-                {#each templates as t (t.id)}
-                  <option value={t.id}>{t.name} · {PLATFORMS[t.platform].label}</option>
-                {/each}
-              </select>
-              <span
-                class="pointer-events-none absolute inset-y-0 right-2 flex items-center text-[var(--color-subtle)]"
-              >
-                <ChevronDown size={14} strokeWidth={2} />
-              </span>
-            </span>
-          </label>
+            <Select
+              size="md"
+              label="Template"
+              placeholder="Pick a template…"
+              value={selectedId ?? ''}
+              options={templates.map((t) => ({
+                value: t.id,
+                label: t.name,
+                hint: PLATFORMS[t.platform].label
+              }))}
+              onchange={choose}
+              class="w-full"
+            />
+          </div>
         {/if}
 
         {#if selected}

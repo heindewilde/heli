@@ -1,5 +1,6 @@
 <script lang="ts">
   import RichText from '$lib/ui/RichText.svelte';
+  import Select from '$lib/ui/Select.svelte';
   import { htmlToPlain } from '$lib/richText';
   import {
     OUTREACH_PLATFORMS,
@@ -146,14 +147,12 @@
       <span class="text-xs font-medium uppercase tracking-wide text-[var(--color-subtle)]"
         >Platform</span
       >
-      <select
+      <Select
+        size="md"
+        label="Platform"
         bind:value={platform}
-        class="h-9 rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)] px-2 text-sm"
-      >
-        {#each OUTREACH_PLATFORMS as p (p)}
-          <option value={p}>{PLATFORMS[p].label}</option>
-        {/each}
-      </select>
+        options={OUTREACH_PLATFORMS.map((p) => ({ value: p, label: PLATFORMS[p].label }))}
+      />
       <span class="text-xs text-[var(--color-subtle)]">
         {#if spec.bodyMax !== null}
           Limit {spec.bodyMax.toLocaleString()} characters.
@@ -239,13 +238,15 @@
         <span class="text-xs font-medium uppercase tracking-wide text-[var(--color-subtle)]"
           >Visibility</span
         >
-        <select
+        <Select
+          size="md"
+          label="Visibility"
           bind:value={visibility}
-          class="h-9 rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)] px-2 text-sm"
-        >
-          <option value="shared">Shared with the workspace</option>
-          <option value="private">Private to me</option>
-        </select>
+          options={[
+            { value: 'shared', label: 'Shared with the workspace' },
+            { value: 'private', label: 'Private to me' }
+          ]}
+        />
       </label>
 
       <label class="flex flex-col gap-1">

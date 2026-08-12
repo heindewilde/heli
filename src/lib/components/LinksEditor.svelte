@@ -10,6 +10,9 @@
     linkKindOf,
     type LinkKind
   } from '$lib/projectTypes';
+  import Select from '$lib/ui/Select.svelte';
+
+  const KIND_OPTIONS = LINK_KINDS.map((k) => ({ value: k, label: LINK_KIND_LABELS[k] }));
 
   type Link = { id: string; url: string; label: string | null; kind: string | null };
 
@@ -196,15 +199,7 @@
                 placeholder="Label (optional)"
                 class="rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-bg)] px-2 py-1 text-sm"
               />
-              <select
-                bind:value={editKind}
-                aria-label="Link type"
-                class="rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-bg)] px-2 py-1 text-sm"
-              >
-                {#each LINK_KINDS as k (k)}
-                  <option value={k}>{LINK_KIND_LABELS[k]}</option>
-                {/each}
-              </select>
+              <Select label="Link type" bind:value={editKind} options={KIND_OPTIONS} />
               <div class="flex items-center gap-1">
                 <button
                   type="button"
@@ -274,16 +269,12 @@
         onkeydown={(e) => { if (e.key === 'Enter') { e.preventDefault(); add(); } if (e.key === 'Escape') cancelAdding(); }}
         class="rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-bg)] px-2 py-1 text-sm"
       />
-      <select
+      <Select
+        label="Link type"
         bind:value={newKind}
+        options={KIND_OPTIONS}
         onchange={() => (kindTouched = true)}
-        aria-label="Link type"
-        class="rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-bg)] px-2 py-1 text-sm"
-      >
-        {#each LINK_KINDS as k (k)}
-          <option value={k}>{LINK_KIND_LABELS[k]}</option>
-        {/each}
-      </select>
+      />
       <div class="flex items-center gap-1">
         <button
           type="button"

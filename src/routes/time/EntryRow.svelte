@@ -10,6 +10,7 @@
   import { X, CircleDollarSign } from 'lucide-svelte';
   import { toast } from '$lib/toasts.svelte';
   import Tooltip from '$lib/ui/Tooltip.svelte';
+  import Select from '$lib/ui/Select.svelte';
   import { formatMinutes, parseDuration } from '$lib/duration';
   import { formatTime } from '$lib/interactions';
   import type { TimeEntryRow } from '$lib/server/time';
@@ -92,17 +93,17 @@
     <span class="hidden shrink-0 text-xs text-[var(--color-muted)] sm:inline">{entry.userName}</span>
   {/if}
 
-  <select
+  <Select
+    ghost
+    label="Project"
+    class="w-32 shrink-0"
     value={entry.projectId ?? ''}
-    onchange={(e) => patch({ projectId: e.currentTarget.value || null })}
-    aria-label="Project"
-    class="w-32 shrink-0 text-xs {cellClass}"
-  >
-    <option value="">No project</option>
-    {#each projects as p (p.id)}
-      <option value={p.id}>{p.name}</option>
-    {/each}
-  </select>
+    options={[
+      { value: '', label: 'No project' },
+      ...projects.map((p) => ({ value: p.id, label: p.name }))
+    ]}
+    onchange={(v) => patch({ projectId: v || null })}
+  />
 
   <Tooltip label={entry.billable ? 'Billable — click to mark non-billable' : 'Not billable — click to mark billable'}>
     {#snippet trigger(attrs)}

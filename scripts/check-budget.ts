@@ -37,9 +37,12 @@ const BASELINE = {
   // the shell because a timer you can only see on /time is one you forget is
   // running — and it must be statically imported, since a new dynamic boundary
   // in the root layout is what has repeatedly broken hydration here.
-  shellJsGzip: 76_390,
+  // The custom Select trimmed the shell slightly (one shared listbox replacing
+  // per-call-site chevron/shell markup) and added ~2.7 KB to the heaviest
+  // route, which is where its keyboard and typeahead logic lands.
+  shellJsGzip: 75_776,
   shellCssGzip: 10_649,
-  largestRouteGzip: 47_002,
+  largestRouteGzip: 49_766,
   prodPackages: 23,
   prodBytes: 12_214_272
 };

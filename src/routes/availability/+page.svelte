@@ -121,18 +121,11 @@
       </div>
       <Select
         size="md"
-        aria-label="Horizon"
+        label="Horizon"
         value={String(win.weekCount)}
-        onchange={(e) =>
-          goto(buildUrl({ weeks: (e.currentTarget as HTMLSelectElement).value }), {
-            noScroll: true,
-            keepFocus: true
-          })}
-      >
-        {#each WEEK_CHOICES as n (n)}
-          <option value={String(n)}>{n} weeks</option>
-        {/each}
-      </Select>
+        options={WEEK_CHOICES.map((n) => ({ value: String(n), label: `${n} weeks` }))}
+        onchange={(weeks) => goto(buildUrl({ weeks }), { noScroll: true, keepFocus: true })}
+      />
     </div>
   </header>
 

@@ -1,5 +1,10 @@
 <script lang="ts">
   import Select from '$lib/ui/Select.svelte';
+
+  const ROLE_OPTIONS = [
+    { value: 'member', label: 'Member' },
+    { value: 'admin', label: 'Admin' }
+  ];
   import { goto, invalidateAll } from '$app/navigation';
   import { APP_NAME } from '$lib/branding';
   import { toast } from '$lib/toasts.svelte';
@@ -896,13 +901,11 @@
                    lose the page they are standing on. -->
               <Select
                 value={m.role}
-                onchange={(e) => changeRole(m.userId, e.currentTarget.value)}
+                options={ROLE_OPTIONS}
+                onchange={(role) => changeRole(m.userId, role)}
                 disabled={busy === m.userId}
-                aria-label="Role for {m.username ?? m.email}"
-              >
-                <option value="member">Member</option>
-                <option value="admin">Admin</option>
-              </Select>
+                label="Role for {m.username ?? m.email}"
+              />
             {:else}
               <span class="cap-label text-[var(--color-muted)]">{m.role}</span>
             {/if}
@@ -938,10 +941,7 @@
           bind:value={inviteEmail}
           required
         />
-        <Select size="md" aria-label="Invite role" bind:value={inviteRole}>
-          <option value="member">Member</option>
-          <option value="admin">Admin</option>
-        </Select>
+        <Select size="md" label="Invite role" options={ROLE_OPTIONS} bind:value={inviteRole} />
         <button
           class="rounded-[var(--radius-sm)] bg-[var(--color-accent)] px-3 py-2 text-sm text-[var(--color-accent-fg)] hover:bg-[var(--color-accent-hover)]"
           type="submit"

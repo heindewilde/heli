@@ -119,14 +119,16 @@
     <div class="ml-auto flex items-center gap-2">
       <Select
         size="md"
-        aria-label="Sort by"
+        label="Sort by"
         value={data.sort}
-        onchange={(e) => goto(buildUrl({ sort: (e.currentTarget as HTMLSelectElement).value }), { replaceState: true, keepFocus: true, noScroll: true })}
+        options={[
+          { value: 'updated', label: 'Recently updated' },
+          { value: 'recent', label: 'Recently added' },
+          { value: 'name', label: 'Name' }
+        ]}
+        onchange={(sort) => goto(buildUrl({ sort }), { replaceState: true, keepFocus: true, noScroll: true })}
       >
         {#snippet icon()}<ArrowDownUp size={14} strokeWidth={2} />{/snippet}
-        <option value="updated">Recently updated</option>
-        <option value="recent">Recently added</option>
-        <option value="name">Name</option>
       </Select>
       <a
         href="/pipelines/new"

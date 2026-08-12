@@ -214,39 +214,38 @@
 
     <Select
       size="sm"
-      aria-label="Person"
+      label="Person"
       value={data.filters.userId}
-      onchange={(e) => go({ user: (e.currentTarget as HTMLSelectElement).value })}
-    >
-      <option value="me">Me</option>
-      <option value="all">Everyone</option>
-      {#each data.members as m (m.userId)}
-        <option value={m.userId}>{m.name}</option>
-      {/each}
-    </Select>
+      options={[
+        { value: 'me', label: 'Me' },
+        { value: 'all', label: 'Everyone' },
+        ...data.members.map((m) => ({ value: m.userId, label: m.name }))
+      ]}
+      onchange={(user) => go({ user })}
+    />
 
     <Select
       size="sm"
-      aria-label="Project filter"
+      label="Project filter"
       value={data.filters.projectId}
-      onchange={(e) => go({ project: (e.currentTarget as HTMLSelectElement).value })}
-    >
-      <option value="">All projects</option>
-      {#each data.projects as p (p.id)}
-        <option value={p.id}>{p.name}</option>
-      {/each}
-    </Select>
+      options={[
+        { value: '', label: 'All projects' },
+        ...data.projects.map((p) => ({ value: p.id, label: p.name }))
+      ]}
+      onchange={(project) => go({ project })}
+    />
 
     <Select
       size="sm"
-      aria-label="Billable filter"
+      label="Billable filter"
       value={data.filters.billable}
-      onchange={(e) => go({ billable: (e.currentTarget as HTMLSelectElement).value })}
-    >
-      <option value="">Billable & not</option>
-      <option value="1">Billable only</option>
-      <option value="0">Non-billable only</option>
-    </Select>
+      options={[
+        { value: '', label: 'Billable & not' },
+        { value: '1', label: 'Billable only' },
+        { value: '0', label: 'Non-billable only' }
+      ]}
+      onchange={(billable) => go({ billable })}
+    />
   </div>
 
   {#if data.view === 'report'}
@@ -307,12 +306,15 @@
         </label>
         <label class="flex flex-col gap-1 text-xs">
           <span class="text-[var(--color-muted)]">Project</span>
-          <select bind:value={mProject} class={fieldClass}>
-            <option value="">No project</option>
-            {#each data.projects as p (p.id)}
-              <option value={p.id}>{p.name}</option>
-            {/each}
-          </select>
+          <Select
+            size="md"
+            label="Project"
+            bind:value={mProject}
+            options={[
+              { value: '', label: 'No project' },
+              ...data.projects.map((p) => ({ value: p.id, label: p.name }))
+            ]}
+          />
         </label>
         <label class="flex flex-col gap-1 text-xs">
           <span class="text-[var(--color-muted)]">How long</span>

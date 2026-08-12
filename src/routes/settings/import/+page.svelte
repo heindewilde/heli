@@ -1,5 +1,6 @@
 <script lang="ts">
   import Checkbox from '$lib/ui/Checkbox.svelte';
+  import Select from '$lib/ui/Select.svelte';
   import { goto } from '$app/navigation';
   import { APP_NAME } from '$lib/branding';
   import { toast } from '$lib/toasts.svelte';
@@ -247,24 +248,32 @@
         {#if years.length > 0}
           <label class="flex flex-col gap-1 text-sm">
             <span class="text-[var(--color-muted)]">Connected since</span>
-            <select class={FIELD} bind:value={since}>
-              <option value={0}>Any time</option>
-              {#each years as year}
-                <option value={Date.UTC(year, 0, 1)}>{year}</option>
-              {/each}
-            </select>
+            <Select
+              size="md"
+              label="Connected since"
+              value={String(since)}
+              options={[
+                { value: '0', label: 'Any time' },
+                ...years.map((year) => ({ value: String(Date.UTC(year, 0, 1)), label: String(year) }))
+              ]}
+              onchange={(v) => (since = Number(v))}
+            />
           </label>
         {/if}
 
         {#if companies.length > 0}
           <label class="flex flex-col gap-1 text-sm">
             <span class="text-[var(--color-muted)]">Company</span>
-            <select class="{FIELD} max-w-[14rem]" bind:value={company}>
-              <option value="">Any company</option>
-              {#each companies as [name, n]}
-                <option value={name}>{name} ({n})</option>
-              {/each}
-            </select>
+            <Select
+              size="md"
+              label="Company"
+              bind:value={company}
+              class="max-w-[14rem]"
+              options={[
+                { value: '', label: 'Any company' },
+                ...companies.map(([name, n]) => ({ value: name, label: name, hint: String(n) }))
+              ]}
+            />
           </label>
         {/if}
 

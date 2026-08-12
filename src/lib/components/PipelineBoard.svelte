@@ -143,13 +143,10 @@
                 </a>
                 <Select
                   value={item.stageId}
-                  onchange={(e) => moveItem(item.id, (e.currentTarget as HTMLSelectElement).value)}
-                  aria-label="Move to stage"
-                >
-                  {#each stages as s (s.id)}
-                    <option value={s.id}>{s.name}</option>
-                  {/each}
-                </Select>
+                  options={stages.map((s) => ({ value: s.id, label: s.name }))}
+                  onchange={(stageId) => moveItem(item.id, stageId)}
+                  label="Move to stage"
+                />
                 {#if onRemoveItem}
                   <button
                     type="button"
