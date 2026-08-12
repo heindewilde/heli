@@ -10,6 +10,44 @@ before changing anything under `mobile/`, or anything in `src/lib/` that
 
 ---
 
+## Running it
+
+```bash
+cd mobile
+npm install
+npm run tokens         # generates src/theme/tokens.ts from ../src/app.css
+npx expo run:ios       # or: npx expo run:android
+```
+
+The first iOS build runs `pod install` and compiles the native project, so it
+takes several minutes and a fair amount of CPU. After that, `npx expo start`
+attaches to the existing build in seconds.
+
+**A dev build, not Expo Go.** The share extension, notifications and SecureStore
+are config plugins with native code, so Expo Go cannot run this app.
+
+**If `expo run:ios` asks for a signing certificate**, it has selected a
+connected physical device. Unplug it, or build for the simulator explicitly:
+
+```bash
+cd mobile/ios
+xcodebuild -workspace Heli.xcworkspace -scheme Heli \
+  -configuration Debug -sdk iphonesimulator \
+  -destination 'platform=iOS Simulator,name=iPhone 17 Pro' \
+  -derivedDataPath ./build CODE_SIGNING_ALLOWED=NO
+```
+
+To pair it: run the web app, open **Settings → Devices**, press *Pair a device*,
+and type the code into the app. On the simulator the server URL needs to be
+reachable from it — `http://localhost:5173` works, since the simulator shares
+the host's network.
+
+**What still needs your accounts:** EAS builds and store submission (Expo,
+Apple, Google), and push *delivery*, which needs APNs/FCM credentials in EAS
+and a physical device — the simulator cannot receive a notification at all.
+
+---
+
 ## The isolation, and why it is not an npm workspace
 
 `mobile/` follows the `extension/` precedent exactly: its own `package.json`,
