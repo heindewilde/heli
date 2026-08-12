@@ -379,3 +379,89 @@ html, body {
   font-weight: 500;
   color: var(--color-subtle);
 }
+
+/*
+ * Print.
+ *
+ * Heli generates no invoices, so "Export PDF" is the browser's own Save-as-PDF
+ * — zero dependencies, in a codebase whose `dependencies` has deliberately had
+ * two entries for its whole life. What that owes the user is a page that prints
+ * as a *document* rather than a screenshot of an app: no navigation, no
+ * controls, no dark theme burning a cartridge, and backgrounds that survive the
+ * browser's default of dropping them.
+ *
+ * Global rather than per-route because the rules are the same wherever you
+ * print from, and `.no-print` / `.print-only` are the only vocabulary a screen
+ * needs to opt in.
+ */
+@media print {
+  /* Force the light palette. A dark-theme PDF is unreadable on paper and
+     nobody chooses it on purpose. */
+  :root,
+  :root[data-theme='dark'] {
+    --color-bg: #ffffff;
+    --color-surface: #ffffff;
+    --color-surface-2: #ffffff;
+    --color-text: #000000;
+    --color-muted: #444444;
+    --color-subtle: #666666;
+    --color-border: #cccccc;
+    --color-border-strong: #999999;
+    --color-accent: #000000;
+  }
+
+  body {
+    background: #fff;
+  }
+
+  /* Chrome that has no meaning on paper. The sidebar, the topbar, the toaster
+     and anything a screen marked as interactive-only. */
+  nav,
+  aside,
+  .no-print,
+  [data-toaster],
+  [popover] {
+    display: none !important;
+  }
+
+  .print-only {
+    display: block !important;
+  }
+
+  /* The app shell is a fixed two-column layout; on paper it is one column. */
+  main {
+    display: block !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    max-width: none !important;
+    overflow: visible !important;
+  }
+
+  /* Tables are the point of a printed report — keep rows whole and repeat the
+     header on every page. */
+  table {
+    page-break-inside: auto;
+  }
+  tr {
+    page-break-inside: avoid;
+    page-break-after: auto;
+  }
+  thead {
+    display: table-header-group;
+  }
+
+  /* Bars and swatches are printed as outlines unless backgrounds are kept. */
+  * {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  a {
+    text-decoration: none;
+    color: inherit;
+  }
+
+  @page {
+    margin: 16mm;
+  }
+}

@@ -1,6 +1,12 @@
 import { requireScope } from '$lib/server/scope';
 import type { PageServerLoad } from './$types';
-import { getRunningEntry, listTimeEntries, timeSummary, type TimeFilters } from '$lib/server/time';
+import {
+  getRunningEntry,
+  isGroupBy,
+  listTimeEntries,
+  timeSummary,
+  type TimeFilters
+} from '$lib/server/time';
 import { listProjects } from '$lib/server/projects-query';
 import { listMemberCapacities } from '$lib/server/allocations';
 import { weekStart, MS_PER_WEEK } from '$lib/weeks';
@@ -10,6 +16,7 @@ const EMPTY = {
   running: null,
   projects: [],
   members: [],
+  capacityMinutes: 0,
   summary: null,
   view: 'entries' as const,
   filters: { from: 0, to: 0, userId: 'me', projectId: '', billable: '' }
@@ -45,12 +52,16 @@ export const load: PageServerLoad = async ({ locals, url }) => {
     billable: billableParam === '' ? undefined : billableParam === '1'
   };
 
+  const groupParam = url.searchParams.get('group');
+  const groupBy = isGroupBy(groupParam) ? groupParam : 'project';
+  const roundTo = Number(url.searchParams.get('round')) || 0;
+
   const [entries, running, projects, members, summary] = await Promise.all([
     listTimeEntries(s, filters),
     getRunningEntry(s),
     listProjects(s, { status: 'active', sort: 'name', limit: 200 }),
     listMemberCapacities(s),
-    view === 'report' ? timeSummary(s, filters) : Promise.resolve(null)
+    view === 'report' ? timeSummary(s, filters, { groupBy, roundTo }) : Promise.resolve(null)
   ]);
 
   return {
@@ -58,6 +69,16 @@ export const load: PageServerLoad = async ({ locals, url }) => {
     running,
     projects: projects.map((p) => ({ id: p.id, name: p.name })),
     members: members.map((m) => ({ userId: m.userId, name: m.name })),
+    /**
+     * The caller's own working week, for the "28h of 32h" reading on the week
+     * strip. When looking at everyone, the whole team's capacity is the honest
+     * denominator.
+     */
+    capacityMinutes:
+      userParam === 'all'
+        ? members.reduce((n, m) => n + m.capacityMinutes, 0)
+        : (members.find((m) => m.userId === (userParam === 'me' ? s.userId : userParam))
+            ?.capacityMinutes ?? 0),
     summary,
     view,
     filters: {

@@ -41,7 +41,9 @@ const BASELINE = {
   // per-call-site chevron/shell markup) and added ~2.7 KB to the heaviest
   // route, which is where its keyboard and typeahead logic lands.
   shellJsGzip: 75_776,
-  shellCssGzip: 10_649,
+  // +0.5 KB for the print stylesheet, which is what makes "Export PDF" a
+  // browser feature rather than a dependency.
+  shellCssGzip: 11_162,
   largestRouteGzip: 49_766,
   prodPackages: 23,
   prodBytes: 12_214_272

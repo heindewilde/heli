@@ -96,9 +96,6 @@
   let panelEl = $state<HTMLElement | undefined>(undefined);
 
   const selected = $derived(options.find((o) => o.value === value) ?? null);
-  const enabledIndexes = $derived(
-    options.map((o, i) => (o.disabled ? -1 : i)).filter((i) => i >= 0)
-  );
 
   /** Options in render order, bucketed by group. Ungrouped options come first. */
   const groups = $derived.by(() => {
@@ -188,21 +185,24 @@
   }
 
   /**
-   * Arrows on the closed trigger step through values without opening, which is
-   * what a native select does and what muscle memory expects.
+   * Arrows on a closed trigger **open the list**; they do not step the value.
+   *
+   * Stepping is what a native `<select>` does on Windows, and the first version
+   * copied it. It is quietly destructive here: several of these dropdowns fire
+   * a write on change, and one of them is a project's billing type — where
+   * changing it clears the money column that type no longer owns. A stray
+   * arrow key would silently wipe an hourly rate, which is exactly what
+   * happened while testing this. The app also binds arrows for list navigation,
+   * so a focused trigger catching one is not a remote possibility.
+   *
+   * Opening is the macOS convention, it is non-destructive, and the value is
+   * still one keystroke away.
    */
   function onTriggerKeydown(e: KeyboardEvent) {
-    if (open) return;
+    if (open || disabled) return;
     if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
       e.preventDefault();
-      const pos = enabledIndexes.indexOf(options.findIndex((o) => o.value === value));
-      const delta = e.key === 'ArrowDown' ? 1 : -1;
-      const nextPos = pos === -1 ? 0 : Math.min(enabledIndexes.length - 1, Math.max(0, pos + delta));
-      const next = options[enabledIndexes[nextPos]];
-      if (next) {
-        value = next.value;
-        onchange?.(next.value);
-      }
+      open = true;
     }
   }
 

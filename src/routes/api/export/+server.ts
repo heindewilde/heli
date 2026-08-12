@@ -181,7 +181,23 @@ export const GET: RequestHandler = async ({ url, locals }) => {
     //
     // `hourly_rate_cents` is the snapshot stored on the row, not the project's
     // current rate, so re-exporting an old month cannot silently reprice it.
-    const rows = await listTimeEntries(s, { userId: 'all', limit: 500 });
+    // Honour the report's own filters. An export button under a filtered
+    // report that quietly exported the whole workspace would be worse than no
+    // button at all.
+    const num = (k: string) => {
+      const v = Number(url.searchParams.get(k));
+      return url.searchParams.has(k) && Number.isFinite(v) ? v : undefined;
+    };
+    const userParam = url.searchParams.get('user');
+    const billableParam = url.searchParams.get('billable');
+    const rows = await listTimeEntries(s, {
+      userId: userParam === 'me' ? s.userId : (userParam ?? 'all'),
+      projectId: url.searchParams.get('project') ?? undefined,
+      from: num('from'),
+      to: num('to'),
+      billable: billableParam ? billableParam === '1' : undefined,
+      limit: 500
+    });
     stream = csvStream({
       header: [
         'id',

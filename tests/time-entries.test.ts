@@ -328,8 +328,58 @@ describe('listing and summary', () => {
     const summary = await t.timeSummary(alice.scope, { from: at, to: at + 6 * HOUR });
     expect(summary.totalMinutes).toBe(240);
     expect(summary.billableMinutes).toBe(240);
-    expect(summary.groups[0].projectName).toBe('USD work');
+    expect(summary.groups[0].label).toBe('USD work');
     expect(summary.amountByCurrency).toEqual({ EUR: 10_000, USD: 60_000 });
+  });
+
+  test('grouping switches what a row is', async () => {
+    const t = await import('../src/lib/server/time');
+    const at = Date.parse('2026-11-02T09:00:00Z');
+    const p = await hourlyProject('Grouped', 10_000);
+    await t.createEntry(alice.scope, { startedAt: at, minutes: 60, projectId: p });
+    await t.createEntry(bobIn, { startedAt: at, minutes: 120, projectId: p });
+
+    const f = { from: at, to: at + 6 * HOUR, userId: 'all' as const };
+
+    const byProject = await t.timeSummary(alice.scope, f, { groupBy: 'project' });
+    expect(byProject.groups).toHaveLength(1);
+    expect(byProject.groups[0].minutes).toBe(180);
+
+    const byPerson = await t.timeSummary(alice.scope, f, { groupBy: 'person' });
+    expect(byPerson.groups.map((g) => g.label).sort()).toEqual(['alice', 'bob']);
+    // Biggest first, so bob's two hours lead.
+    expect(byPerson.groups[0].label).toBe('bob');
+
+    const byDay = await t.timeSummary(alice.scope, f, { groupBy: 'day' });
+    expect(byDay.groups).toHaveLength(1);
+    expect(byDay.groups[0].entries).toBe(2);
+  });
+
+  test('rounding is per entry, and the exact total stays visible', async () => {
+    const t = await import('../src/lib/server/time');
+    const at = Date.parse('2026-12-01T09:00:00Z');
+    const p = await hourlyProject('Rounded', 60_000); // €600/h keeps the maths obvious
+    // Three short calls: 5, 5 and 5 minutes.
+    for (let i = 0; i < 3; i++) {
+      await t.createEntry(alice.scope, { startedAt: at + i * HOUR, minutes: 5, projectId: p });
+    }
+
+    const f = { from: at, to: at + 6 * HOUR };
+    const exact = await t.timeSummary(alice.scope, f, { roundTo: 0 });
+    expect(exact.totalMinutes).toBe(15);
+
+    // Each entry rounds up to 15 on its own: 45, not 15. That is the whole
+    // point of the per-entry rule.
+    const rounded = await t.timeSummary(alice.scope, f, { roundTo: 15 });
+    expect(rounded.totalMinutes).toBe(45);
+    expect(rounded.rawMinutes).toBe(15);
+    expect(rounded.amountByCurrency.EUR).toBe(45_000); // 0.75h × €600
+  });
+
+  test('an unknown rounding increment falls back to exact', async () => {
+    const t = await import('../src/lib/server/time');
+    const s = await t.timeSummary(alice.scope, {}, { roundTo: 7 });
+    expect(s.roundTo).toBe(0);
   });
 
   test('trackedByProject sums finished time per project', async () => {

@@ -1,24 +1,34 @@
 <script lang="ts">
   /**
-   * Tracked time: a timer, the entries it produces, and the rollup you invoice
-   * from. One route with a segmented control rather than two — the report is
-   * the same filtered data grouped differently.
+   * Tracked time.
+   *
+   * The old version stacked timer, filters, an add button and a flat list at
+   * one visual weight, so nothing said what the screen was for. The order now
+   * follows what you actually do: **start the clock**, then **see the shape of
+   * the range**, then **read the days**.
+   *
+   * The timer bar is sticky. It is the only control on the page you reach for
+   * without reading anything else, and scrolling a week of entries used to
+   * leave it behind.
    */
   import { onMount } from 'svelte';
   import { goto, invalidateAll } from '$app/navigation';
   import { page } from '$app/state';
-  import { Timer, Plus } from 'lucide-svelte';
+  import { Timer, Plus, ChevronLeft, ChevronRight } from 'lucide-svelte';
   import { APP_NAME } from '$lib/branding';
   import EmptyState from '$lib/ui/EmptyState.svelte';
   import Button from '$lib/ui/Button.svelte';
   import Select from '$lib/ui/Select.svelte';
+  import SegmentedControl from '$lib/ui/SegmentedControl.svelte';
   import { toast } from '$lib/toasts.svelte';
   import { registerCommands } from '$lib/commands/registry.svelte';
   import { formatMinutes, parseDuration } from '$lib/duration';
   import { dayBucket } from '$lib/interactions';
-  import { MS_PER_WEEK, weekStart } from '$lib/weeks';
+  import { MS_PER_WEEK, MS_PER_DAY, weekStart } from '$lib/weeks';
   import TimerBar from './TimerBar.svelte';
   import EntryRow from './EntryRow.svelte';
+  import WeekStrip from './WeekStrip.svelte';
+  import TimeReport from './TimeReport.svelte';
 
   let { data } = $props();
 
@@ -38,24 +48,112 @@
   const go = (o: Record<string, string | null>) =>
     goto(buildUrl(o), { noScroll: true, keepFocus: true });
 
-  function shiftWeek(by: number) {
-    const from = weekStart(data.filters.from) + by * MS_PER_WEEK;
-    go({ from: toIso(from), to: toIso(from + MS_PER_WEEK - 86_400_000) });
+  /** Range presets. Typing two dates to answer "last month" is a chore. */
+  const PRESETS = [
+    { value: 'this-week', label: 'This week' },
+    { value: 'last-week', label: 'Last week' },
+    { value: 'this-month', label: 'This month' },
+    { value: 'last-month', label: 'Last month' },
+    { value: 'this-quarter', label: 'This quarter' },
+    { value: 'custom', label: 'Custom range' }
+  ];
+
+  function presetRange(v: string): { from: number; to: number } | null {
+    const now = new Date();
+    const monthStart = (offset: number) =>
+      new Date(now.getFullYear(), now.getMonth() + offset, 1).getTime();
+    switch (v) {
+      case 'this-week':
+        return { from: weekStart(Date.now()), to: weekStart(Date.now()) + MS_PER_WEEK - MS_PER_DAY };
+      case 'last-week':
+        return {
+          from: weekStart(Date.now()) - MS_PER_WEEK,
+          to: weekStart(Date.now()) - MS_PER_DAY
+        };
+      case 'this-month':
+        return { from: monthStart(0), to: monthStart(1) - MS_PER_DAY };
+      case 'last-month':
+        return { from: monthStart(-1), to: monthStart(0) - MS_PER_DAY };
+      case 'this-quarter': {
+        const q = Math.floor(now.getMonth() / 3) * 3;
+        return {
+          from: new Date(now.getFullYear(), q, 1).getTime(),
+          to: new Date(now.getFullYear(), q + 3, 1).getTime() - MS_PER_DAY
+        };
+      }
+      default:
+        return null;
+    }
   }
 
-  /** Days, newest first, using the same bucketing the activity feed uses. */
+  /** Which preset the current range corresponds to, if any. */
+  const activePreset = $derived.by(() => {
+    for (const p of PRESETS) {
+      const r = presetRange(p.value);
+      if (!r) continue;
+      if (toIso(r.from) === toIso(data.filters.from) && toIso(r.to) === toIso(data.filters.to)) {
+        return p.value;
+      }
+    }
+    return 'custom';
+  });
+
+  function applyPreset(v: string) {
+    const r = presetRange(v);
+    if (!r) return;
+    go({ from: toIso(r.from), to: toIso(r.to) });
+  }
+
+  function shiftRange(dir: number) {
+    const span = data.filters.to - data.filters.from + MS_PER_DAY;
+    go({
+      from: toIso(data.filters.from + dir * span),
+      to: toIso(data.filters.to + dir * span)
+    });
+  }
+
+  // ----- Day grouping -------------------------------------------------------
+  const startOfDay = (ts: number) => {
+    const d = new Date(ts);
+    d.setHours(0, 0, 0, 0);
+    return d.getTime();
+  };
+
+  /** Set by the week strip; narrows the rendered list without a round trip. */
+  let dayFilter = $state<number | null>(null);
+  $effect(() => {
+    // A new range invalidates a day selection from the previous one.
+    void data.filters.from;
+    dayFilter = null;
+  });
+
+  const visibleEntries = $derived(
+    dayFilter === null
+      ? data.entries
+      : data.entries.filter((e) => startOfDay(e.startedAt) === dayFilter)
+  );
+
   const days = $derived.by(() => {
     const today = new Date();
-    const map = new Map<string, { label: string; items: typeof data.entries; minutes: number }>();
-    for (const e of data.entries) {
+    const map = new Map<
+      string,
+      { label: string; items: typeof data.entries; minutes: number; billable: number }
+    >();
+    for (const e of visibleEntries) {
       const b = dayBucket(e.startedAt, today);
       const mins = e.endedAt == null ? 0 : Math.round((e.endedAt - e.startedAt) / 60_000);
       const g = map.get(b.key);
       if (g) {
         g.items.push(e);
         g.minutes += mins;
+        if (e.billable) g.billable += mins;
       } else {
-        map.set(b.key, { label: b.label, items: [e], minutes: mins });
+        map.set(b.key, {
+          label: b.label,
+          items: [e],
+          minutes: mins,
+          billable: e.billable ? mins : 0
+        });
       }
     }
     return [...map.entries()].sort((a, b) => (a[0] < b[0] ? 1 : -1));
@@ -68,6 +166,27 @@
     )
   );
 
+  /**
+   * The CSV carries the *report's* filters, not the whole workspace — an export
+   * button under a filtered report that quietly exported everything else would
+   * be worse than no button.
+   */
+  const csvHref = $derived.by(() => {
+    const p = new URLSearchParams({ kind: 'time' });
+    p.set('from', String(data.filters.from));
+    p.set('to', String(data.filters.to + MS_PER_DAY));
+    if (data.filters.projectId) p.set('project', data.filters.projectId);
+    if (data.filters.billable) p.set('billable', data.filters.billable);
+    p.set('user', data.filters.userId === 'me' ? 'me' : data.filters.userId);
+    return `/api/export?${p}`;
+  });
+
+  /** Past a month the per-day strip stops being legible. */
+  const stripDays = $derived(
+    Math.round((startOfDay(data.filters.to) - startOfDay(data.filters.from)) / MS_PER_DAY) + 1
+  );
+  const showStrip = $derived(stripDays > 1 && stripDays <= 31);
+
   // ----- Manual add ---------------------------------------------------------
   let adding = $state(false);
   let mDate = $state('');
@@ -78,7 +197,7 @@
 
   function startAdd() {
     adding = true;
-    mDate = toIso(Date.now());
+    mDate = toIso(dayFilter ?? Date.now());
     mDuration = '';
     mDescription = '';
     mProject = '';
@@ -98,7 +217,7 @@
     saving = true;
     try {
       // 09:00 local on the chosen day: a backfilled entry has no real clock
-      // time, and putting it at midnight makes it look like night work.
+      // time, and midnight would make it look like night work.
       const start = new Date(day);
       start.setHours(9, 0, 0, 0);
       const res = await fetch('/api/time', {
@@ -121,19 +240,6 @@
     }
   }
 
-  const money = (cents: number, currency: string) => {
-    try {
-      return new Intl.NumberFormat(undefined, { style: 'currency', currency }).format(cents / 100);
-    } catch {
-      return `${(cents / 100).toFixed(2)} ${currency}`;
-    }
-  };
-
-  /** Widest group drives the bar scale, the Histogram technique. */
-  const maxGroupMinutes = $derived(
-    Math.max(1, ...(data.summary?.groups ?? []).map((g) => g.minutes))
-  );
-
   onMount(() =>
     registerCommands([
       {
@@ -144,18 +250,18 @@
         run: startAdd
       },
       {
-        id: 'ctx:time-prev-week',
-        title: 'Previous week',
+        id: 'ctx:time-prev',
+        title: 'Previous period',
         section: 'This page',
         shortcut: '[',
-        run: () => shiftWeek(-1)
+        run: () => shiftRange(-1)
       },
       {
-        id: 'ctx:time-next-week',
-        title: 'Next week',
+        id: 'ctx:time-next',
+        title: 'Next period',
         section: 'This page',
         shortcut: ']',
-        run: () => shiftWeek(1)
+        run: () => shiftRange(1)
       }
     ])
   );
@@ -169,32 +275,45 @@
 </svelte:head>
 
 <div class="flex flex-col gap-4">
-  <header class="flex flex-wrap items-center gap-3">
+  <header class="flex flex-wrap items-baseline gap-x-3 gap-y-1">
     <h1 class="text-2xl font-semibold tracking-tight">Time</h1>
-    <span class="rounded-full bg-[var(--color-surface)] px-2 py-0.5 text-xs tabular-nums text-[var(--color-muted)]">
-      {formatMinutes(rangeMinutes)}
+    <span class="text-sm tabular-nums text-[var(--color-muted)]">
+      {formatMinutes(rangeMinutes)} in range
     </span>
-    <div class="ml-auto flex items-center gap-1 rounded-[var(--radius-md)] border border-[var(--color-border)] p-0.5">
-      <a
-        href={buildUrl({ view: null })}
-        class="rounded-[var(--radius-sm)] px-3 py-1 text-sm {data.view === 'entries'
-          ? 'bg-[var(--color-surface)] font-medium text-[var(--color-text)]'
-          : 'text-[var(--color-muted)]'}"
-      >Entries</a>
-      <a
-        href={buildUrl({ view: 'report' })}
-        class="rounded-[var(--radius-sm)] px-3 py-1 text-sm {data.view === 'report'
-          ? 'bg-[var(--color-surface)] font-medium text-[var(--color-text)]'
-          : 'text-[var(--color-muted)]'}"
-      >Report</a>
+    <div class="ml-auto">
+      <SegmentedControl
+        label="Time view"
+        value={data.view}
+        segments={[
+          { value: 'entries', label: 'Entries', href: buildUrl({ view: null }) },
+          { value: 'report', label: 'Report', href: buildUrl({ view: 'report' }) }
+        ]}
+      />
     </div>
   </header>
 
-  <TimerBar running={data.running} projects={data.projects} />
+  <!-- Sticky: the one control you reach for without reading the page. -->
+  <div class="sticky top-0 z-[var(--z-sticky)] -mx-1 bg-[var(--color-bg)] px-1 pb-2 pt-1">
+    <TimerBar running={data.running} projects={data.projects} />
+  </div>
 
-  <!-- Filters -->
-  <div class="flex flex-wrap items-center gap-2 text-xs">
-    <Button variant="ghost" size="sm" onclick={() => shiftWeek(-1)}>←</Button>
+  <!-- Range -->
+  <div class="flex flex-wrap items-center gap-2">
+    <Select
+      size="md"
+      label="Date range"
+      value={activePreset}
+      options={PRESETS}
+      onchange={applyPreset}
+    />
+    <div class="flex items-center gap-0.5 rounded-[var(--radius-md)] border border-[var(--color-border)] p-0.5">
+      <Button variant="ghost" size="sm" onclick={() => shiftRange(-1)} aria-label="Previous period">
+        <ChevronLeft size={14} strokeWidth={2} />
+      </Button>
+      <Button variant="ghost" size="sm" onclick={() => shiftRange(1)} aria-label="Next period">
+        <ChevronRight size={14} strokeWidth={2} />
+      </Button>
+    </div>
     <input
       type="date"
       value={toIso(data.filters.from)}
@@ -202,7 +321,7 @@
       aria-label="From"
       class={fieldClass}
     />
-    <span class="text-[var(--color-subtle)]">to</span>
+    <span class="text-xs text-[var(--color-subtle)]">to</span>
     <input
       type="date"
       value={toIso(data.filters.to)}
@@ -210,90 +329,63 @@
       aria-label="To"
       class={fieldClass}
     />
-    <Button variant="ghost" size="sm" onclick={() => shiftWeek(1)}>→</Button>
 
-    <Select
-      size="sm"
-      label="Person"
-      value={data.filters.userId}
-      options={[
-        { value: 'me', label: 'Me' },
-        { value: 'all', label: 'Everyone' },
-        ...data.members.map((m) => ({ value: m.userId, label: m.name }))
-      ]}
-      onchange={(user) => go({ user })}
-    />
-
-    <Select
-      size="sm"
-      label="Project filter"
-      value={data.filters.projectId}
-      options={[
-        { value: '', label: 'All projects' },
-        ...data.projects.map((p) => ({ value: p.id, label: p.name }))
-      ]}
-      onchange={(project) => go({ project })}
-    />
-
-    <Select
-      size="sm"
-      label="Billable filter"
-      value={data.filters.billable}
-      options={[
-        { value: '', label: 'Billable & not' },
-        { value: '1', label: 'Billable only' },
-        { value: '0', label: 'Non-billable only' }
-      ]}
-      onchange={(billable) => go({ billable })}
-    />
+    <div class="ml-auto flex flex-wrap items-center gap-2">
+      <Select
+        size="md"
+        label="Person"
+        value={data.filters.userId}
+        options={[
+          { value: 'me', label: 'Me' },
+          { value: 'all', label: 'Everyone' },
+          ...data.members.map((m) => ({ value: m.userId, label: m.name }))
+        ]}
+        onchange={(user) => go({ user })}
+      />
+      <Select
+        size="md"
+        label="Project filter"
+        value={data.filters.projectId}
+        options={[
+          { value: '', label: 'All projects' },
+          ...data.projects.map((p) => ({ value: p.id, label: p.name }))
+        ]}
+        onchange={(project) => go({ project })}
+      />
+      <Select
+        size="md"
+        label="Billable filter"
+        value={data.filters.billable}
+        options={[
+          { value: '', label: 'Billable & not' },
+          { value: '1', label: 'Billable only' },
+          { value: '0', label: 'Non-billable only' }
+        ]}
+        onchange={(billable) => go({ billable })}
+      />
+    </div>
   </div>
 
   {#if data.view === 'report'}
-    {#if !data.summary || data.summary.groups.length === 0}
-      <EmptyState
-        icon={Timer}
-        title="Nothing tracked in this range"
-        description="Widen the dates, or start the timer above."
-      />
-    {:else}
-      <div class="flex flex-wrap gap-6 rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)] p-4">
-        <div>
-          <div class="text-xs uppercase tracking-wide text-[var(--color-subtle)]">Tracked</div>
-          <div class="text-xl tabular-nums">{formatMinutes(data.summary.totalMinutes)}</div>
-        </div>
-        <div>
-          <div class="text-xs uppercase tracking-wide text-[var(--color-subtle)]">Billable</div>
-          <div class="text-xl tabular-nums">{formatMinutes(data.summary.billableMinutes)}</div>
-        </div>
-        {#each Object.entries(data.summary.amountByCurrency) as [cur, cents] (cur)}
-          <div>
-            <div class="text-xs uppercase tracking-wide text-[var(--color-subtle)]">Amount</div>
-            <div class="text-xl tabular-nums">{money(cents, cur)}</div>
-          </div>
-        {/each}
-      </div>
-
-      <ul class="flex flex-col gap-2">
-        {#each data.summary.groups as g (g.projectId ?? 'none')}
-          <li class="grid items-center gap-3" style="grid-template-columns: minmax(0,1fr) 1fr 90px 110px;">
-            <span class="truncate text-sm">
-              {#if g.projectId}
-                <a href="/projects/{g.projectId}" class="hover:underline">{g.projectName}</a>
-              {:else}
-                <span class="italic text-[var(--color-muted)]">No project</span>
-              {/if}
-            </span>
-            <span class="track"><span class="fill" style="--p: {(g.minutes / maxGroupMinutes) * 100}%"></span></span>
-            <span class="text-right text-sm tabular-nums">{formatMinutes(g.minutes)}</span>
-            <span class="text-right text-sm tabular-nums text-[var(--color-muted)]">
-              {g.amount > 0 ? money(g.amount, g.currency ?? '') : '—'}
-            </span>
-          </li>
-        {/each}
-      </ul>
-    {/if}
+    <TimeReport
+      summary={data.summary}
+      filters={data.filters}
+      csvHref={csvHref}
+      onGroupBy={(group) => go({ group })}
+      onRoundTo={(round) => go({ round: round === '0' ? null : round })}
+    />
   {:else}
-    <!-- Manual add -->
+    {#if showStrip}
+      <WeekStrip
+        entries={data.entries}
+        from={data.filters.from}
+        to={data.filters.to}
+        capacityMinutes={data.capacityMinutes}
+        activeDay={dayFilter}
+        onPickDay={(d) => (dayFilter = d)}
+      />
+    {/if}
+
     {#if adding}
       <div class="flex flex-wrap items-end gap-2 rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)] p-3">
         <label class="flex flex-col gap-1 text-xs">
@@ -304,7 +396,7 @@
           <span class="text-[var(--color-muted)]">What</span>
           <input bind:value={mDescription} placeholder="Description" class="w-full {fieldClass}" />
         </label>
-        <label class="flex flex-col gap-1 text-xs">
+        <div class="flex flex-col gap-1 text-xs">
           <span class="text-[var(--color-muted)]">Project</span>
           <Select
             size="md"
@@ -315,7 +407,7 @@
               ...data.projects.map((p) => ({ value: p.id, label: p.name }))
             ]}
           />
-        </label>
+        </div>
         <label class="flex flex-col gap-1 text-xs">
           <span class="text-[var(--color-muted)]">How long</span>
           <input
@@ -330,63 +422,59 @@
           <Button size="sm" variant="ghost" onclick={() => (adding = false)}>Cancel</Button>
         </div>
       </div>
-    {:else}
-      <button
-        type="button"
-        onclick={startAdd}
-        class="inline-flex items-center gap-1 self-start rounded-[var(--radius-sm)] border border-dashed border-[var(--color-border)] px-2.5 py-1 text-xs text-[var(--color-muted)] hover:border-[var(--color-highlight-border)] hover:bg-[var(--color-highlight-bg)] hover:text-[var(--color-text)]"
-      >
-        <Plus size={12} strokeWidth={2} />
-        Add time manually
-      </button>
     {/if}
 
-    {#if data.entries.length === 0}
+    {#if visibleEntries.length === 0}
       <EmptyState
         icon={Timer}
-        title="No time tracked here"
+        title={dayFilter === null ? 'No time tracked here' : 'Nothing on that day'}
         description="Start the timer above, or add an entry for a day you forgot."
-      />
+      >
+        {#snippet actions()}
+          <Button variant="secondary" onclick={startAdd}>Add time manually</Button>
+        {/snippet}
+      </EmptyState>
     {:else}
-      <div class="flex flex-col gap-4">
+      <div class="flex flex-col gap-5">
         {#each days as [key, day] (key)}
-          <section class="flex flex-col gap-1">
-            <div class="flex items-center justify-between">
-              <h2 class="text-xs font-medium uppercase tracking-wide text-[var(--color-subtle)]">
-                {day.label}
-              </h2>
+          <section class="flex flex-col">
+            <!-- Day header carries the day's totals, so a day reads as a unit
+                 rather than as a run of rows. -->
+            <div class="flex items-baseline justify-between gap-2 border-b border-[var(--color-border)] pb-1.5">
+              <h2 class="text-sm font-semibold text-[var(--color-text)]">{day.label}</h2>
               <span class="text-xs tabular-nums text-[var(--color-muted)]">
+                {#if day.billable > 0 && day.billable !== day.minutes}
+                  <span class="text-[var(--color-success)]">{formatMinutes(day.billable)} billable</span>
+                  <span class="text-[var(--color-subtle)]"> · </span>
+                {/if}
                 {formatMinutes(day.minutes)}
               </span>
             </div>
-            {#each day.items as entry (entry.id)}
-              <EntryRow
-                {entry}
-                projects={data.projects}
-                {showWho}
-                onChanged={() => invalidateAll()}
-                onRemoved={() => invalidateAll()}
-              />
-            {/each}
+            <div class="flex flex-col pt-0.5">
+              {#each day.items as entry (entry.id)}
+                <EntryRow
+                  {entry}
+                  projects={data.projects}
+                  {showWho}
+                  onChanged={() => invalidateAll()}
+                  onRemoved={() => invalidateAll()}
+                />
+              {/each}
+            </div>
           </section>
         {/each}
       </div>
+
+      {#if !adding}
+        <button
+          type="button"
+          onclick={startAdd}
+          class="inline-flex items-center gap-1 self-start rounded-[var(--radius-sm)] border border-dashed border-[var(--color-border)] px-2.5 py-1.5 text-xs text-[var(--color-muted)] hover:border-[var(--color-highlight-border)] hover:bg-[var(--color-highlight-bg)] hover:text-[var(--color-text)]"
+        >
+          <Plus size={12} strokeWidth={2} />
+          Add time manually
+        </button>
+      {/if}
     {/if}
   {/if}
 </div>
-
-<style>
-  .track {
-    height: 8px;
-    border-radius: 999px;
-    background: var(--color-bg);
-    border: 1px solid var(--color-border);
-    overflow: hidden;
-  }
-  .fill {
-    display: block;
-    height: 100%;
-    width: var(--p);
-    background: var(--color-accent);
-  }
-</style>

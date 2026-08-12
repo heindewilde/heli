@@ -17,10 +17,13 @@ import { db } from './db';
 import {
   timeEntries,
   projectAllocations,
+  projectCompanies,
   projectMilestones,
   projects,
+  companies,
   users
 } from './schema';
+import { weekKey } from '$lib/weeks';
 import { billingImpliesBillable, type BillingType } from '$lib/projectTypes';
 import { sanitizePlainText } from './sanitize';
 import { requireRole, type Scope } from './scope';
@@ -449,20 +452,44 @@ export async function deleteEntry(s: Scope, id: string): Promise<void> {
     .where(and(eq(timeEntries.id, id), eq(timeEntries.workspaceId, s.workspaceId)));
 }
 
+/** What a report's rows are. Different questions, same entries. */
+export const GROUP_BYS = ['project', 'person', 'client', 'day', 'week'] as const;
+export type GroupBy = (typeof GROUP_BYS)[number];
+
+export function isGroupBy(v: unknown): v is GroupBy {
+  return typeof v === 'string' && (GROUP_BYS as readonly string[]).includes(v);
+}
+
+/**
+ * Billing increments, in minutes. 0 is "don't round".
+ *
+ * Rounding is applied **per entry**, which is the agency convention and also
+ * the only version that is defensible on an invoice: three six-minute calls are
+ * three billable units, not eighteen minutes rounded once.
+ */
+export const ROUNDING_CHOICES = [0, 6, 15, 30, 60] as const;
+
 export type SummaryGroup = {
-  projectId: string | null;
-  projectName: string | null;
+  key: string;
+  label: string;
+  /** Set when the row is a project or a client, so the UI can link to it. */
+  href: string | null;
   minutes: number;
   billableMinutes: number;
   /** Cents. Only from entries that actually carry a rate. */
   amount: number;
   currency: string | null;
+  entries: number;
 };
 
 export type TimeSummary = {
+  groupBy: GroupBy;
+  roundTo: number;
   groups: SummaryGroup[];
   totalMinutes: number;
   billableMinutes: number;
+  /** Unrounded, so the rounding's effect is visible rather than hidden. */
+  rawMinutes: number;
   /** Cents per currency — a workspace can bill in more than one. */
   amountByCurrency: Record<string, number>;
 };
@@ -478,12 +505,35 @@ export type TimeSummary = {
  * The row cap keeps that bounded, and it means the rounding rule for money is
  * the same one the row list uses.
  */
-export async function timeSummary(s: Scope, f: TimeFilters = {}): Promise<TimeSummary> {
+export type SummaryOptions = { groupBy?: GroupBy; roundTo?: number };
+
+/** Round up to the next increment. 12 minutes at a 15-minute increment is 15. */
+function roundUp(minutes: number, increment: number): number {
+  if (!increment || increment <= 0) return minutes;
+  return Math.ceil(minutes / increment) * increment;
+}
+
+export async function timeSummary(
+  s: Scope,
+  f: TimeFilters = {},
+  opts: SummaryOptions = {}
+): Promise<TimeSummary> {
+  const groupBy: GroupBy = opts.groupBy ?? 'project';
+  const roundTo = ROUNDING_CHOICES.includes(
+    (opts.roundTo ?? 0) as (typeof ROUNDING_CHOICES)[number]
+  )
+    ? (opts.roundTo ?? 0)
+    : 0;
+
   const conditions = filterConditions(s, f);
   const rows = await db(s.region)
     .select({
       projectId: timeEntries.projectId,
       projectName: projects.name,
+      userId: timeEntries.userId,
+      userName: sql<string>`COALESCE(NULLIF(TRIM(${users.username}), ''), ${users.email})`.as(
+        'userName'
+      ),
       startedAt: timeEntries.startedAt,
       endedAt: timeEntries.endedAt,
       billable: timeEntries.billable,
@@ -491,31 +541,88 @@ export async function timeSummary(s: Scope, f: TimeFilters = {}): Promise<TimeSu
       currency: timeEntries.currency
     })
     .from(timeEntries)
+    .innerJoin(users, eq(users.id, timeEntries.userId))
     .leftJoin(projects, eq(projects.id, timeEntries.projectId))
     .where(and(...conditions, sql`${timeEntries.endedAt} IS NOT NULL`))
     .orderBy(asc(timeEntries.startedAt));
 
-  const byProject = new Map<string, SummaryGroup>();
+  // Grouping by client needs the company behind each project. One query for
+  // the projects actually present, not one per row.
+  let clientByProject = new Map<string, { id: string; name: string }>();
+  if (groupBy === 'client') {
+    const ids = [...new Set(rows.map((r) => r.projectId).filter((v): v is string => !!v))];
+    if (ids.length > 0) {
+      const links = await db(s.region)
+        .select({
+          projectId: projectCompanies.projectId,
+          companyId: companies.id,
+          companyName: companies.name
+        })
+        .from(projectCompanies)
+        .innerJoin(companies, eq(companies.id, projectCompanies.companyId))
+        .where(and(eq(companies.workspaceId, s.workspaceId), inArray(projectCompanies.projectId, ids)));
+      // A project can carry several companies; the first is the client for
+      // reporting purposes, and a project with two clients is a data problem
+      // rather than something to model here.
+      for (const l of links) {
+        if (!clientByProject.has(l.projectId)) {
+          clientByProject.set(l.projectId, { id: l.companyId, name: l.companyName });
+        }
+      }
+    }
+  }
+
+  const buckets = new Map<string, SummaryGroup>();
   const amountByCurrency: Record<string, number> = {};
   let totalMinutes = 0;
+  let rawMinutes = 0;
   let billableMinutes = 0;
 
   for (const r of rows) {
-    const minutes = Math.round(((r.endedAt as number) - r.startedAt) / 60_000);
-    const key = r.projectId ?? '';
+    const raw = Math.round(((r.endedAt as number) - r.startedAt) / 60_000);
+    const minutes = roundUp(raw, roundTo);
+
+    let key: string;
+    let label: string;
+    let href: string | null = null;
+    if (groupBy === 'person') {
+      key = r.userId;
+      label = r.userName;
+    } else if (groupBy === 'client') {
+      const client = r.projectId ? clientByProject.get(r.projectId) : undefined;
+      key = client?.id ?? '';
+      label = client?.name ?? 'No client';
+      href = client ? `/companies/${client.id}` : null;
+    } else if (groupBy === 'day') {
+      const d = new Date(r.startedAt);
+      key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+      label = key;
+    } else if (groupBy === 'week') {
+      key = weekKey(r.startedAt);
+      label = key;
+    } else {
+      key = r.projectId ?? '';
+      label = r.projectName ?? 'No project';
+      href = r.projectId ? `/projects/${r.projectId}` : null;
+    }
+
     const group =
-      byProject.get(key) ??
+      buckets.get(key) ??
       ({
-        projectId: r.projectId,
-        projectName: r.projectName,
+        key,
+        label,
+        href,
         minutes: 0,
         billableMinutes: 0,
         amount: 0,
-        currency: r.currency
+        currency: r.currency,
+        entries: 0
       } satisfies SummaryGroup);
 
     group.minutes += minutes;
+    group.entries += 1;
     totalMinutes += minutes;
+    rawMinutes += raw;
 
     if (r.billable === 1) {
       group.billableMinutes += minutes;
@@ -527,11 +634,17 @@ export async function timeSummary(s: Scope, f: TimeFilters = {}): Promise<TimeSu
         amountByCurrency[cur] = (amountByCurrency[cur] ?? 0) + cents;
       }
     }
-    byProject.set(key, group);
+    buckets.set(key, group);
   }
 
-  const groups = [...byProject.values()].sort((a, b) => b.minutes - a.minutes);
-  return { groups, totalMinutes, billableMinutes, amountByCurrency };
+  // Chronological groupings read in time order; the rest read biggest-first.
+  const groups = [...buckets.values()].sort(
+    groupBy === 'day' || groupBy === 'week'
+      ? (a, b) => a.key.localeCompare(b.key)
+      : (a, b) => b.minutes - a.minutes
+  );
+
+  return { groupBy, roundTo, groups, totalMinutes, billableMinutes, rawMinutes, amountByCurrency };
 }
 
 /**
