@@ -325,6 +325,24 @@ CREATE TABLE IF NOT EXISTS project_goals (
 );
 CREATE INDEX IF NOT EXISTS idx_project_goals_project ON project_goals(project_id, position);
 
+-- Who is booked on what, and when. user_id is attribution; assignee_user_id is
+-- whose time this books, and is deleted rather than reassigned when that member
+-- leaves (see ASSIGNMENT_COLUMNS). Hours are integer minutes.
+CREATE TABLE IF NOT EXISTS project_allocations (
+  id TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  assignee_user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+  start_date INTEGER NOT NULL,
+  end_date INTEGER NOT NULL,
+  minutes_per_week INTEGER NOT NULL,
+  hourly_rate INTEGER,
+  note TEXT,
+  created_at INTEGER NOT NULL,
+  updated_at INTEGER NOT NULL
+);
+-- Tenancy indexes: see WORKSPACE_INDEXES.
+
 CREATE TABLE IF NOT EXISTS collections (
   id TEXT PRIMARY KEY,
   user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -630,6 +648,9 @@ const ALTERS: string[] = [
   // Links get grouped and ordered rather than being one undifferentiated list.
   `ALTER TABLE project_links ADD COLUMN kind TEXT`,
   `ALTER TABLE project_links ADD COLUMN position INTEGER`,
+  // Capacity planning. Minutes, not hours — integers all the way down.
+  `ALTER TABLE workspace_members ADD COLUMN weekly_capacity_minutes INTEGER`,
+  `ALTER TABLE project_allocations ADD COLUMN workspace_id TEXT REFERENCES workspaces(id)`,
   // Stage color picker on pipeline creation.
   `ALTER TABLE pipeline_stages ADD COLUMN color TEXT`,
   // ── Workspace tenancy ──────────────────────────────────────────────────────
@@ -686,8 +707,26 @@ export const TENANT_TABLES = [
   'collection_pipeline_syncs',
   'api_tokens',
   'calendar_feeds',
-  'outreach_templates'
+  'outreach_templates',
+  'project_allocations'
 ] as const;
+
+/**
+ * A *second* user reference on a tenant table, naming whose work a row books
+ * rather than who typed it in.
+ *
+ * `reassignAuthorship` only knows about `user_id`, and for
+ * `project_allocations` that column is ordinary attribution — reassigning it is
+ * correct. `assignee_user_id` is not: handing a departing member's allocation
+ * to the workspace owner would silently book the owner for 24 hours a week of
+ * someone else's work, and it would keep showing on /availability. Those rows
+ * are deleted.
+ *
+ * Column names here are literals compiled into the query, never user input.
+ */
+export const ASSIGNMENT_COLUMNS: Record<string, string> = {
+  project_allocations: 'assignee_user_id'
+};
 
 /**
  * Tenant tables whose rows belong to *a person*, not to the workspace.
@@ -740,6 +779,10 @@ CREATE INDEX IF NOT EXISTS idx_people_ws_domain ON people(workspace_id, domain);
 CREATE INDEX IF NOT EXISTS idx_people_ws_priority ON people(workspace_id, priority);
 CREATE INDEX IF NOT EXISTS idx_people_ws_status ON people(workspace_id, status_id);
 CREATE INDEX IF NOT EXISTS idx_people_statuses_ws_sort ON people_statuses(workspace_id, sort_order);
+
+CREATE INDEX IF NOT EXISTS idx_alloc_ws_range ON project_allocations(workspace_id, start_date, end_date);
+CREATE INDEX IF NOT EXISTS idx_alloc_ws_assignee ON project_allocations(workspace_id, assignee_user_id, start_date);
+CREATE INDEX IF NOT EXISTS idx_alloc_project ON project_allocations(project_id);
 
 CREATE INDEX IF NOT EXISTS idx_interactions_ws_occurred ON interactions(workspace_id, occurred_at);
 CREATE INDEX IF NOT EXISTS idx_interactions_ws_company ON interactions(workspace_id, company_id);

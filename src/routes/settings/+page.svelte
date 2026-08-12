@@ -8,6 +8,11 @@
   // context, which is exactly the docker-compose quickstart before Caddy is in
   // front of it and any plain-HTTP LAN self-host. copyText falls back.
   import { copyText } from '$lib/client/clipboard';
+  import {
+    hoursToMinutes,
+    minutesToHours,
+    DEFAULT_WEEKLY_CAPACITY_MINUTES
+  } from '$lib/duration';
   import { Bookmark, Building2, CalendarDays, Download, ShieldAlert, KeyRound, Mail, User, LogOut, Copy, Check, Users } from 'lucide-svelte';
 
   let { data } = $props();
@@ -225,6 +230,33 @@
     } finally {
       busy = null;
     }
+  }
+
+  /**
+   * A member on the default shows the default rather than an empty box — the
+   * number is what availability actually uses, so leaving it blank would hide
+   * the assumption being made about their week.
+   */
+  function capacityDraft(m: { weeklyCapacityMinutes: number | null }): string {
+    return String(minutesToHours(m.weeklyCapacityMinutes ?? DEFAULT_WEEKLY_CAPACITY_MINUTES));
+  }
+
+  async function saveCapacity(userId: string, raw: string) {
+    const trimmed = raw.trim();
+    // Clearing the field means "use the default", which is a null on the row.
+    const minutes = trimmed === '' ? null : hoursToMinutes(trimmed);
+    if (trimmed !== '' && minutes == null) {
+      toast.danger('Enter hours per week, e.g. 32 or 37.5');
+      await invalidateAll();
+      return;
+    }
+    const res = await request(
+      '/api/workspace/capacity',
+      { method: 'PATCH', body: { userId, weeklyCapacityMinutes: minutes } },
+      { invalid_minutes: 'That is not a workable week.', forbidden: 'Only admins can change that.' },
+      'Could not save that capacity.'
+    );
+    if (res) await invalidateAll();
   }
 
   async function changeRole(userId: string, role: string) {
@@ -844,6 +876,21 @@
             <div class="truncate text-xs text-[var(--color-muted)]">{m.email}</div>
           </div>
           <div class="flex shrink-0 items-center gap-2">
+            <!-- Your own working week is yours to state; a colleague's is
+                 workspace configuration, so the input is read-only unless you
+                 are an admin. The server enforces the same rule. -->
+            <label class="flex items-center gap-1 text-xs text-[var(--color-muted)]">
+              <input
+                type="text"
+                inputmode="decimal"
+                value={capacityDraft(m)}
+                disabled={!teamAdmin && m.userId !== data.user.id}
+                onblur={(e) => saveCapacity(m.userId, e.currentTarget.value)}
+                aria-label="Weekly capacity for {m.username ?? m.email}"
+                class="w-14 rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-bg)] px-1.5 py-1 text-right tabular-nums disabled:opacity-50"
+              />
+              h/wk
+            </label>
             {#if teamAdmin && !m.isOwner && m.userId !== data.user.id}
               <!-- Self excluded deliberately: an admin demoting themselves would
                    lose the page they are standing on. -->

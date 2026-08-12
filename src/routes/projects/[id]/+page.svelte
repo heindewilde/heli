@@ -17,6 +17,7 @@
   import { toast } from '$lib/toasts.svelte';
   import MilestonesCard from '$lib/components/MilestonesCard.svelte';
   import GoalsCard from '$lib/components/GoalsCard.svelte';
+  import AllocationsCard from '$lib/components/AllocationsCard.svelte';
   import Skeleton from '$lib/ui/Skeleton.svelte';
   import {
     PROJECT_TYPES,
@@ -270,6 +271,18 @@
         <Skeleton variant="rows" lines={2} />
       {:then goals}
         <GoalsCard projectId={project.id} {goals} />
+      {/await}
+
+      {#await data.staffing}
+        <Skeleton variant="rows" lines={2} />
+      {:then staffing}
+        <AllocationsCard
+          projectId={project.id}
+          allocations={staffing.allocations}
+          members={staffing.members}
+          projectStart={project.startDate}
+          projectEnd={project.endDate}
+        />
       {/await}
 
       <div class="flex flex-col gap-2">

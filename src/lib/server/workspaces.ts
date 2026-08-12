@@ -1,7 +1,7 @@
 import { createId } from '@paralleldrive/cuid2';
 import { and, asc, desc, eq, sql } from 'drizzle-orm';
 import { client, db } from './db';
-import { PERSONAL_TABLES, ROW_PERSONAL, TENANT_TABLES } from './migrate';
+import { ASSIGNMENT_COLUMNS, PERSONAL_TABLES, ROW_PERSONAL, TENANT_TABLES } from './migrate';
 import { sanitizePlainText } from './sanitize';
 import { sessions, users, workspaces, workspaceMembers, type WorkspaceRole } from './schema';
 
@@ -175,6 +175,19 @@ export async function reassignAuthorship(
     await c.execute({
       sql: `UPDATE ${table} SET user_id = ? WHERE workspace_id = ? AND user_id = ?`,
       args: [toUserId, workspaceId, fromUserId]
+    });
+  }
+
+  // Rows that book the departing member's *time* rather than record their
+  // authorship. The loop above cannot express this: on project_allocations
+  // `user_id` is attribution and is correctly reassigned, while
+  // `assignee_user_id` names whose week is committed. Handing that over would
+  // book the workspace owner for work that left with the member, and keep it
+  // showing on /availability. Column names come from a constant map.
+  for (const [table, column] of Object.entries(ASSIGNMENT_COLUMNS)) {
+    await c.execute({
+      sql: `DELETE FROM ${table} WHERE workspace_id = ? AND ${column} = ?`,
+      args: [workspaceId, fromUserId]
     });
   }
 }
@@ -357,6 +370,8 @@ export type MemberRow = {
   role: WorkspaceRole;
   joinedAt: number;
   isOwner: boolean;
+  /** Sellable minutes a week. NULL means the member is on the default. */
+  weeklyCapacityMinutes: number | null;
 };
 
 export async function listMembers(region: string, workspaceId: string): Promise<MemberRow[]> {
@@ -367,7 +382,8 @@ export async function listMembers(region: string, workspaceId: string): Promise<
       email: users.email,
       username: users.username,
       role: workspaceMembers.role,
-      joinedAt: workspaceMembers.createdAt
+      joinedAt: workspaceMembers.createdAt,
+      weeklyCapacityMinutes: workspaceMembers.weeklyCapacityMinutes
     })
     .from(workspaceMembers)
     .innerJoin(users, eq(users.id, workspaceMembers.userId))

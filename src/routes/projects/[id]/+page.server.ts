@@ -10,6 +10,7 @@ import {
   getProjectMilestones,
   getProjectGoals
 } from '$lib/server/projects-query';
+import { listAllocationsForProject, listMemberCapacities } from '$lib/server/allocations';
 
 /**
  * Only the project row is awaited; everything else is returned unawaited so the
@@ -38,6 +39,12 @@ export const load: PageServerLoad = async ({ locals, params, url }) => {
     companies: getProjectCompanies(s, params.id),
     interactions: getProjectInteractions(s, params.id),
     milestones: getProjectMilestones(s, params.id),
-    goals: getProjectGoals(s, params.id)
+    goals: getProjectGoals(s, params.id),
+    // Allocations and the member list always render together, so they resolve
+    // as one promise rather than making the card wait on two.
+    staffing: Promise.all([
+      listAllocationsForProject(s, params.id),
+      listMemberCapacities(s)
+    ]).then(([allocations, members]) => ({ allocations, members }))
   };
 };

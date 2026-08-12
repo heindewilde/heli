@@ -150,6 +150,14 @@ export const workspaceMembers = sqliteTable(
       .notNull()
       .references(() => users.id, { onDelete: 'cascade' }),
     role: text('role').notNull().default('member'),
+    /**
+     * Sellable hours a week, in minutes. NULL falls back to
+     * DEFAULT_WEEKLY_CAPACITY_MINUTES.
+     *
+     * On the membership rather than the user: someone can be three days a week
+     * in one workspace and two in another.
+     */
+    weeklyCapacityMinutes: integer('weekly_capacity_minutes'),
     createdAt: integer('created_at').notNull()
   },
   (t) => [
@@ -542,6 +550,57 @@ export const projectMilestones = sqliteTable(
 );
 
 /**
+ * Who is booked on a project, for how long, at how many hours a week.
+ *
+ * The spine of /availability. Time-boxed rather than a single number on the
+ * membership, because a ramp-down ("24h/wk in Q1, 8h/wk in Q2") is the normal
+ * case and cannot be expressed otherwise.
+ *
+ * **Two user columns, and the difference is load-bearing.** `userId` is
+ * ordinary created-by attribution, so the generic `reassignAuthorship` loop
+ * handles it unchanged. `assigneeUserId` is a real reference to whose time is
+ * booked — it is genuinely filtered on, and when that member leaves the
+ * allocation is *deleted*, not handed to the owner (see ASSIGNMENT_COLUMNS in
+ * migrate.ts). Leaving it would book a workspace against someone who is gone.
+ *
+ * Hours are stored as integer minutes, like money is stored as cents. No
+ * floats: "7.5 hours" is 450 and always adds up.
+ */
+export const projectAllocations = sqliteTable(
+  'project_allocations',
+  {
+    id: text('id').primaryKey(),
+    workspaceId: text('workspace_id')
+      .notNull()
+      .references(() => workspaces.id, { onDelete: 'cascade' }),
+    /** Created-by attribution only — never a filter. */
+    userId: text('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    /** Whose time this books. A real owner, filtered on. */
+    assigneeUserId: text('assignee_user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    projectId: text('project_id')
+      .notNull()
+      .references(() => projects.id, { onDelete: 'cascade' }),
+    startDate: integer('start_date').notNull(),
+    endDate: integer('end_date').notNull(),
+    minutesPerWeek: integer('minutes_per_week').notNull(),
+    /** Overrides the project's hourly rate for this person. Cents. */
+    hourlyRate: integer('hourly_rate'),
+    note: text('note'),
+    createdAt: integer('created_at').notNull(),
+    updatedAt: integer('updated_at').notNull()
+  },
+  (t) => [
+    index('idx_alloc_ws_range').on(t.workspaceId, t.startDate, t.endDate),
+    index('idx_alloc_ws_assignee').on(t.workspaceId, t.assigneeUserId, t.startDate),
+    index('idx_alloc_project').on(t.projectId)
+  ]
+);
+
+/**
  * Measurable targets on a project — "ship 12 posts", 7 done.
  *
  * Kept separate from milestones rather than folded in as nullable columns:
@@ -868,6 +927,11 @@ export type Project = typeof projects.$inferSelect;
 export type ProjectLink = typeof projectLinks.$inferSelect;
 export type ProjectMilestone = typeof projectMilestones.$inferSelect;
 export type ProjectGoal = typeof projectGoals.$inferSelect;
+export type ProjectAllocation = typeof projectAllocations.$inferSelect;
+
+// Lives in `$lib/duration` so the browser can read it without pulling Drizzle
+// in. Re-exported here for server callers.
+export { DEFAULT_WEEKLY_CAPACITY_MINUTES } from '$lib/duration';
 export type Collection = typeof collections.$inferSelect;
 export type CollectionItem = typeof collectionItems.$inferSelect;
 export type OAuthAccount = typeof oauthAccounts.$inferSelect;

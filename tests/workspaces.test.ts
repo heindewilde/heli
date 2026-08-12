@@ -17,6 +17,9 @@ let leaverScope: ReturnType<typeof scopeFor>;
 let leaverPersonId: string;
 let leaverReminderId: string;
 let ownerReminderId: string;
+/** Both authored by the leaver; they differ only in whose time they book. */
+let allocOnLeaverId: string;
+let allocOnOwnerId: string;
 
 beforeAll(async () => {
   ctx = await freshDb();
@@ -59,6 +62,28 @@ beforeAll(async () => {
       createdAt: now
     }
   ]);
+
+  // Two allocations, both *authored* by the leaver so the attribution rewrite
+  // and the assignment deletion can be told apart.
+  const { createProject } = await import('../src/lib/server/saveProject');
+  const { createAllocation } = await import('../src/lib/server/allocations');
+  const project = await createProject(leaverScope, { name: 'Shared engagement' });
+  allocOnLeaverId = (
+    await createAllocation(leaverScope, project.id, {
+      assigneeUserId: leaver.user.id,
+      startDate: now,
+      endDate: now + 90 * 86_400_000,
+      minutesPerWeek: 1440
+    })
+  ).id;
+  allocOnOwnerId = (
+    await createAllocation(leaverScope, project.id, {
+      assigneeUserId: owner.user.id,
+      startDate: now,
+      endDate: now + 90 * 86_400_000,
+      minutesPerWeek: 600
+    })
+  ).id;
 }, 120_000);
 
 afterAll(() => ctx?.cleanup());
@@ -101,6 +126,34 @@ test('reassignAuthorship hands over shared work but deletes personal rows', asyn
   // And the owner's sidebar shows exactly one reminder — their own.
   const hers = await listReminders(owner.scope);
   expect(hers.map((r) => r.id)).toEqual([ownerReminderId]);
+
+  // Allocations split by *which* user column matters. The one booking the
+  // leaver's own time is deleted: keeping it would book the owner for 24 hours
+  // a week of work that walked out of the door, and it would keep showing on
+  // /availability. The one booking the owner survives, with its authorship
+  // rewritten like any other shared record.
+  const allocs = await ctx.client.execute({
+    sql: `SELECT id, user_id, assignee_user_id FROM project_allocations WHERE workspace_id = ?`,
+    args: [owner.scope.workspaceId]
+  });
+  const allocIds = allocs.rows.map((r) => String(r.id));
+  expect(allocIds).not.toContain(allocOnLeaverId);
+  expect(allocIds).toEqual([allocOnOwnerId]);
+  expect(String(allocs.rows[0].user_id)).toBe(owner.user.id);
+  expect(String(allocs.rows[0].assignee_user_id)).toBe(owner.user.id);
+});
+
+test('ASSIGNMENT_COLUMNS names real tenant tables', async () => {
+  const { TENANT_TABLES, ASSIGNMENT_COLUMNS, PERSONAL_TABLES } = await import(
+    '../src/lib/server/migrate'
+  );
+  for (const table of Object.keys(ASSIGNMENT_COLUMNS)) {
+    // It has to be in the loop reassignAuthorship walks, or the DELETE would
+    // be the only thing that ever touched the table.
+    expect(TENANT_TABLES as readonly string[]).toContain(table);
+    // And it must not be wholly personal, or the row would already be gone.
+    expect(PERSONAL_TABLES).not.toContain(table);
+  }
 });
 
 test('purgeWorkspace empties every tenant table before dropping the workspace', async () => {

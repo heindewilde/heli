@@ -38,6 +38,12 @@ const ALLOW_FILES = new Set([
   // ownership is (workspace_id, user_id) — see PERSONAL_TABLES in migrate.ts.
   'src/routes/api/calendar/[id]/+server.ts',
   'src/routes/api/user/+server.ts', // account settings act on the user
+  // Allocations carry two user columns. `user_id` is ordinary attribution; the
+  // filtered one is `assignee_user_id`, which names whose week is booked and is
+  // a genuine owner — "my allocations" is a real query. Every statement still
+  // filters workspace_id first. See ASSIGNMENT_COLUMNS in migrate.ts for why
+  // those rows are deleted rather than reassigned when a member leaves.
+  'src/lib/server/allocations.ts',
   // Outreach templates are the one table where user_id means two different
   // things per row: attribution on a shared template, real ownership on a
   // private one. So listing is (workspace_id AND (shared OR user_id)) — see
@@ -198,6 +204,11 @@ const MEMBER_ALLOWED = new Map<string, string>([
   ['projects/[id]/companies/+server.ts', 'linking records'],
   ['projects/[id]/milestones/+server.ts', "planning a project you can already edit"],
   ['projects/[id]/goals/+server.ts', "planning a project you can already edit"],
+  ['projects/[id]/allocations/+server.ts', 'staffing a project is routine work in a small team'],
+  [
+    'workspace/capacity/+server.ts',
+    'your own working week is yours; setting a colleague’s calls requireRole in the handler'
+  ],
   ['projects/[id]/interactions/+server.ts', 'linking records'],
   ['projects/[id]/links/+server.ts', 'linking records'],
   ['projects/[id]/people/+server.ts', 'linking records'],
