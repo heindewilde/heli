@@ -11,7 +11,8 @@ import { useTheme } from '../src/theme';
 import { haptics } from '../src/ui/haptics';
 import { api } from '../src/api/endpoints';
 import { ApiError } from '../src/api/client';
-import { cleanUrl, UrlError, domainOf } from '../../src/lib/cleanUrl';
+import { domainOf } from '../../src/lib/cleanUrl';
+import { resolveShare } from '../src/native/shareIntent';
 
 /**
  * Save a page you are looking at, from anywhere.
@@ -40,21 +41,20 @@ export default function CaptureScreen() {
   const [state, setState] = useState<'idle' | 'checking' | 'known' | 'new' | 'saving'>('idle');
   const [error, setError] = useState<string | null>(null);
 
-  // A share can arrive as a URL or as text with a URL inside it — the iOS share
-  // sheet is inconsistent about which, and Safari sends both depending on
-  // whether you shared the page or a selection.
-  const incoming =
-    params.url ?? shareIntent?.webUrl ?? extractUrl(shareIntent?.text ?? '') ?? '';
-
+  // `resolveShare` owns the parsing, so it can be tested without a device —
+  // the share sheet is inconsistent about whether a page arrives as a URL
+  // field or as text with a link inside it.
   useEffect(() => {
-    if (!incoming) return;
-    try {
-      setUrl(cleanUrl(incoming));
-    } catch (err) {
-      setError(err instanceof UrlError ? 'That does not look like a web address.' : null);
-      setUrl(incoming);
+    const resolved = resolveShare({
+      webUrl: params.url ?? shareIntent?.webUrl,
+      text: shareIntent?.text
+    });
+    if (resolved.kind === 'url') setUrl(resolved.url);
+    else if (resolved.kind === 'unusable') {
+      setUrl(resolved.text);
+      setError('That does not look like a web address.');
     }
-  }, [incoming]);
+  }, [params.url, shareIntent?.webUrl, shareIntent?.text]);
 
   const check = useCallback(async (candidate: string) => {
     setState('checking');
@@ -216,12 +216,3 @@ function inputStyle(t: ReturnType<typeof useTheme>) {
   } as const;
 }
 
-/**
- * Pull a URL out of shared text.
- *
- * Mirrors what `/save` does on the web: several apps share "Some title
- * https://example.com" as one string rather than sending the URL field.
- */
-function extractUrl(text: string): string | null {
-  return /https?:\/\/[^\s]+/.exec(text)?.[0] ?? null;
-}
