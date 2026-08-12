@@ -154,6 +154,34 @@ genuinely owns its own stacking.
 - **`Dialog.svelte`** — modal surfaces. The backdrop has **no** click handler;
   dismissal comes from `layerStack`. Don't add one back — that is what forced
   the two a11y workarounds this replaced.
+- **`Select.svelte`** — the dropdown. A real listbox on `Popover`, **not** a
+  native `<select>`: `appearance-none` strips the platform chevron but nothing
+  can style the open option list, so every dropdown used to open into an OS
+  menu that ignored the theme. Data-driven (`options`, not `<option>`
+  children); `name` renders a hidden input so form-action pages still post.
+  - **Touch keeps the native control.** A transparent `<select>` sits over the
+    trigger, given `pointer-events` only under `@media (pointer: coarse)`. The
+    branch is CSS, not JS — detecting the pointer at mount would be a hydration
+    mismatch on every dropdown in the app. It is `aria-hidden`/`tabindex="-1"`:
+    a pointer target, not a second control.
+  - **Focus is the keyboard cursor**, not an `activeIndex`. Options are real
+    buttons, and the keydown handler has to live on the element that has focus
+    — a handler on a wrapper never fires, because `trapFocus` has already
+    focused past it.
+  - **Initial focus polls for layout.** The panel mounts in `{#if open}` and
+    `showPopover()` runs in one of Popover's effects; `focus()` on an element
+    with no boxes is a silent no-op. This is also why Popover's own `autoFocus`
+    misses here. Single-shot attempts (one rAF, two, the `toggle` event) are
+    each sensitive to that ordering — the bounded poll is not.
+  - **Arrows on a closed trigger open the list; they never step the value.**
+    Several of these write on change, and one is a project's billing type,
+    where a change clears the money column that type no longer owns. Stepping
+    on a stray arrow key silently wiped an hourly rate once already.
+  - `Combobox` is still the right answer when the list needs *searching*.
+- **`SegmentedControl.svelte`** — mutually exclusive views. Renders links when
+  segments carry `href`, so a view stays middle-clickable and shareable.
+- **`StatTile.svelte`** — one headline number. `tabular-nums` without asking,
+  because a row of these is read as a column of digits.
 - **`Editable.svelte`** — click-to-edit a value, optimistic with rollback.
 - **`RichText.svelte`** — the rich-text surface, wrapping `squire-rte`. Used by
   `NotesEditor`, so it is behind person notes and every company / project /
@@ -842,7 +870,31 @@ records what actually happened.
   still filters `workspace_id` first.
 - **The billing cross-field rule is `BILLING_MONEY_FIELD`**, not an if/else
   chain. A project owns exactly one money column; with four billing types the
-  chain had to be right in three separate places.
+  chain had to be right in three separate places. Note the consequence: changing
+  a billing type *clears* the columns that type no longer owns, so anything that
+  can fire a `billingType` write accidentally is a data-loss path.
+- **`project_allocations.day_mask` is a Mon..Sun bitmask**, NULL meaning
+  unspecified. Where it is set the weekly hours divide across those days (16h/wk
+  on Tue+Thu is 8h each) and clipping is by *pattern* day; where it is NULL every
+  consumer must behave exactly as it did before patterns existed, which
+  `tests/weeks.test.ts` pins explicitly. `0` normalises to NULL on write so
+  there is one representation of "no pattern".
+- **`/availability` has three views**, each fetching only its own data: the
+  capacity grid, `weekDetail` (one week by day), and `projectTimeline` (bars per
+  project, spanning the union of that project's allocations — deliberately not
+  `projects.start_date`, since a project can be dated long before anyone is
+  booked).
+- **Report rounding is applied per entry, never to the total.** Three six-minute
+  calls are three billable units. The raw total is kept alongside the rounded one
+  and the delta is shown — rounding you cannot see is rounding you cannot check.
+- **Colour is project identity, via `$lib/projectColor`.** It hashes an id onto
+  the existing `--stage-*` palette rather than introducing a chart palette;
+  `gray` is excluded so a real project can never look like a neutral row.
+- **The print stylesheet in `app.css` is what makes "Export PDF" free.** It
+  forces the light palette, drops nav and `.no-print` chrome, repeats table
+  headers across pages and preserves backgrounds. Screens opt in with
+  `.no-print` / `.print-only`; there is no PDF dependency and there should not
+  be one.
 
 ## Versioning
 
