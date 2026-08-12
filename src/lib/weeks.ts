@@ -90,7 +90,48 @@ export function monthLabel(start: number): string {
   return new Date(start).toLocaleString('en', { month: 'short', year: '2-digit', timeZone: 'UTC' });
 }
 
-export type Span = { startDate: number; endDate: number };
+/**
+ * Which weekdays an allocation actually falls on, as a bitmask.
+ *
+ * Monday is bit 0 through Sunday bit 6, matching `weekStart`'s Monday anchor.
+ * `null` means "unspecified" — the hours are simply spread across the span, and
+ * every consumer must keep behaving exactly as it did before day patterns
+ * existed. A bitmask rather than a join table because there are seven of them
+ * and they are always read together with the row.
+ */
+export const MONDAY = 0;
+export const DAY_NAMES = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'] as const;
+export const WEEKDAY_MASK = 0b0011111; // Mon–Fri
+export const FULL_WEEK_MASK = 0b1111111;
+
+export function hasDay(mask: number, dayIndex: number): boolean {
+  return (mask & (1 << dayIndex)) !== 0;
+}
+
+export function toggleDay(mask: number, dayIndex: number): number {
+  return mask ^ (1 << dayIndex);
+}
+
+export function countDays(mask: number): number {
+  let n = 0;
+  for (let i = 0; i < 7; i++) if (hasDay(mask, i)) n++;
+  return n;
+}
+
+/** `'Tue, Thu'`, or `'Mon–Fri'` for the common runs. */
+export function describeDays(mask: number | null): string {
+  if (mask == null || mask === 0) return 'Any day';
+  if (mask === WEEKDAY_MASK) return 'Mon–Fri';
+  if (mask === FULL_WEEK_MASK) return 'Every day';
+  return DAY_NAMES.filter((_, i) => hasDay(mask, i)).join(', ');
+}
+
+/** Monday-relative index (0–6) of a timestamp. */
+export function dayIndex(ts: number): number {
+  return (new Date(ts).getUTCDay() + 6) % 7;
+}
+
+export type Span = { startDate: number; endDate: number; dayMask?: number | null };
 
 /**
  * How many days of `week` the span [startDate, endDate] covers, 0–7.
@@ -108,6 +149,45 @@ export function overlapDays(span: Span, week: Week): number {
 }
 
 /**
+ * The Monday-relative day indexes this span actually occupies in this week.
+ *
+ * With no `dayMask` every covered day counts, which is what the grid did before
+ * patterns existed. With one, only the pattern's days that also fall inside the
+ * covered range count — so a Tue/Thu allocation whose span ends on Wednesday
+ * contributes Tuesday alone.
+ */
+export function coveredDays(span: Span, week: Week): number[] {
+  const spanEndExclusive = span.endDate + MS_PER_DAY;
+  const out: number[] = [];
+  for (let i = 0; i < 7; i++) {
+    const dayStart = week.start + i * MS_PER_DAY;
+    if (dayStart < span.startDate || dayStart >= spanEndExclusive) continue;
+    if (span.dayMask != null && span.dayMask !== 0 && !hasDay(span.dayMask, i)) continue;
+    out.push(i);
+  }
+  return out;
+}
+
+/**
+ * Minutes this allocation puts on a single day of the week.
+ *
+ * The weekly figure is divided across the pattern's days — 16h/wk on Tue+Thu is
+ * 8h on each. Without a pattern the hours are spread across the whole covered
+ * week, which is the only honest answer when nobody has said which days.
+ */
+export function minutesOnDay(
+  span: Span & { minutesPerWeek: number },
+  week: Week,
+  dayIdx: number
+): number {
+  const covered = coveredDays(span, week);
+  if (!covered.includes(dayIdx)) return 0;
+  const divisor =
+    span.dayMask != null && span.dayMask !== 0 ? countDays(span.dayMask) : 7;
+  return Math.round(span.minutesPerWeek / divisor);
+}
+
+/**
  * The minutes an allocation contributes to one week.
  *
  * Pro-rated by days covered, so a span that starts on a Wednesday contributes
@@ -119,6 +199,16 @@ export function minutesInWeek(
   span: Span & { minutesPerWeek: number },
   week: Week
 ): number {
+  // With a day pattern the week's total is the sum of the pattern days that
+  // land inside it, so a Tue/Thu booking clipped to a Monday–Wednesday span
+  // charges one day rather than three-sevenths of a week.
+  if (span.dayMask != null && span.dayMask !== 0) {
+    const covered = coveredDays(span, week);
+    if (covered.length === 0) return 0;
+    const perDay = span.minutesPerWeek / countDays(span.dayMask);
+    return Math.round(perDay * covered.length);
+  }
+
   const days = overlapDays(span, week);
   if (days === 0) return 0;
   if (days === 7) return span.minutesPerWeek;

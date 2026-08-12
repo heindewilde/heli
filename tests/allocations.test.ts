@@ -147,6 +147,62 @@ describe('updating', () => {
   });
 });
 
+describe('day patterns', () => {
+  test('a mask round-trips, and zero normalises to null', async () => {
+    const a = await import('../src/lib/server/allocations');
+    const TUE_THU = (1 << 1) | (1 << 3);
+
+    const { id } = await a.createAllocation(alice.scope, projectId, {
+      assigneeUserId: bob.user.id,
+      startDate: JAN,
+      endDate: JUN,
+      minutesPerWeek: 960,
+      dayMask: TUE_THU
+    });
+    expect((await a.listAllocationsForProject(alice.scope, projectId))[0].dayMask).toBe(TUE_THU);
+
+    // 0 and null are the same statement — "no particular days" — and there
+    // should be exactly one stored representation of it.
+    await a.updateAllocation(alice.scope, id, { dayMask: 0 });
+    expect((await a.listAllocationsForProject(alice.scope, projectId))[0].dayMask).toBeNull();
+
+    await a.deleteAllocation(alice.scope, id);
+  });
+
+  test('an out-of-range mask is rejected', async () => {
+    const a = await import('../src/lib/server/allocations');
+    for (const bad of [-1, 128, 1.5]) {
+      await expect(
+        a.createAllocation(alice.scope, projectId, {
+          assigneeUserId: bob.user.id,
+          startDate: JAN,
+          endDate: JUN,
+          minutesPerWeek: 600,
+          dayMask: bad
+        })
+      ).rejects.toThrow('invalid_days');
+    }
+  });
+
+  test('omitting the mask leaves existing allocations alone', async () => {
+    const a = await import('../src/lib/server/allocations');
+    const { id } = await a.createAllocation(alice.scope, projectId, {
+      assigneeUserId: bob.user.id,
+      startDate: JAN,
+      endDate: JUN,
+      minutesPerWeek: 600
+    });
+    expect((await a.listAllocationsForProject(alice.scope, projectId))[0].dayMask).toBeNull();
+
+    await a.updateAllocation(alice.scope, id, { minutesPerWeek: 720 });
+    const row = (await a.listAllocationsForProject(alice.scope, projectId))[0];
+    expect(row.minutesPerWeek).toBe(720);
+    expect(row.dayMask).toBeNull();
+
+    await a.deleteAllocation(alice.scope, id);
+  });
+});
+
 describe('range query', () => {
   test('returns allocations that overlap the window, not only those inside it', async () => {
     const a = await import('../src/lib/server/allocations');

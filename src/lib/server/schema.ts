@@ -587,6 +587,14 @@ export const projectAllocations = sqliteTable(
     startDate: integer('start_date').notNull(),
     endDate: integer('end_date').notNull(),
     minutesPerWeek: integer('minutes_per_week').notNull(),
+    /**
+     * Which weekdays this falls on, as a bitmask (Mon = bit 0 … Sun = bit 6).
+     *
+     * NULL means unspecified — the hours spread across the week, which is how
+     * every allocation behaved before patterns existed. When set, the weekly
+     * hours divide across the chosen days: 16h/wk on Tue+Thu is 8h each.
+     */
+    dayMask: integer('day_mask'),
     /** Overrides the project's hourly rate for this person. Cents. */
     hourlyRate: integer('hourly_rate'),
     note: text('note'),

@@ -674,6 +674,9 @@ const ALTERS: string[] = [
   `ALTER TABLE workspace_members ADD COLUMN weekly_capacity_minutes INTEGER`,
   `ALTER TABLE project_allocations ADD COLUMN workspace_id TEXT REFERENCES workspaces(id)`,
   `ALTER TABLE time_entries ADD COLUMN workspace_id TEXT REFERENCES workspaces(id)`,
+  // Which weekdays an allocation falls on, as a Mon..Sun bitmask. NULL keeps
+  // the pre-pattern behaviour: hours spread across the whole week.
+  `ALTER TABLE project_allocations ADD COLUMN day_mask INTEGER`,
   // Stage color picker on pipeline creation.
   `ALTER TABLE pipeline_stages ADD COLUMN color TEXT`,
   // ── Workspace tenancy ──────────────────────────────────────────────────────

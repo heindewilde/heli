@@ -33,6 +33,7 @@ export type AllocationInput = {
   startDate?: number;
   endDate?: number;
   minutesPerWeek?: number;
+  dayMask?: number | null;
   hourlyRate?: number | null;
   note?: string | null;
 };
@@ -47,6 +48,7 @@ export type AllocationRow = {
   startDate: number;
   endDate: number;
   minutesPerWeek: number;
+  dayMask: number | null;
   hourlyRate: number | null;
   note: string | null;
 };
@@ -72,6 +74,18 @@ function coerceDate(v: unknown): number {
   const n = typeof v === 'number' ? v : Number(v);
   if (!Number.isFinite(n)) throw new Error('invalid_date');
   return n;
+}
+
+/**
+ * A weekday bitmask, 0–127. Zero and null both mean "unspecified" and are
+ * stored as null, so there is one representation of "no pattern" rather than
+ * two that every reader would have to check for.
+ */
+function coerceDayMask(v: unknown): number | null {
+  if (v == null) return null;
+  const n = typeof v === 'number' ? v : Number(v);
+  if (!Number.isInteger(n) || n < 0 || n > 0b1111111) throw new Error('invalid_days');
+  return n === 0 ? null : n;
 }
 
 function coerceRate(v: unknown): number | null {
@@ -156,6 +170,7 @@ const ROW_COLS = {
   startDate: projectAllocations.startDate,
   endDate: projectAllocations.endDate,
   minutesPerWeek: projectAllocations.minutesPerWeek,
+  dayMask: projectAllocations.dayMask,
   hourlyRate: projectAllocations.hourlyRate,
   note: projectAllocations.note
 };
@@ -232,6 +247,7 @@ export async function createAllocation(
     startDate,
     endDate,
     minutesPerWeek: coerceMinutes(input.minutesPerWeek),
+    dayMask: coerceDayMask(input.dayMask),
     hourlyRate: coerceRate(input.hourlyRate),
     note: input.note == null ? null : sanitizePlainText(String(input.note), NOTE_MAX) || null,
     createdAt: now,
@@ -253,6 +269,7 @@ export async function updateAllocation(
   if (input.startDate !== undefined) updates.startDate = coerceDate(input.startDate);
   if (input.endDate !== undefined) updates.endDate = coerceDate(input.endDate);
   if (input.minutesPerWeek !== undefined) updates.minutesPerWeek = coerceMinutes(input.minutesPerWeek);
+  if (input.dayMask !== undefined) updates.dayMask = coerceDayMask(input.dayMask);
   if (input.hourlyRate !== undefined) updates.hourlyRate = coerceRate(input.hourlyRate);
   if (input.note !== undefined) {
     updates.note = input.note == null ? null : sanitizePlainText(String(input.note), NOTE_MAX) || null;

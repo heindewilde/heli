@@ -136,6 +136,78 @@ describe('startsMonth', () => {
   });
 });
 
+describe('day patterns', () => {
+  const w = week('2026-02-02T00:00:00Z'); // Mon 2 Feb – Sun 8 Feb
+  const TUE = 1 << 1;
+  const THU = 1 << 3;
+  const TUE_THU = TUE | THU;
+  const span = { startDate: at('2026-01-01'), endDate: at('2026-12-31') };
+
+  test('a mask restricts which days count', async () => {
+    const { coveredDays } = await import('../src/lib/weeks');
+    expect(coveredDays(span, w)).toEqual([0, 1, 2, 3, 4, 5, 6]);
+    expect(coveredDays({ ...span, dayMask: TUE_THU }, w)).toEqual([1, 3]);
+  });
+
+  test('weekly hours divide across the pattern days', async () => {
+    const { minutesInWeek, minutesOnDay } = await import('../src/lib/weeks');
+    const alloc = { ...span, dayMask: TUE_THU, minutesPerWeek: 960 };
+    // 16h over Tue+Thu is 8h each, and the week still totals 16h.
+    expect(minutesOnDay(alloc, w, 1)).toBe(480);
+    expect(minutesOnDay(alloc, w, 3)).toBe(480);
+    expect(minutesOnDay(alloc, w, 0)).toBe(0);
+    expect(minutesInWeek(alloc, w)).toBe(960);
+  });
+
+  test('a clipped span charges only the pattern days it still covers', async () => {
+    const { minutesInWeek } = await import('../src/lib/weeks');
+    // Ends Wednesday, so Thursday never happens: half the weekly hours.
+    const clipped = {
+      startDate: at('2026-01-01'),
+      endDate: at('2026-02-04'),
+      dayMask: TUE_THU,
+      minutesPerWeek: 960
+    };
+    expect(minutesInWeek(clipped, w)).toBe(480);
+  });
+
+  test('no mask behaves exactly as before patterns existed', async () => {
+    const { minutesInWeek } = await import('../src/lib/weeks');
+    const withoutKey = { ...span, minutesPerWeek: 960 };
+    const explicitNull = { ...span, dayMask: null, minutesPerWeek: 960 };
+    const explicitZero = { ...span, dayMask: 0, minutesPerWeek: 960 };
+    expect(minutesInWeek(withoutKey, w)).toBe(960);
+    expect(minutesInWeek(explicitNull, w)).toBe(960);
+    expect(minutesInWeek(explicitZero, w)).toBe(960);
+
+    // And a partial week still pro-rates by sevenths.
+    const partial = { startDate: at('2026-02-04'), endDate: at('2026-12-31'), minutesPerWeek: 960 };
+    expect(minutesInWeek(partial, w)).toBe(686);
+  });
+
+  test('mask helpers', async () => {
+    const { hasDay, toggleDay, countDays, describeDays, WEEKDAY_MASK, FULL_WEEK_MASK } =
+      await import('../src/lib/weeks');
+    expect(hasDay(TUE_THU, 1)).toBe(true);
+    expect(hasDay(TUE_THU, 2)).toBe(false);
+    expect(toggleDay(TUE, 3)).toBe(TUE_THU);
+    expect(toggleDay(TUE_THU, 3)).toBe(TUE);
+    expect(countDays(TUE_THU)).toBe(2);
+    expect(countDays(WEEKDAY_MASK)).toBe(5);
+    expect(describeDays(TUE_THU)).toBe('Tue, Thu');
+    expect(describeDays(WEEKDAY_MASK)).toBe('Mon–Fri');
+    expect(describeDays(FULL_WEEK_MASK)).toBe('Every day');
+    expect(describeDays(null)).toBe('Any day');
+    expect(describeDays(0)).toBe('Any day');
+  });
+
+  test('dayIndex is Monday-relative', async () => {
+    const { dayIndex } = await import('../src/lib/weeks');
+    expect(dayIndex(at('2026-02-02T12:00:00Z'))).toBe(0); // Monday
+    expect(dayIndex(at('2026-02-08T12:00:00Z'))).toBe(6); // Sunday
+  });
+});
+
 describe('constants', () => {
   test('are what they say', () => {
     expect(MS_PER_DAY).toBe(86_400_000);

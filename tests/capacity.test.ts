@@ -221,6 +221,109 @@ describe('ordering and tenancy', () => {
   });
 });
 
+describe('week detail', () => {
+  const TUE_THU = (1 << 1) | (1 << 3);
+
+  test('a day pattern puts hours only on those days', async () => {
+    const { weekDetail } = await import('../src/lib/server/capacity');
+    const { createAllocation, deleteAllocation } = await import('../src/lib/server/allocations');
+    const p = await project('Patterned');
+    const id = (
+      await createAllocation(alice.scope, p, {
+        assigneeUserId: bob.user.id,
+        startDate: at('2026-01-01'),
+        endDate: at('2026-12-31'),
+        minutesPerWeek: 960,
+        dayMask: TUE_THU
+      })
+    ).id;
+
+    const detail = await weekDetail(alice.scope, MON);
+    const row = detail.rows.find((r) => r.userId === bob.user.id)!;
+    expect(row.days.map((d) => d.total)).toEqual([0, 480, 0, 480, 0, 0, 0]);
+    expect(row.days[1].items[0]).toMatchObject({ projectName: 'Patterned', minutes: 480 });
+    expect(row.weekTotal).toBe(960);
+
+    await deleteAllocation(alice.scope, id);
+  });
+
+  test('without a pattern the hours spread across every covered day', async () => {
+    const { weekDetail } = await import('../src/lib/server/capacity');
+    const { createAllocation, deleteAllocation } = await import('../src/lib/server/allocations');
+    const p = await project('Unpatterned');
+    const id = (
+      await createAllocation(alice.scope, p, {
+        assigneeUserId: bob.user.id,
+        startDate: at('2026-01-01'),
+        endDate: at('2026-12-31'),
+        minutesPerWeek: 700
+      })
+    ).id;
+
+    const row = (await weekDetail(alice.scope, MON)).rows.find((r) => r.userId === bob.user.id)!;
+    // 700/7 = 100 on each of the seven days: nobody said which days, so no
+    // day is special.
+    expect(row.days.map((d) => d.total)).toEqual([100, 100, 100, 100, 100, 100, 100]);
+
+    await deleteAllocation(alice.scope, id);
+  });
+
+  test('two projects on different days read as different days', async () => {
+    const { weekDetail } = await import('../src/lib/server/capacity');
+    const { createAllocation, deleteAllocation } = await import('../src/lib/server/allocations');
+    const x = await project('Project X');
+    const y = await project('Project Y');
+    const FRI = 1 << 4;
+    const a1 = (
+      await createAllocation(alice.scope, x, {
+        assigneeUserId: bob.user.id,
+        startDate: at('2026-01-01'),
+        endDate: at('2026-12-31'),
+        minutesPerWeek: 960,
+        dayMask: TUE_THU
+      })
+    ).id;
+    const a2 = (
+      await createAllocation(alice.scope, y, {
+        assigneeUserId: bob.user.id,
+        startDate: at('2026-01-01'),
+        endDate: at('2026-12-31'),
+        minutesPerWeek: 480,
+        dayMask: FRI
+      })
+    ).id;
+
+    const row = (await weekDetail(alice.scope, MON)).rows.find((r) => r.userId === bob.user.id)!;
+    expect(row.days[1].items.map((i) => i.projectName)).toEqual(['Project X']);
+    expect(row.days[3].items.map((i) => i.projectName)).toEqual(['Project X']);
+    expect(row.days[4].items.map((i) => i.projectName)).toEqual(['Project Y']);
+    expect(row.days[0].items).toEqual([]);
+
+    await deleteAllocation(alice.scope, a1);
+    await deleteAllocation(alice.scope, a2);
+  });
+});
+
+describe('project timeline', () => {
+  test('bars span the union of a project allocations and list its people', async () => {
+    const { projectTimeline } = await import('../src/lib/server/capacity');
+    const { createAllocation, deleteAllocation } = await import('../src/lib/server/allocations');
+    const p = await project('Timeline test');
+    const a1 = await allocate(p, bob.user.id, '2026-02-02', '2026-03-31', 16);
+    const a2 = await allocate(p, alice.user.id, '2026-03-01', '2026-05-31', 8);
+
+    const { bars } = await projectTimeline(alice.scope, { from: MON, weeks: 26 });
+    const bar = bars.find((b) => b.projectName === 'Timeline test')!;
+    expect(bar.startDate).toBe(at('2026-02-02'));
+    expect(bar.endDate).toBe(at('2026-05-31'));
+    expect(bar.minutesPerWeek).toBe(24 * 60);
+    expect(bar.people.map((x) => x.name).sort()).toEqual(['alice', 'bob']);
+
+    await deleteAllocation(alice.scope, a1);
+    await deleteAllocation(alice.scope, a2);
+  });
+});
+
 describe('loadRatio', () => {
   test('is allocated over capacity, and treats zero capacity as fully booked', async () => {
     const { loadRatio } = await import('../src/lib/server/capacity');
