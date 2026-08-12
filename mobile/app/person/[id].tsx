@@ -18,9 +18,8 @@ import { LogSheet, type LogSheetRef } from '../../src/features/LogSheet';
 import { EditPersonSheet, type EditPersonSheetRef } from '../../src/features/EditPersonSheet';
 import { useTheme } from '../../src/theme';
 import { haptics } from '../../src/ui/haptics';
-import { useRows, patchPerson, logInteraction } from '../../src/db/sync';
+import { useRows, useWorkspace, patchPerson, logInteraction } from '../../src/db/sync';
 import { getPerson, listInteractions } from '../../src/db/cache';
-import { loadCredential } from '../../src/api/credentials';
 import { formatTime, TYPE_LABELS } from '../../../src/lib/interactionMeta';
 import type { InteractionType } from '../../../src/lib/interactionTypes';
 
@@ -41,14 +40,10 @@ export default function PersonScreen() {
   const t = useTheme();
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const [ws, setWs] = useState<string | null>(null);
+  const ws = useWorkspace();
   const logSheet = useRef<LogSheetRef>(null);
   const editSheet = useRef<EditPersonSheetRef>(null);
 
-  useRows('people', async () => {
-    setWs((await loadCredential())?.workspaceId ?? null);
-    return null;
-  }, []);
 
   const { rows: person } = useRows(
     'people',

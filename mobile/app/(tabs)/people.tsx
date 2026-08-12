@@ -14,9 +14,8 @@ import { SwipeRow } from '../../src/ui/SwipeRow';
 import { SegmentedControl } from '../../src/ui/SegmentedControl';
 import { useTheme } from '../../src/theme';
 import { haptics } from '../../src/ui/haptics';
-import { useRows, refreshPeople, refreshCompanies, patchPerson } from '../../src/db/sync';
+import { useRows, useWorkspace, refreshPeople, refreshCompanies, patchPerson } from '../../src/db/sync';
 import { listPeople, listCompanies, type PersonRow, type CompanyRow } from '../../src/db/cache';
-import { loadCredential } from '../../src/api/credentials';
 import { formatLastSeen } from '../../../src/lib/interactionMeta';
 
 /**
@@ -42,12 +41,8 @@ export default function PeopleScreen() {
   const [q, setQ] = useState('');
   const [tab, setTab] = useState<'people' | 'companies'>('people');
   const [refreshing, setRefreshing] = useState(false);
-  const [ws, setWs] = useState<string | null>(null);
+  const ws = useWorkspace();
 
-  useRows('people', async () => {
-    setWs((await loadCredential())?.workspaceId ?? null);
-    return null;
-  }, []);
 
   const { rows: people, loading: loadingPeople } = useRows(
     'people',

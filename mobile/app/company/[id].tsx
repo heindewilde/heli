@@ -9,9 +9,8 @@ import { Avatar } from '../../src/ui/Avatar';
 import { EmptyState } from '../../src/ui/EmptyState';
 import { useTheme } from '../../src/theme';
 import { haptics } from '../../src/ui/haptics';
-import { useRows } from '../../src/db/sync';
+import { useRows, useWorkspace } from '../../src/db/sync';
 import { getCompany, peopleAtCompany } from '../../src/db/cache';
-import { loadCredential } from '../../src/api/credentials';
 
 /**
  * One company.
@@ -26,12 +25,8 @@ export default function CompanyScreen() {
   const t = useTheme();
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const [ws, setWs] = useState<string | null>(null);
+  const ws = useWorkspace();
 
-  useRows('companies', async () => {
-    setWs((await loadCredential())?.workspaceId ?? null);
-    return null;
-  }, []);
 
   const { rows: company } = useRows(
     'companies',

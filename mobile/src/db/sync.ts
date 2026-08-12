@@ -67,6 +67,37 @@ for (const table of ['people', 'companies', 'interactions', 'outbox']) {
   cache.subscribe(table, () => versions.set(table, (versions.get(table) ?? 0) + 1));
 }
 
+/**
+ * The workspace every screen scopes its queries to.
+ *
+ * Read once and cached in module scope. It was originally smuggled out of a
+ * `useRows` query callback, which meant hitting the Keychain again on every
+ * change notification — a secure-storage read per repaint, to learn something
+ * that changes only when the workspace does.
+ */
+export function useWorkspace(): string | null {
+  const [ws, setWs] = useState<string | null>(cachedWorkspace);
+  useEffect(() => {
+    if (cachedWorkspace !== null) return;
+    let alive = true;
+    void loadCredential().then((c) => {
+      cachedWorkspace = c?.workspaceId ?? null;
+      if (alive) setWs(cachedWorkspace);
+    });
+    return () => {
+      alive = false;
+    };
+  }, []);
+  return ws;
+}
+
+let cachedWorkspace: string | null = null;
+
+/** Call after a workspace switch or a sign-out so the next read is fresh. */
+export function forgetWorkspace(): void {
+  cachedWorkspace = null;
+}
+
 /* ── fetching ────────────────────────────────────────────────────────────── */
 
 async function workspace(): Promise<string | null> {

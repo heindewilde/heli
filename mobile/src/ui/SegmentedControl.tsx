@@ -1,13 +1,9 @@
-import { useRef } from 'react';
-import { Animated, LayoutAnimation, Platform, View, UIManager } from 'react-native';
+import { useRef, useState } from 'react';
+import { Animated, View } from 'react-native';
 import { Pressable } from './Pressable';
 import { Text } from './Text';
 import { useTheme } from '../theme';
 import { haptics } from './haptics';
-
-if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
-  UIManager.setLayoutAnimationEnabledExperimental(true);
-}
 
 /**
  * Two or three mutually exclusive views.
@@ -32,7 +28,17 @@ export function SegmentedControl<T extends string>({
   const t = useTheme();
   const index = Math.max(0, segments.findIndex((s) => s.value === value));
   const slide = useRef(new Animated.Value(index)).current;
-  const width = useRef(0);
+
+  /**
+   * State, not a ref.
+   *
+   * `interpolate` captures its `outputRange` when it is created, and a ref
+   * assignment in `onLayout` does not re-render — so the interpolation built on
+   * the first pass keeps the zero-width range forever and the thumb never
+   * moves. It reads as "the animation is broken" rather than as a measurement
+   * bug, which is why it is worth a comment.
+   */
+  const [width, setWidth] = useState(0);
 
   function select(next: T, nextIndex: number) {
     if (next === value) return;
@@ -49,7 +55,7 @@ export function SegmentedControl<T extends string>({
 
   return (
     <View
-      onLayout={(e) => (width.current = e.nativeEvent.layout.width)}
+      onLayout={(e) => setWidth(e.nativeEvent.layout.width)}
       style={{
         flexDirection: 'row',
         padding: 2,
@@ -72,7 +78,7 @@ export function SegmentedControl<T extends string>({
             {
               translateX: slide.interpolate({
                 inputRange: segments.map((_, i) => i),
-                outputRange: segments.map((_, i) => i * (width.current / segments.length))
+                outputRange: segments.map((_, i) => i * (width / segments.length))
               })
             }
           ],

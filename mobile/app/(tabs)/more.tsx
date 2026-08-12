@@ -21,6 +21,7 @@ import { haptics } from '../../src/ui/haptics';
 import { api } from '../../src/api/endpoints';
 import { clearCredential, loadCredential } from '../../src/api/credentials';
 import { purgeAll } from '../../src/db';
+import { forgetWorkspace } from '../../src/db/sync';
 import { APP_NAME } from '../../../src/lib/branding';
 
 /**
@@ -85,6 +86,7 @@ export default function MoreScreen() {
             // device they want to leave — the local credential goes either way.
             await api.unpairSelf().catch(() => {});
             await clearCredential();
+            forgetWorkspace();
             await purgeAll();
             router.replace('/pair');
           }

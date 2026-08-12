@@ -10,9 +10,8 @@ import { Avatar } from '../../src/ui/Avatar';
 import { EmptyState } from '../../src/ui/EmptyState';
 import { Reminders } from '../../src/features/Reminders';
 import { useTheme } from '../../src/theme';
-import { useRows, refreshInteractions, useOnline, usePendingWrites } from '../../src/db/sync';
+import { useRows, useWorkspace, refreshInteractions, useOnline, usePendingWrites } from '../../src/db/sync';
 import { listInteractions } from '../../src/db/cache';
-import { loadCredential } from '../../src/api/credentials';
 import { dayBucket, formatTime, TYPE_LABELS } from '../../../src/lib/interactionMeta';
 import type { InteractionType } from '../../../src/lib/interactionTypes';
 
@@ -32,14 +31,10 @@ export default function HomeScreen() {
   const insets = useSafeAreaInsets();
   const scrollY = useRef(new Animated.Value(0)).current;
   const [refreshing, setRefreshing] = useState(false);
-  const [ws, setWs] = useState<string | null>(null);
+  const ws = useWorkspace();
   const online = useOnline();
   const queued = usePendingWrites();
 
-  useRows('interactions', async () => {
-    setWs((await loadCredential())?.workspaceId ?? null);
-    return null;
-  }, []);
 
   const { rows } = useRows(
     'interactions',
