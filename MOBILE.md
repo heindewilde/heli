@@ -241,6 +241,60 @@ That is the check that would have caught both, and it needs no dependency.
 
 ---
 
+## What makes it feel native rather than ported
+
+The API work is most of the *lines*; this section is most of the *difference*.
+Each of these is a small decision that is invisible when right and unmistakable
+when wrong.
+
+**Press feedback is a spring, not a fade.** `ui/Pressable` scales 2–3% on the UI
+thread via Reanimated. `TouchableOpacity`'s default fade reads as something
+switching off rather than being pressed, and a web app signals "pressable" with
+hover, which a finger does not have.
+
+**`ui/Screen` reimplements the iOS large title properly.** It scrolls away with
+the content rather than on a threshold, the compact title fades in as it goes,
+and the hairline appears only once something is behind it. Native driver, so it
+tracks the finger instead of arriving a frame late.
+
+**`ui/SwipeRow` reveals its action behind the row**, arms past a threshold, and
+buzzes *at* the threshold rather than on release — so a swipe can be made
+without watching. `activeOffsetX` is what stops it fighting the vertical scroll.
+
+**Haptics are used by meaning, sparingly.** Nothing for navigation, where the
+screen moving is the feedback. A tick when a value changes and the confirmation
+is otherwise invisible. A notification pattern for errors. Android's selection
+tick is a hard buzz on much hardware, so it stays iOS-only.
+
+**Text goes through Dynamic Type**, capped at 1.4×. An app that ignores the
+system text size is identifiable as a port on sight; an uncapped one turns a
+list row into three lines of truncation, which helps nobody.
+
+**Geist is cut into four static weights.** React Native selects a face by family
+name and its variable-font weight behaviour differs across platforms — asking
+for 600 can silently render 400. `Text` sets the family and *not* `fontWeight`
+alongside it, or iOS synthesises a second bold on an already-bold face.
+
+**The iOS icon has no alpha channel at all.** All-opaque is not enough: App
+Store validation rejects an icon that merely has the channel, and it tells you
+at submission. `mobile/scripts/icons.mjs` emits true RGB.
+
+**Timers derive from `startedAt` on every tick** rather than incrementing. A
+counter drifts when the JS thread is busy and stops entirely while backgrounded,
+so a timer left running over lunch comes back an hour short.
+
+**Search has a stale-response guard**, not just a debounce. Without it a slow
+answer for "an" lands after a fast one for "anna" and the list flickers
+backwards as you type.
+
+**Permissions are requested at the point of use.** The notification prompt lives
+in the reminders section, never at launch — a cold prompt on first run is the
+fastest route to a permanent "Don't Allow", and iOS only lets you ask once.
+
+**Screens read SQLite, never the network.** Fetching writes to the mirror and a
+change bus repaints. That inversion is what makes offline a property of the app
+rather than a mode it switches into.
+
 ## Things that do **not** transfer from the web app
 
 - **The code-splitting hazard is Rollup's, not Metro's.** `CLAUDE.md` documents
