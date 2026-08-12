@@ -1,0 +1,99 @@
+# Daily health check for the hosted site.
+#
+# Exists because heli.so went down on 2026-08-12 with a Cloudflare 525: the
+# origin certificate expired and nothing said so. The expiry was knowable weeks
+# ahead — renewal had been failing silently for ninety days — and the first
+# anyone knew was the site being unreachable.
+#
+# Two deliberate choices:
+#
+# 1. **It checks the origin certificate, not the edge one.** Curling
+#    https://heli.so only ever sees Cloudflare's certificate, which is always
+#    valid and says nothing about Fly. The failure mode this exists to catch is
+#    specifically the TLS handshake *behind* the proxy, so the check connects to
+#    Fly directly with SNI set to the public hostname — exactly what Cloudflare
+#    does.
+#
+# 2. **No secrets, no flyctl.** It reads the certificate actually being served
+#    rather than asking Fly's API what it believes. On the day this broke, Fly
+#    reported the certificate as "Issued" while the edge was serving none; the
+#    handshake is the only source of truth. A check that needs no credentials
+#    also cannot break when a token rotates.
+name: health
+
+on:
+  schedule:
+    # 07:00 UTC daily — morning in Amsterdam, so a failure email lands at the
+    # start of the day rather than overnight.
+    - cron: '0 7 * * *'
+  workflow_dispatch:
+
+# Nothing is written; the job only reports.
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Site responds
+        run: |
+          set -uo pipefail
+          fail=0
+          for url in https://heli.so/ https://www.heli.so/; do
+            code=$(curl -sS -o /dev/null -w '%{http_code}' --max-time 25 "$url" || echo 000)
+            if [ "$code" = "200" ]; then
+              echo "ok    $url -> $code"
+            else
+              echo "FAIL  $url -> $code"
+              fail=1
+            fi
+          done
+          # 525 means Cloudflare reached the origin but TLS failed — almost
+          # always a missing origin certificate, and never a reason to redeploy.
+          # See the cloud deployment notes in CLAUDE.md.
+          exit $fail
+
+      - name: Origin certificate is present and not expiring
+        run: |
+          set -uo pipefail
+          # Days of warning. Let's Encrypt renews at ~30 days out, so 21 means
+          # automatic renewal has already had a week to succeed on its own and
+          # this only fires when something is genuinely stuck.
+          THRESHOLD=21
+          ORIGIN=heli-app.fly.dev   # openssl resolves this to Fly's ingress
+          fail=0
+
+          for host in heli.so www.heli.so; do
+            cert=$(echo | openssl s_client -connect "$ORIGIN:443" -servername "$host" 2>/dev/null \
+                   | openssl x509 -noout -subject -enddate 2>/dev/null)
+
+            if [ -z "$cert" ]; then
+              echo "FAIL  $host — origin served no certificate for this hostname."
+              echo "      That is the Cloudflare 525 signature. Check:"
+              echo "        fly certs list -a heli-app"
+              echo "        fly certs check $host -a heli-app"
+              echo "      and confirm the _fly-ownership TXT records still exist."
+              fail=1
+              continue
+            fi
+
+            end=$(echo "$cert" | sed -n 's/^notAfter=//p')
+            end_epoch=$(date -u -d "$end" +%s)
+            days=$(( (end_epoch - $(date -u +%s)) / 86400 ))
+
+            if [ "$days" -lt 0 ]; then
+              echo "FAIL  $host — certificate EXPIRED ${days#-} days ago ($end)."
+              fail=1
+            elif [ "$days" -lt "$THRESHOLD" ]; then
+              echo "FAIL  $host — certificate expires in $days days ($end)."
+              echo "      Renewal should have run by now. Cloudflare proxies this"
+              echo "      domain, so HTTP-01 cannot work — verify the"
+              echo "      _fly-ownership TXT records, then: fly certs check $host -a heli-app"
+              fail=1
+            else
+              echo "ok    $host — certificate valid for $days more days ($end)"
+            fi
+          done
+
+          exit $fail
