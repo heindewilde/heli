@@ -85,7 +85,28 @@ const config: ExpoConfig = {
     ]
   },
   web: { favicon: './assets/favicon.png' },
-  plugins: ['expo-router', 'expo-secure-store', 'expo-sqlite'],
+  plugins: [
+    'expo-router',
+    'expo-secure-store',
+    'expo-sqlite',
+    // Fonts are bundled into the binary rather than fetched at runtime. A font
+    // that arrives a beat after first paint reflows every screen once, which is
+    // the flash of unstyled text that no native app has.
+    ['expo-font', { fonts: ['./assets/fonts/Geist-Regular.ttf', './assets/fonts/Geist-Medium.ttf', './assets/fonts/Geist-SemiBold.ttf', './assets/fonts/Geist-Bold.ttf'] }],
+    [
+      'expo-splash-screen',
+      {
+        image: './assets/splash-icon.png',
+        imageWidth: 160,
+        resizeMode: 'contain',
+        // Heli's own paper, not Expo's white — and the dark variant matters
+        // more than it sounds: a white flash before a dark app is the single
+        // most jarring half-second in a phone's day.
+        backgroundColor: '#f6f8fc',
+        dark: { backgroundColor: '#0c0d11' }
+      }
+    ]
+  ],
   experiments: { typedRoutes: true }
 };
 

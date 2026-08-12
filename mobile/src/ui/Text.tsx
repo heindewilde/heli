@@ -1,5 +1,7 @@
 import { Text as RNText, type TextProps as RNTextProps } from 'react-native';
+import { useFonts } from 'expo-font';
 import { useTheme } from '../theme';
+import { fonts, fontFor, type Weight } from '../theme/fonts';
 import type { colors } from '../theme/tokens';
 
 /**
@@ -33,7 +35,7 @@ const TONE_TOKEN: Record<Tone, keyof typeof colors.light> = {
 export type TextProps = RNTextProps & {
   variant?: Variant;
   tone?: Tone;
-  weight?: '400' | '500' | '600' | '700';
+  weight?: Weight;
   /** Digits that don't jiggle. On by default for anything read as a number. */
   tabular?: boolean;
 };
@@ -48,6 +50,10 @@ export function Text({
 }: TextProps) {
   const t = useTheme();
   const step = t.type[variant];
+  // Cheap after the first call — expo-font caches, and this keeps the fallback
+  // decision in one place rather than threading a "fonts ready" flag through
+  // every screen.
+  const [loaded] = useFonts(fonts);
 
   return (
     <RNText
@@ -61,8 +67,13 @@ export function Text({
           lineHeight: 'lineHeight' in step ? step.lineHeight : undefined,
           letterSpacing: 'letterSpacing' in step ? step.letterSpacing : undefined,
           color: t.c(TONE_TOKEN[tone]),
-          fontWeight: weight,
-          fontVariant: tabular ? ['tabular-nums'] : undefined
+          fontVariant: tabular ? ['tabular-nums'] : undefined,
+          ...fontFor(weight, loaded),
+          // Only while falling back to the system face. Naming a weight on top
+          // of an already-weighted Geist face makes iOS synthesise a second
+          // bold, which is the smeared look that reads as "web font in a native
+          // app".
+          ...(loaded ? null : { fontWeight: weight })
         },
         style
       ]}
