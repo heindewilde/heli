@@ -366,6 +366,30 @@ export async function listCompanies(
   return rows.map(toCompany);
 }
 
+export async function getCompany(workspaceId: string, id: string): Promise<CompanyRow | null> {
+  const handle = await db();
+  const row = await handle.getFirstAsync<Record<string, unknown>>(
+    `SELECT * FROM companies WHERE workspace_id = ? AND id = ?`,
+    [workspaceId, id]
+  );
+  return row ? toCompany(row) : null;
+}
+
+/** People at this company, from the mirror. */
+export async function peopleAtCompany(
+  workspaceId: string,
+  companyId: string
+): Promise<PersonRow[]> {
+  const handle = await db();
+  const rows = await handle.getAllAsync<Record<string, unknown>>(
+    `SELECT * FROM people
+      WHERE workspace_id = ? AND company_id = ? AND is_archived = 0
+      ORDER BY name COLLATE NOCASE`,
+    [workspaceId, companyId]
+  );
+  return rows.map(toPerson);
+}
+
 function toCompany(r: Record<string, unknown>): CompanyRow {
   return {
     id: r.id as string,

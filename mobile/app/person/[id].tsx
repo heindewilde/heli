@@ -15,6 +15,7 @@ import { Pressable } from '../../src/ui/Pressable';
 import { Avatar } from '../../src/ui/Avatar';
 import { Button } from '../../src/ui/Button';
 import { LogSheet, type LogSheetRef } from '../../src/features/LogSheet';
+import { EditPersonSheet, type EditPersonSheetRef } from '../../src/features/EditPersonSheet';
 import { useTheme } from '../../src/theme';
 import { haptics } from '../../src/ui/haptics';
 import { useRows, patchPerson, logInteraction } from '../../src/db/sync';
@@ -42,6 +43,7 @@ export default function PersonScreen() {
   const insets = useSafeAreaInsets();
   const [ws, setWs] = useState<string | null>(null);
   const logSheet = useRef<LogSheetRef>(null);
+  const editSheet = useRef<EditPersonSheetRef>(null);
 
   useRows('people', async () => {
     setWs((await loadCredential())?.workspaceId ?? null);
@@ -107,14 +109,26 @@ export default function PersonScreen() {
         <Pressable press="button" onPress={() => router.back()} accessibilityLabel="Back" style={{ padding: 8 }}>
           <ChevronLeft size={26} color={t.c('--color-interactive')} strokeWidth={2} />
         </Pressable>
-        <Pressable press="button" onPress={toggleFavorite} accessibilityLabel="Favourite" style={{ padding: 8 }}>
-          <Star
-            size={21}
-            color={person.isFavorite ? t.c('--color-warning') : t.c('--color-subtle')}
-            fill={person.isFavorite ? t.c('--color-warning') : 'transparent'}
-            strokeWidth={2}
-          />
-        </Pressable>
+        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+          <Pressable press="button" onPress={toggleFavorite} accessibilityLabel="Favourite" style={{ padding: 8 }}>
+            <Star
+              size={21}
+              color={person.isFavorite ? t.c('--color-warning') : t.c('--color-subtle')}
+              fill={person.isFavorite ? t.c('--color-warning') : 'transparent'}
+              strokeWidth={2}
+            />
+          </Pressable>
+          <Pressable
+            press="button"
+            onPress={() => editSheet.current?.open()}
+            accessibilityLabel="Edit details"
+            style={{ paddingHorizontal: 10, paddingVertical: 8 }}
+          >
+            <Text variant="sm" tone="accent" weight="500">
+              Edit
+            </Text>
+          </Pressable>
+        </View>
       </View>
 
       <ScrollView contentContainerStyle={{ paddingBottom: insets.bottom + 32 }}>
@@ -125,9 +139,21 @@ export default function PersonScreen() {
               {person.name}
             </Text>
             {person.role || person.companyName ? (
-              <Text tone="muted" variant="sm" style={{ textAlign: 'center' }}>
-                {[person.role, person.companyName].filter(Boolean).join(' · ')}
-              </Text>
+              <Pressable
+                press="none"
+                disabled={!person.companyId}
+                onPress={() => person.companyId && router.push(`/company/${person.companyId}`)}
+              >
+                <Text tone="muted" variant="sm" style={{ textAlign: 'center' }}>
+                  {person.role}
+                  {person.role && person.companyName ? ' · ' : ''}
+                  {person.companyName ? (
+                    <Text variant="sm" tone={person.companyId ? 'accent' : 'muted'}>
+                      {person.companyName}
+                    </Text>
+                  ) : null}
+                </Text>
+              </Pressable>
             ) : null}
           </View>
         </View>
@@ -225,6 +251,7 @@ export default function PersonScreen() {
       </ScrollView>
 
       <LogSheet ref={logSheet} personId={person.id} personName={person.name} />
+      <EditPersonSheet ref={editSheet} person={person} />
     </View>
   );
 }

@@ -206,7 +206,10 @@ export default function PeopleScreen() {
                 onPress={() => router.push(`/person/${item.id}`)}
               />
             ) : (
-              <CompanyListRow company={item as CompanyRow} />
+              <CompanyListRow
+                company={item as CompanyRow}
+                onPress={() => router.push(`/company/${item.id}`)}
+              />
             )
           }
         />
@@ -285,10 +288,18 @@ function PersonListRow({ person, onPress }: { person: PersonRow; onPress: () => 
   );
 }
 
-function CompanyListRow({ company }: { company: CompanyRow }) {
+function CompanyListRow({
+  company,
+  onPress
+}: {
+  company: CompanyRow;
+  onPress: () => void;
+}) {
   const t = useTheme();
   return (
-    <View
+    <Pressable
+      press="row"
+      onPress={onPress}
       style={{
         flexDirection: 'row',
         alignItems: 'center',
@@ -316,6 +327,6 @@ function CompanyListRow({ company }: { company: CompanyRow }) {
           {formatLastSeen(company.lastAt)}
         </Text>
       ) : null}
-    </View>
+    </Pressable>
   );
 }

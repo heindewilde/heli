@@ -88,8 +88,9 @@ export default function SearchScreen() {
     (hit: SearchHit) => {
       Keyboard.dismiss();
       if (hit.kind === 'person') router.push(`/person/${hit.id}`);
-      // Companies and the rest have no detail screen yet; the list is still
-      // worth showing, so tapping is simply inert rather than a broken route.
+      else if (hit.kind === 'company') router.push(`/company/${hit.id}`);
+      // The remaining kinds have no detail screen yet, so tapping is inert
+      // rather than pushing a route that would 404.
     },
     [router]
   );
