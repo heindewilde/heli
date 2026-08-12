@@ -28,6 +28,33 @@ The phased build spec is gone — work from what the user says in conversation, 
 Heli is a personal CRM. SvelteKit 2 (adapter-node, full SSR) + libSQL/SQLite + Drizzle ORM, FTS5 search, lean bundle (no charting/markdown/animation deps).
 
 - **Cloud version**: single Fly region (`ams`), with Cloudflare in front for global edge cache + brotli + HTTP/3 + TLS-near-user. Patch version auto-bumped per deploy.
+  - **The `_fly-ownership` TXT records are load-bearing — do not delete them.**
+    Cloudflare proxies `heli.so` (orange cloud), so Let's Encrypt's HTTP-01
+    challenge never reaches Fly and certificate *renewal* fails. Fly falls back
+    to a DNS ownership check, which needs:
+
+    | Type | Name                  | Content        |
+    |------|-----------------------|----------------|
+    | TXT  | `_fly-ownership`      | `app-zkrnq63`  |
+    | TXT  | `_fly-ownership.www`  | `app-zkrnq63`  |
+
+    Without them the initial certificate still issues (it was created before the
+    proxy was switched on), renewal silently fails for ~90 days, and the site
+    goes down the moment the old certificate expires. That is exactly what
+    happened on 2026-08-12.
+  - **Symptom to recognise: Cloudflare `525`.** It means CF reached the origin
+    but TLS failed — almost always a missing origin certificate, not an app
+    fault. Diagnose without guessing:
+    ```
+    curl -sS -o /dev/null -w '%{http_code}\n' https://heli.so/        # 525
+    curl -sS -o /dev/null -w '%{http_code}\n' https://heli-app.fly.dev/  # 200 → app is fine
+    openssl s_client -connect 66.241.125.54:443 -servername heli.so </dev/null
+    #   "no peer certificate available" → Fly has no cert for that hostname
+    fly certs list -a heli-app          # "Not verified" / "Issuing..."
+    fly certs check heli.so -a heli-app # forces revalidation once DNS is right
+    ```
+    A 5xx on `heli.so` while `heli-app.fly.dev` is healthy is *never* a reason
+    to redeploy — the deploy will succeed and change nothing.
 - **Self-host**: one-line installer at `heli.so/install` provisions Docker + Caddy + Let's Encrypt on a VPS. Caddy is auto-configured. See `SELFHOST.md` for the full guide including a Performance-tuning section. Self-hosters run `ghcr.io/heindewilde/heli:latest`; a Watchtower sidecar auto-updates every 6 hours.
 - **Multi-region DB**: optional Turso replicas via `DATABASE_URL_EU/US/APAC`. Region routing keyed by `email_routing` table; `db(region)` returns the right libSQL client. Writes go to `PRIMARY_REGION`.
 
