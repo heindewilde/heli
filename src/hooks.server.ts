@@ -33,6 +33,7 @@ const PROTECTED_PATTERNS = [
   /^\/companies(\/|$)/,
   /^\/interactions(\/|$)/,
   /^\/projects(\/|$)/,
+  /^\/availability(\/|$)/,
   /^\/settings(\/|$)/
 ];
 
@@ -45,7 +46,8 @@ const PROTECTED_PATTERNS = [
 // This list and NAV_PATHS in src/service-worker.ts are one decision in two
 // places and must stay identical. A path the worker stores but this marks
 // `no-store` would be cached while telling the browser not to.
-const NAV_CACHEABLE = /^\/(?:people|companies|projects|interactions|collections|pipelines)(?:\/|$)/;
+const NAV_CACHEABLE =
+  /^\/(?:people|companies|projects|interactions|collections|pipelines|availability)(?:\/|$)/;
 
 // The whole request runs inside one AsyncLocalStorage scope, so every query the
 // db client issues lands in this request's timing bucket rather than a shared

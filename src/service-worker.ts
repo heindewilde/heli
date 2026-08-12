@@ -20,7 +20,8 @@ const PRECACHE_SET = new Set(PRECACHE);
 // API endpoints that we serve with stale-while-revalidate. They are private
 // per-user data, so we only ever cache responses that came back with
 // `Cache-Control: private, max-age=*, must-revalidate` (set in cache.ts).
-const SWR_PATHS = /^\/api\/(?:people|companies|projects|interactions|search)(?:\/|\?|$)/;
+const SWR_PATHS =
+  /^\/api\/(?:people|companies|projects|interactions|search|capacity)(?:\/|\?|$)/;
 
 // CRM pages whose SSR HTML we keep a copy of, so back-navigation paints
 // instantly and a dropped connection still shows the last known state instead
@@ -32,7 +33,8 @@ const SWR_PATHS = /^\/api\/(?:people|companies|projects|interactions|search)(?:\
 // step with the route list in hooks.server.ts, which is what marks these
 // cacheable in the first place — a path here that is `no-store` there would be
 // stored anyway while telling the browser not to.
-const NAV_PATHS = /^\/(?:people|companies|projects|interactions|collections|pipelines)(?:\/|$)/;
+const NAV_PATHS =
+  /^\/(?:people|companies|projects|interactions|collections|pipelines|availability)(?:\/|$)/;
 
 // Cap on stored pages. Each is a full SSR document at 100-300 KB, so this is a
 // disk-footprint bound as much as a freshness one — 30 of them is several

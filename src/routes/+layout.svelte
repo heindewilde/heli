@@ -10,7 +10,7 @@
   import Tooltip from '$lib/ui/Tooltip.svelte';
   import UpdateBanner from '$lib/components/UpdateBanner.svelte';
   import { watchServiceWorker } from '$lib/client/sw.svelte';
-  import { LayoutDashboard, Users, Building2, MessagesSquare, Briefcase, Folder, Funnel, Send, LogOut, Search, HelpCircle, Settings, Menu, X } from 'lucide-svelte';
+  import { LayoutDashboard, Users, Building2, MessagesSquare, Briefcase, Folder, Funnel, Send, CalendarRange, LogOut, Search, HelpCircle, Settings, Menu, X } from 'lucide-svelte';
   import { page, navigating } from '$app/state';
   import Popover from '$lib/ui/Popover.svelte';
   import MenuItem from '$lib/ui/MenuItem.svelte';
@@ -53,7 +53,9 @@
     '/pipelines': 'l',
     '/projects': 'r',
     // `o` is collections and `r` is projects, so outreach takes `u`.
-    '/outreach': 'u'
+    '/outreach': 'u',
+    '/availability': 'a',
+    '/time': 't'
   };
 
   const tabs = [
@@ -64,7 +66,8 @@
     { href: '/collections', label: 'Collections', icon: Folder },
     { href: '/pipelines', label: 'Pipelines', icon: Funnel },
     { href: '/projects', label: 'Projects', icon: Briefcase },
-    { href: '/outreach', label: 'Outreach', icon: Send }
+    { href: '/outreach', label: 'Outreach', icon: Send },
+    { href: '/availability', label: 'Availability', icon: CalendarRange }
   ];
 
   /**
@@ -81,7 +84,8 @@
     { hrefs: ['/'] },
     { label: 'Records', hrefs: ['/people', '/companies', '/interactions'] },
     { label: 'Organise', hrefs: ['/collections', '/pipelines', '/projects'] },
-    { label: 'Engage', hrefs: ['/outreach'] }
+    { label: 'Engage', hrefs: ['/outreach'] },
+    { label: 'Plan', hrefs: ['/availability'] }
   ];
   const byHref = $derived(new Map(tabs.map((t) => [t.href, t])));
 
