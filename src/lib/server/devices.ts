@@ -48,6 +48,34 @@ const SECRET_BYTES = 32;
 /** What a device is minted with. Narrower than the UI, wider than the extension. */
 export const DEVICE_SCOPES: TokenScope[] = ['read', 'write'];
 
+/**
+ * Who may see that the mobile app exists.
+ *
+ * The app's server half ships ahead of the app itself. The tables, `/api/v1`
+ * and `/pair` all go live so a development build can pair against production —
+ * but the Settings section that hands out a pairing code is the surface that
+ * *announces* the app, and it stays hidden until there is something in a store
+ * to pair with.
+ *
+ * `MOBILE_ENABLED=1` opens it to everyone; that is the launch flip, and because
+ * the variable is read per request it is a `fly secrets set` rather than a
+ * deploy. Any other value is a comma-separated email allowlist, which is what
+ * lets one account test against production while nobody else sees the section.
+ * Unset means nobody, operator included.
+ *
+ * This gates *discovery only*. It is not a security boundary and must never be
+ * used as one — every device endpoint authenticates on its own, and a paired
+ * phone keeps working whatever this says.
+ */
+export function mobileEnabledFor(email: string | null | undefined): boolean {
+  const raw = process.env.MOBILE_ENABLED?.trim();
+  if (!raw) return false;
+  if (raw === '1') return true;
+  const wanted = email?.trim().toLowerCase();
+  if (!wanted) return false;
+  return raw.split(',').some((allowed) => allowed.trim().toLowerCase() === wanted);
+}
+
 function hash(value: string): string {
   return createHash('sha256').update(value).digest('hex');
 }

@@ -689,8 +689,17 @@ while nothing checked them at all. `.github/workflows/ci.yml` runs
 `npm run typecheck` (plain `tsc --noEmit`) as a separate job; keep it there.
 
 **`mobile/` is the same arrangement, one size up — see `MOBILE.md`.** Same three
-guards, same separate CI job, same reason. Two rules from it belong here because
-they constrain code in `src/`:
+guards, same separate CI job, same reason. Three rules from it belong here
+because they constrain code in `src/`:
+
+- **`MOBILE_ENABLED` gates discovery of the app, and nothing else.** The server
+  half shipped to `main` ahead of any store release, so the Devices section in
+  Settings — the only place a pairing code is handed out — is behind
+  `mobileEnabledFor` in `src/lib/server/devices.ts`. The endpoints and `/pair`
+  stay live on purpose, so a dev build can pair against production. **It is not
+  a security boundary**; every device endpoint authenticates on its own. Unset
+  means nobody, `1` means everyone, anything else is an email allowlist. Read
+  per request, so launch is a secret change rather than a deploy.
 
 - **Modules listed in `mobile/tsconfig.json`'s `include` must stay
   dependency-free.** Metro blocks the repo root's `node_modules`, so a shared

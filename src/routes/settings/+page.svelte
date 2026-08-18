@@ -736,10 +736,12 @@
       href="#calendars"
       class="inline-flex items-center gap-1.5 rounded-full border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-1 text-xs font-medium text-[var(--color-muted)] transition-colors hover:border-[var(--color-interactive-ring)] hover:text-[var(--color-text)]"
     ><CalendarDays size={13} strokeWidth={2} class="text-[var(--color-subtle)]" /> Calendars</a>
-    <a
-      href="#devices"
-      class="inline-flex items-center gap-1.5 rounded-full border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-1 text-xs font-medium text-[var(--color-muted)] transition-colors hover:border-[var(--color-interactive-ring)] hover:text-[var(--color-text)]"
-    ><Smartphone size={13} strokeWidth={2} class="text-[var(--color-subtle)]" /> Devices</a>
+    {#if data.mobileEnabled}
+      <a
+        href="#devices"
+        class="inline-flex items-center gap-1.5 rounded-full border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-1 text-xs font-medium text-[var(--color-muted)] transition-colors hover:border-[var(--color-interactive-ring)] hover:text-[var(--color-text)]"
+      ><Smartphone size={13} strokeWidth={2} class="text-[var(--color-subtle)]" /> Devices</a>
+    {/if}
     <a
       href="#tokens"
       class="inline-flex items-center gap-1.5 rounded-full border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-1 text-xs font-medium text-[var(--color-muted)] transition-colors hover:border-[var(--color-interactive-ring)] hover:text-[var(--color-text)]"
@@ -1167,7 +1169,9 @@
     {/if}
   </section>
 
-  <DevicesSection devices={data.devices} />
+  {#if data.mobileEnabled}
+    <DevicesSection devices={data.devices} />
+  {/if}
 
   <section id="tokens" style="scroll-margin-top:1rem"
     class="flex flex-col gap-3 rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)] p-5"

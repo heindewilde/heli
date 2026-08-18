@@ -362,3 +362,55 @@ describe('tenancy classification', () => {
     }
   });
 });
+
+describe('the discovery gate', () => {
+  /**
+   * `MOBILE_ENABLED` hides the Settings section that hands out a pairing code,
+   * because the server half shipped before the app reached a store. It gates
+   * discovery only — every test above still passes with it unset, which is the
+   * property that matters: it must never become a second authentication check.
+   */
+  const original = process.env.MOBILE_ENABLED;
+  afterAll(() => {
+    if (original === undefined) delete process.env.MOBILE_ENABLED;
+    else process.env.MOBILE_ENABLED = original;
+  });
+
+  async function enabledFor(value: string | undefined, email: string | null) {
+    if (value === undefined) delete process.env.MOBILE_ENABLED;
+    else process.env.MOBILE_ENABLED = value;
+    const { mobileEnabledFor } = await import('../src/lib/server/devices');
+    return mobileEnabledFor(email);
+  }
+
+  test('unset hides it from everyone, operator included', async () => {
+    expect(await enabledFor(undefined, 'alice@example.com')).toBe(false);
+    expect(await enabledFor('', 'alice@example.com')).toBe(false);
+    expect(await enabledFor('   ', 'alice@example.com')).toBe(false);
+  });
+
+  test('"1" is the launch flip', async () => {
+    expect(await enabledFor('1', 'anyone@example.com')).toBe(true);
+    // No email at all still passes: "everyone" means everyone.
+    expect(await enabledFor('1', null)).toBe(true);
+  });
+
+  test('anything else is an email allowlist', async () => {
+    expect(await enabledFor('alice@example.com', 'alice@example.com')).toBe(true);
+    expect(await enabledFor('alice@example.com', 'bob@example.com')).toBe(false);
+    expect(await enabledFor('a@x.com, bob@example.com ', 'bob@example.com')).toBe(true);
+    expect(await enabledFor('a@x.com,b@x.com', null)).toBe(false);
+  });
+
+  test('the allowlist is case- and space-insensitive on both sides', async () => {
+    expect(await enabledFor(' Alice@Example.COM ', 'alice@example.com')).toBe(true);
+    expect(await enabledFor('alice@example.com', '  ALICE@EXAMPLE.COM  ')).toBe(true);
+  });
+
+  test('a partial match is not a match', async () => {
+    // Substring matching here would admit anyone whose address contains an
+    // allowed one, which is a thing an attacker picks their own address to do.
+    expect(await enabledFor('alice@example.com', 'malice@example.com')).toBe(false);
+    expect(await enabledFor('alice@example.com', 'alice@example.com.evil.test')).toBe(false);
+  });
+});

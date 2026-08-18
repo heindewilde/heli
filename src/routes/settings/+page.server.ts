@@ -11,7 +11,7 @@ import { listMembers } from '$lib/server/workspaces';
 import { listPendingInvites } from '$lib/server/invites';
 import { isAdmin } from '$lib/server/scope';
 import { listTokens } from '$lib/server/tokens';
-import { listDevices } from '$lib/server/devices';
+import { listDevices, mobileEnabledFor } from '$lib/server/devices';
 import { listFeeds, redactFeed } from '$lib/server/calendar';
 import { env } from '$env/dynamic/private';
 
@@ -21,6 +21,10 @@ export const load: PageServerLoad = async ({ locals, url, cookies }) => {
 
   const d = db(locals.user.region);
   const origin = url.origin;
+
+  // Hidden until the app is in a store; see `mobileEnabledFor`. Checked here
+  // rather than in the markup so a hidden section costs no query either.
+  const mobileEnabled = mobileEnabledFor(locals.user.email);
 
   /**
    * One wave, not four.
@@ -47,7 +51,7 @@ export const load: PageServerLoad = async ({ locals, url, cookies }) => {
     // Devices are user-scoped, not workspace-scoped — they follow their owner
     // across every workspace, so this is keyed by (region, user) with no
     // workspace filter. See the `devices` table in schema.ts.
-    listDevices(s.region, s.userId)
+    mobileEnabled ? listDevices(s.region, s.userId) : Promise.resolve([])
   ]);
 
   const googleAuthEnabled = !!(env.GOOGLE_CLIENT_ID && env.GOOGLE_CLIENT_SECRET);
@@ -75,6 +79,7 @@ export const load: PageServerLoad = async ({ locals, url, cookies }) => {
     calendars,
     apiTokens,
     devices,
+    mobileEnabled,
     user: locals.user,
     workspace: {
       id: s.workspaceId,

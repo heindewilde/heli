@@ -414,3 +414,27 @@ outside its root.
 and `localhost`. The QR carries the origin so the common path involves no
 typing; manual entry is the fallback, validated against the unauthenticated
 `GET /api/health`.
+
+### `MOBILE_ENABLED`, and why the halves ship apart
+
+The server half went to `main` before the app existed in any store, because
+holding it back meant a long-lived branch across `schema.ts`, `migrate.ts`,
+`hooks.server.ts` and the settings page — the files everything else touches too.
+The schema additions are additive (`devices`, `device_pairings`,
+`idempotency_keys`, `reminders.notified_at`), so landing them early costs
+nothing and gets the one-shot DDL replay out of the way on its own deploy.
+
+What is gated is **discovery, and only discovery**: the Devices section in
+Settings, which is the one place a pairing code is handed out and therefore the
+one place a user learns the app exists. `mobileEnabledFor` in
+`src/lib/server/devices.ts` owns the rule, and the load skips `listDevices`
+entirely when it says no, so a hidden section is not a query either.
+
+Everything else stays live — the endpoints, `/pair`, the pairing claim — which
+is deliberate: it is what lets a development build pair against production
+before launch. The flag is therefore **not a security boundary and must never
+be used as one.** Every device endpoint authenticates on its own, and a phone
+already paired keeps working whatever the flag says.
+
+Because it is read per request, launch is `fly secrets set MOBILE_ENABLED=1`,
+not a deploy. Any other value is a comma-separated email allowlist.
