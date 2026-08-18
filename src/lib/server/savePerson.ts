@@ -58,7 +58,7 @@ function fallbackName(u: URL): string {
 
 /**
  * The identity triple a person row derives from its URL, plus the placeholder
- * name and the `parsing` marker that go with "we have a URL and nothing else".
+ * name that goes with "we have a URL and nothing else".
  *
  * Exported because the bulk URL import cannot go through `savePerson` — 500
  * rows at one dedupe-select plus one insert each is a thousand sequential round
@@ -66,20 +66,22 @@ function fallbackName(u: URL): string {
  * fields in two places is how `url`, `domain` and `handle` would quietly drift,
  * and those three are what decide whether a later capture of the same profile
  * deduplicates or creates a second person. One definition, two callers.
+ *
+ * `source` is deliberately *not* here. It is a lifecycle marker — "is anything
+ * still coming for this row" — not something derived from the URL, and the two
+ * callers answer it differently.
  */
 export function derivePersonRow(u: URL): {
   url: string;
   domain: string;
   handle: string | null;
   name: string;
-  source: string;
 } {
   return {
     url: u.toString(),
     domain: domainOf(u),
     handle: deriveHandle(u),
-    name: fallbackName(u),
-    source: 'parsing'
+    name: fallbackName(u)
   };
 }
 

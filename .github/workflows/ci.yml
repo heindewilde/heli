@@ -31,6 +31,37 @@ jobs:
       # svelte-check, check-tenancy, check-overlays and vitest, in one command.
       - run: npm run check
 
+  # `npm run check` is server-side only — it calls helpers and handlers, never a
+  # component. That gap let a real bug ship: a ticked row rendered as unticked,
+  # because cancelling a checkbox click makes the browser restore
+  # `input.checked` after every handler has run. Six hundred passing tests could
+  # not see it. Its own job, like Extension and Mobile, because it needs a build
+  # and a browser and has no business slowing a type check down.
+  browser:
+    name: Browser
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      # Chromium only — the suite pins app behaviour, not cross-browser rendering.
+      - run: npx playwright install --with-deps chromium
+      # The specs boot `build/index.js`: the hydration failures this exists to
+      # catch appear only in a built app, never under `vite dev`.
+      - run: npm run build
+      - run: npm run test:e2e
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: playwright-report
+          path: |
+            playwright-report/
+            test-results/
+          retention-days: 7
+
   extension:
     name: Extension
     runs-on: ubuntu-latest

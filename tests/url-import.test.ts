@@ -104,9 +104,9 @@ test('the derived row matches what savePerson writes', async () => {
   expect(written?.domain).toBe(derived.domain);
   expect(written?.handle).toBe(derived.handle);
   expect(written?.name).toBe(derived.name);
-  // LinkedIn serves the server a sign-up wall, so no enrichment runs and the
-  // row keeps its `parsing` marker until the janitor clears it.
-  expect(derived.source).toBe('parsing');
+  // `source` is not derived from the URL — it is a lifecycle marker each caller
+  // decides for itself, so it is deliberately absent here.
+  expect('source' in derived).toBe(false);
 
   const site = new URL(cleanUrl('https://acme.com/about'));
   const savedCo = await saveCompany(alice.scope, site.toString());
@@ -131,4 +131,25 @@ test('linkedin hosts are recognised as authwalled', async () => {
   expect(servesAuthwall(new URL('https://github.com/torvalds'))).toBe(false);
   // Not a suffix match on the string: `notlinkedin.com` is somebody else.
   expect(servesAuthwall(new URL('https://notlinkedin.com/in/ada'))).toBe(false);
+});
+
+/**
+ * The bug this pins: an authwalled profile is complete the moment it is
+ * inserted, because nothing will ever be queued to enrich it. Marking it
+ * `parsing` left a spinner on the row until the next process restart, since the
+ * boot janitor is the only thing that clears the marker.
+ */
+test('a row nothing will enrich is not marked parsing', async () => {
+  const { servesAuthwall } = await import('../src/lib/server/savePerson');
+  const linkedin = new URL('https://www.linkedin.com/in/ada-lovelace');
+  const github = new URL('https://github.com/torvalds');
+
+  // The commit endpoint's rule, stated here so a change to it is visible.
+  const sourceFor = (u: URL, kind: 'person' | 'company') =>
+    kind === 'company' || !servesAuthwall(u) ? 'parsing' : null;
+
+  expect(sourceFor(linkedin, 'person')).toBeNull();
+  expect(sourceFor(github, 'person')).toBe('parsing');
+  // A LinkedIn *company* page is still fetched, so it keeps the marker.
+  expect(sourceFor(new URL('https://linkedin.com/company/acme'), 'company')).toBe('parsing');
 });

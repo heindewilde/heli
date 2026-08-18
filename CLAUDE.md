@@ -1134,3 +1134,32 @@ Rules (apply only when `graphify-out/` exists; skip silently if missing):
 - For broad codebase questions ("how does X relate to Y", "what touches Z"), skim `graphify-out/GRAPH_REPORT.md` or use `graphify query`/`path`/`explain` before falling back to grep. For a single known file, just Read it.
 - If `graphify-out/.needs_update` exists, `*.md` docs have changed since the last full rebuild — run `/graphify --update` (LLM cost) before relying on doc-to-code rationale edges.
 - The post-commit hook auto-rebuilds code edges (AST-only, free). `graphify update .` re-extracts everything including docs and **costs LLM tokens**.
+
+## Browser tests (`e2e/`)
+
+Vitest here is server-side only and always has been — it calls helpers and
+handlers, never a component. That gap let a real bug ship: a ticked row rendered
+as unticked, because `preventDefault()` on a checkbox click makes the browser
+restore `input.checked` after every handler has run. Six hundred passing tests
+could not see it. Playwright covers that surface; `npm run test:e2e`, its own CI
+job, never part of `npm run check`.
+
+- **They run against `build/index.js`, never `vite dev`.** The hydration failure
+  this file documents at length appears only in a built app, so testing dev
+  would be testing the one configuration where it cannot happen.
+- **`e2e/server.mjs` seeds a throwaway database and then boots.** Playwright
+  starts `webServer` *before* any setup hook, so a `globalSetup` would run after
+  the server had already tried to open a database that did not exist.
+- **Auth is a cookie, minted by the app's own `register()`.** Driving the
+  sign-in form would make every spec depend on the auth UI.
+- **`visit()` waits for `html[data-hydrated]`**, set by the root layout's
+  `onMount`. Every SvelteKit-level signal — `history.state`, the
+  `__sveltekit_*` global — is in place *before* component hydration finishes, so
+  gating on those still let clicks land on nothing.
+- **`serviceWorkers: 'block'`.** It auto-registers in production builds and
+  takes over navigations to the very routes these specs drive, so a page could
+  be served from a cache an earlier assertion wrote. That was the whole of the
+  flakiness, and it also cost a minute of wall clock per run.
+- **Every spec fails on a console error.** The hydration crash throws once and
+  leaves markup that still looks server-rendered, so an assertion on visible
+  text can pass while the app is dead.

@@ -155,6 +155,7 @@
     <button
       type="button"
       onclick={beginEdit}
+      {...label ? { 'aria-label': label } : {}}
       class="group/editable flex min-h-6 w-full items-center justify-between gap-2 rounded-[var(--radius-sm)] -mx-1 px-1 text-left text-sm hover:bg-[var(--color-surface)] {displayClass}"
     >
       {#if display}

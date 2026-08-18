@@ -2,7 +2,7 @@
   import Editable from '$lib/ui/Editable.svelte';
   import { APP_NAME } from '$lib/branding';
   import { goto, invalidate } from '$app/navigation';
-  import { Star, Archive, Trash2, Loader2, MapPin, Building2, Linkedin, Twitter, X } from 'lucide-svelte';
+  import { Star, Archive, Trash2, Loader2, MapPin, Building2, Linkedin, Twitter, X, Globe, Mail, Phone } from 'lucide-svelte';
   import PersonPicker from '$lib/components/PersonPicker.svelte';
   import NotesEditor from '$lib/components/NotesEditor.svelte';
   import FieldRow from '$lib/components/FieldRow.svelte';
@@ -337,6 +337,9 @@
 
     <aside class="flex flex-col gap-3">
       <div class="flex flex-col gap-1 rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)] p-2 text-sm">
+        <FieldRow label="Website" icon={Globe} value={company.url} field="url" id={company.id} endpoint="companies" />
+        <FieldRow label="Email" icon={Mail} value={company.email} field="email" id={company.id} endpoint="companies" />
+        <FieldRow label="Phone" icon={Phone} value={company.phone} field="phone" id={company.id} endpoint="companies" />
         <FieldRow label="Industry" icon={Building2} value={company.industry} field="industry" id={company.id} endpoint="companies" />
         <FieldRow label="Location" icon={MapPin} value={company.location} field="location" id={company.id} endpoint="companies" />
         <FieldRow label="LinkedIn" icon={Linkedin} value={company.linkedinUrl} field="linkedinUrl" id={company.id} endpoint="companies" />

@@ -13,7 +13,8 @@
     "check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json && tsx scripts/check-tenancy.ts && tsx scripts/check-overlays.ts && tsx scripts/check-shared.ts && tsx scripts/check-parity.ts && tsx scripts/check-budget.ts && vitest run",
     "check:watch": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --watch",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "test:e2e": "playwright test"
   },
   "dependencies": {
     "@libsql/client": "^0.17.2",
@@ -21,6 +22,7 @@
   },
   "devDependencies": {
     "@paralleldrive/cuid2": "^3.3.0",
+    "@playwright/test": "^1.62.1",
     "@sveltejs/adapter-node": "^5.5.4",
     "@sveltejs/kit": "^2.57.0",
     "@sveltejs/vite-plugin-svelte": "^7.0.0",

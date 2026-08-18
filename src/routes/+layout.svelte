@@ -149,6 +149,21 @@
   });
 
   onMount(() => {
+    /**
+     * Marks the app as hydrated, for the browser tests.
+     *
+     * They kept clicking during the window where the markup is present and the
+     * listeners are not — the press lands on nothing and the assertion then
+     * waits for a panel that was never going to open. Every SvelteKit-level
+     * signal is set *before* component hydration finishes, so the only honest
+     * marker is one the app sets itself, from the root layout's `onMount`,
+     * which by definition runs after the tree is live.
+     *
+     * One attribute, no styling attached to it, and nothing reads it at
+     * runtime — cheaper than the retry loops the alternative needs.
+     */
+    document.documentElement.dataset.hydrated = 'true';
+
     watchServiceWorker();
 
     const cleanups: Array<() => void> = [];

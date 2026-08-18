@@ -139,9 +139,14 @@
   }
 
   async function discard() {
+    // `back` is read *before* the request. `invalidateAll()` used to run here,
+    // which re-ran this route's loader, found nothing staged and redirected —
+    // and by the time `goto` was reached `data` was gone, so it navigated to
+    // `/undefined`. The DELETE already cleared the slot; leaving is all that
+    // is left to do.
+    const back = data.back;
     await fetch('/api/import/urls', { method: 'DELETE' });
-    await invalidateAll();
-    goto(data.back);
+    goto(back);
   }
 
   const GRID =

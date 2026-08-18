@@ -30,21 +30,20 @@ export type ManualCompanyInput = {
 
 /**
  * The identity fields a company row derives from its URL, plus the placeholder
- * name and the `parsing` marker. The sibling of `derivePersonRow`, and exported
- * for the same reason: the bulk URL import chunk-inserts rather than calling
- * `saveCompany` per row, and `url`/`domain` must not drift between the two.
+ * name. The sibling of `derivePersonRow`, and exported for the same reason: the
+ * bulk URL import chunk-inserts rather than calling `saveCompany` per row, and
+ * `url`/`domain` must not drift between the two. `source` is the caller's, for
+ * the reason given there.
  */
 export function deriveCompanyRow(u: URL): {
   url: string;
   domain: string;
   name: string;
-  source: string;
 } {
   return {
     url: u.toString(),
     domain: domainOf(u),
-    name: domainOf(u),
-    source: 'parsing'
+    name: domainOf(u)
   };
 }
 
@@ -188,6 +187,12 @@ function cleanDescription(raw: string | undefined): string | null {
 export async function enrichCompany(id: string, s: Scope, url: URL): Promise<void> {
   const d = db(s.region);
   try {
+    const existing = await d
+      .select({ email: companies.email, phone: companies.phone })
+      .from(companies)
+      .where(and(eq(companies.id, id), eq(companies.workspaceId, s.workspaceId)))
+      .get();
+
     let og = await fetchOg(url);
 
     // If the user pasted a deep page and we didn't get a canonical Organization
@@ -200,6 +205,28 @@ export async function enrichCompany(id: string, s: Scope, url: URL): Promise<voi
         og = mergeOg(og, rootOg);
       } catch {
         // Root fetch is best-effort.
+      }
+    }
+
+    /**
+     * One extra hop for a contact address, and only when the landing page had
+     * none. Companies put `hello@` on `/contact`, not on the homepage — without
+     * this, `companies.email` stays empty for most records and a company
+     * outreach template renders with no address to send to.
+     *
+     * Bounded deliberately: one hop, same-origin (`pickContactUrl` enforces
+     * that), only when `email` is missing, and only for what the *first* fetch
+     * nominated. `enrichCompany` already makes up to two requests, so this is a
+     * third in the worst case — which is why it is gated rather than routine,
+     * with a bulk import of hundreds of companies in mind.
+     */
+    if (!og.email && og.contactUrl) {
+      try {
+        const contactOg = await fetchOg(new URL(og.contactUrl));
+        if (contactOg.email) og = { ...og, email: contactOg.email };
+        if (!og.phone && contactOg.phone) og = { ...og, phone: contactOg.phone };
+      } catch {
+        // Best-effort, exactly like the root-page hop above.
       }
     }
 
@@ -237,6 +264,10 @@ export async function enrichCompany(id: string, s: Scope, url: URL): Promise<voi
       updatedAt: Date.now()
     };
     if (finalName) updates.name = finalName;
+    // Only ever fill a blank. Enrichment re-runs on a re-save, and an address
+    // someone typed by hand must outrank one scraped off a footer.
+    if (og.email && !existing?.email) updates.email = og.email;
+    if (og.phone && !existing?.phone) updates.phone = og.phone;
 
     await d.update(companies).set(updates).where(and(eq(companies.id, id), eq(companies.workspaceId, s.workspaceId)));
   } catch (err) {

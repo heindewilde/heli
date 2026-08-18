@@ -84,18 +84,27 @@ export const POST: RequestHandler = async ({ request, locals, cookies }) => {
       continue;
     }
     const id = createId();
+    /**
+     * `parsing` means "something is still coming for this row": it shows a
+     * spinner and hands the row to the boot janitor. Both are wrong for a host
+     * we have already decided not to fetch — an authwalled profile would spin
+     * until the next restart, because nothing was ever queued to clear it.
+     * A LinkedIn import is complete the moment it is inserted.
+     */
+    const willEnrich = kind === 'company' || !servesAuthwall(u);
     const base = {
       id,
       workspaceId: s.workspaceId,
       userId: s.userId,
       isFavorite: 0,
       isArchived: 0,
+      source: willEnrich ? 'parsing' : null,
       createdAt: now,
       updatedAt: now
     };
     if (kind === 'person') personRows.push({ ...base, ...derivePersonRow(u) });
     else companyRows.push({ ...base, ...deriveCompanyRow(u) });
-    queued.push({ id, u, kind });
+    if (willEnrich) queued.push({ id, u, kind });
   }
 
   let imported = 0;
@@ -131,14 +140,12 @@ export const POST: RequestHandler = async ({ request, locals, cookies }) => {
     }
   }
 
-  // Queue only what actually landed, and only where a fetch would tell us
-  // something: `servesAuthwall` hosts serve the server a sign-up wall, so
-  // enriching a LinkedIn profile finds nothing but chrome.
+  // Queue only what actually landed. Authwalled hosts were already left out
+  // above, along with their `parsing` marker.
   let enqueued = 0;
   let dropped = 0;
   for (const q of queued) {
     if (failed.has(q.id)) continue;
-    if (q.kind === 'person' && servesAuthwall(q.u)) continue;
     const ok = enqueueEnrichment(
       q.kind === 'person'
         ? () => enrichPerson(q.id, s, q.u)

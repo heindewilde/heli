@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { invalidateAll } from '$app/navigation';
   import { toast } from '$lib/toasts.svelte';
   import { Pencil } from 'lucide-svelte';
   import Editable from '$lib/ui/Editable.svelte';
@@ -19,8 +20,8 @@
 
   let { label, icon: Icon, value, field, id, endpoint }: Props = $props();
 
-  // No invalidateAll: the PATCH response is authoritative for this one field,
-  // and Editable holds the new value optimistically until the page next
+  // Normally no invalidateAll: the PATCH response is authoritative for this one
+  // field, and Editable holds the new value optimistically until the page next
   // re-renders from the server for some other reason.
   async function save(next: string | null): Promise<boolean> {
     const res = await fetch(`/api/${endpoint}/${id}`, {
@@ -29,9 +30,17 @@
       body: JSON.stringify({ [field]: next })
     });
     if (!res.ok) {
-      toast.danger('Update failed');
+      toast.danger(res.status === 409 ? 'Another record already has that' : 'Update failed');
       return false;
     }
+    // The exception: some fields are rewritten on the way in — `url` goes
+    // through `cleanUrl`, because it is the workspace's dedupe key. Typing
+    // "ACME.example/" and being shown "ACME.example/" until the next reload,
+    // when what was actually stored is "https://acme.example", is the kind of
+    // small lie that makes people re-type things. Only reloads when the server
+    // disagreed with what was sent.
+    const stored = ((await res.json()) as Record<string, unknown>)[field];
+    if (typeof stored === 'string' && next !== null && stored !== next) await invalidateAll();
     return true;
   }
 </script>

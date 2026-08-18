@@ -31,6 +31,11 @@ export type OgData = {
   sizeBand?: string;
   email?: string;
   phone?: string;
+  /**
+   * A same-origin page that looks like it carries contact details, when this
+   * one did not. `enrichCompany` follows it once — see the note there.
+   */
+  contactUrl?: string;
 };
 
 // Thin wrapper over the shared guard — see src/lib/server/fetchGuard.ts. The
@@ -221,6 +226,84 @@ function isImagePoor(html: string): boolean {
   return !/<meta[^>]+(?:property|name)\s*=\s*["'](?:og:image|twitter:image)/i.test(html);
 }
 
+
+/**
+ * Local parts we will accept from a `mailto:` link.
+ *
+ * An allowlist, not a blocklist, and that is the whole design. A company page
+ * links plenty of addresses — a named employee, a webmaster alias, a
+ * `no-reply` — and writing to any of them is worse than having no address at
+ * all, the same reasoning that keeps a guessed employer off a LinkedIn profile.
+ * These are the ones that mean "the company reads this".
+ */
+const GENERIC_LOCAL_PARTS = new Set([
+  'info',
+  'hello',
+  'hi',
+  'contact',
+  'contactus',
+  'enquiries',
+  'enquiry',
+  'inquiries',
+  'inquiry',
+  'sales',
+  'support',
+  'help',
+  'office',
+  'mail',
+  'team',
+  'business',
+  'partnerships',
+  'press'
+]);
+
+/** Links whose text or href suggests a page carrying contact details. */
+const CONTACT_PATH_RE = /^\/?(contact|contact-us|contactus|about|about-us|aboutus|impressum)\/?$/i;
+
+/**
+ * The first `mailto:` on the page whose local part is generic.
+ *
+ * Deliberately ignores the address's domain: plenty of companies route
+ * `hello@` through a helpdesk on another host, and requiring a match would
+ * discard exactly the addresses worth having.
+ */
+export function pickContactEmail(doc: HTMLElement): string | undefined {
+  for (const el of doc.querySelectorAll('a[href^="mailto:"], a[href^="MAILTO:"]')) {
+    const href = el.getAttribute('href');
+    if (!href) continue;
+    // Strip `?subject=` and friends before parsing.
+    const raw = href.slice('mailto:'.length).split('?')[0].trim().toLowerCase();
+    if (!raw || raw.split('@').length !== 2) continue;
+    const [local] = raw.split('@');
+    // `sales.eu@` and `info-uk@` are still the front desk.
+    const stem = local.split(/[.+_-]/)[0];
+    if (GENERIC_LOCAL_PARTS.has(stem)) return raw;
+  }
+  return undefined;
+}
+
+/** A same-origin contact/about page to try when this one carried no address. */
+export function pickContactUrl(doc: HTMLElement, base: URL): string | undefined {
+  for (const el of doc.querySelectorAll('a[href]')) {
+    const href = el.getAttribute('href');
+    if (!href) continue;
+    let candidate: URL;
+    try {
+      candidate = new URL(href, base);
+    } catch {
+      continue;
+    }
+    if (candidate.hostname !== base.hostname) continue;
+    if (candidate.pathname === base.pathname) continue;
+    if (CONTACT_PATH_RE.test(candidate.pathname)) {
+      candidate.hash = '';
+      candidate.search = '';
+      return candidate.toString();
+    }
+  }
+  return undefined;
+}
+
 export async function fetchOg(url: URL | string): Promise<OgData> {
   const target = typeof url === 'string' ? new URL(url) : url;
   // `withTimeout` from fetchGuard, not a hand-rolled controller — this module
@@ -310,8 +393,11 @@ export async function fetchOg(url: URL | string): Promise<OgData> {
       address: pickJsonLdAddress(jsonLd),
       industry: pickJsonLdIndustry(jsonLd),
       sizeBand: pickJsonLdSize(jsonLd),
-      email: pickJsonLdContact(jsonLd).email,
-      phone: pickJsonLdContact(jsonLd).telephone
+      // JSON-LD first — it is a stated fact rather than a guess. The mailto
+      // scan is the fallback, and only ever returns a generic local part.
+      email: pickJsonLdContact(jsonLd).email ?? pickContactEmail(doc),
+      phone: pickJsonLdContact(jsonLd).telephone,
+      contactUrl: pickContactUrl(doc, new URL(res.url || String(url)))
     };
   } finally {
     done();

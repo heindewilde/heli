@@ -21,3 +21,6 @@ mobile/src/theme/tokens.ts
 mobile/.expo
 mobile/ios
 mobile/android
+e2e/.state.json
+test-results/
+playwright-report/
