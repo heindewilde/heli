@@ -208,12 +208,28 @@ const MEMBER_ALLOWED = new Map<string, string>([
   ['collections/[id]/items/+server.ts', 'adding a record to a list'],
   ['collections/[id]/sync/+server.ts', 'unlinking your own collection from a pipeline'],
   ['companies/+server.ts', 'routine CRM work'],
+  [
+    'companies/bulk/+server.ts',
+    'patch/tag/collection are routine CRM work; the delete action calls requireRole in bulk.ts'
+  ],
   ['companies/[id]/+server.ts', 'routine CRM work'],
   ['import/+server.ts', 'DELETE only discards the staging cookie; POST is role-guarded'],
+  [
+    'import/urls/+server.ts',
+    'pasting links is the same act as the bookmarklet, and bounded the same way — LIMITS.urlImport'
+  ],
+  [
+    'import/urls/commit/+server.ts',
+    'saving links one at a time is member work; the paste that produced them was already rate-limited'
+  ],
   ['interactions/+server.ts', 'routine CRM work'],
   ['interactions/[id]/+server.ts', 'routine CRM work'],
   ['interactions/[id]/people/+server.ts', 'linking a person to an interaction'],
   ['people/+server.ts', 'routine CRM work'],
+  [
+    'people/bulk/+server.ts',
+    'patch/tag/collection are routine CRM work; the delete action calls requireRole in bulk.ts'
+  ],
   ['people/[id]/+server.ts', 'routine CRM work'],
   ['pipelines/+server.ts', 'creating a pipeline is routine; deleting one is guarded'],
   ['pipelines/[id]/+server.ts', 'PATCH is routine; DELETE calls requireRole'],

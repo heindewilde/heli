@@ -21,6 +21,7 @@ export const POST: RequestHandler = async ({ request, locals }) => {
   let body: {
     templateId?: string;
     personId?: string;
+    companyId?: string;
     subject?: string | null;
     body?: string | null;
     remindInDays?: number | null;
@@ -32,11 +33,23 @@ export const POST: RequestHandler = async ({ request, locals }) => {
   }
 
   if (!body.templateId || typeof body.templateId !== 'string') throw error(400, 'missing_template');
-  if (!body.personId || typeof body.personId !== 'string') throw error(400, 'missing_person');
+
+  const personId = typeof body.personId === 'string' && body.personId ? body.personId : null;
+  const companyId = typeof body.companyId === 'string' && body.companyId ? body.companyId : null;
+  // Exactly one. Neither is nothing to log against; both would be a message
+  // claimed to have gone to two different recipients.
+  if (!personId === !companyId) throw error(400, 'missing_recipient');
 
   const template = await getTemplate(s, body.templateId);
   if (!template) throw error(404, 'not_found');
   if (!isOutreachPlatform(template.platform)) throw error(400, 'invalid_platform');
+  /**
+   * The recipient has to agree with who the template addresses.
+   * `interactions.outreach_template_id` is the only provenance an outreach
+   * message leaves behind, so a company template logged against a person would
+   * make that record say something untrue and nothing would ever catch it.
+   */
+  if ((template.target === 'company') !== !!companyId) throw error(400, 'target_mismatch');
 
   const spec = PLATFORMS[template.platform];
   // The subject is part of the message on the platforms that have one, so it
@@ -51,7 +64,8 @@ export const POST: RequestHandler = async ({ request, locals }) => {
       type: spec.interactionType,
       title,
       body: body.body ?? null,
-      personIds: [body.personId],
+      personIds: personId ? [personId] : undefined,
+      companyId: companyId ?? undefined,
       outreachTemplateId: template.id
     });
   } catch (err) {
@@ -64,9 +78,11 @@ export const POST: RequestHandler = async ({ request, locals }) => {
   let reminderId: string | null = null;
   if (days && Number.isFinite(days) && days > 0) {
     try {
+      // `REMINDER_KINDS` already carries 'company', and `refExists` already has
+      // the branch — a company nudge needed no schema change.
       const reminder = await createReminder(s, {
-        kind: 'person',
-        refId: body.personId,
+        kind: personId ? 'person' : 'company',
+        refId: (personId ?? companyId)!,
         remindAt: Date.now() + Math.floor(days) * DAY_MS
       });
       reminderId = reminder.id;

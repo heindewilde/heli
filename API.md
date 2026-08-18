@@ -243,10 +243,19 @@ field: both timestamps are stored and duration is derived, so they cannot drift.
 
 | | |
 |---|---|
-| `GET /outreach` | `?q=` `?platform=` `?archived=` |
-| `POST /outreach` | `{ name, platform, subject?, body, visibility?, nudgeDays? }` |
+| `GET /outreach` | `?q=` `?platform=` `?target=` `?archived=` |
+| `POST /outreach` | `{ name, platform, target?, subject?, body, visibility?, nudgeDays? }` |
 | `GET`, `PATCH`, `DELETE /outreach/:id` | |
-| `POST /outreach/sent` | `{ templateId, personId, subject?, body?, remindInDays? }` — logs an interaction and optionally schedules a follow-up. |
+| `POST /outreach/sent` | `{ templateId, personId \| companyId, subject?, body?, remindInDays? }` — logs an interaction and optionally schedules a follow-up. |
+
+`target` is `person` (the default) or `company`, and it decides who the template
+addresses. Templates written before this existed are `person`.
+
+`POST /outreach/sent` takes **exactly one** of `personId` and `companyId`, and it
+must agree with the template's `target` — a mismatch is a `400`. That check is
+not pedantry: `interactions.outreach_template_id` is the only provenance an
+outreach message leaves behind, so logging a company template against a person
+would make that record say something untrue.
 
 Heli renders and logs messages; it never sends them. There is no send endpoint
 and there will not be one — which is also why this works identically for

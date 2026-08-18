@@ -202,8 +202,21 @@
     <div class="flex items-center gap-1">
       {#if data.user}
         <CompanyOutreachButton
-          companyName={company.name}
+          company={{
+            kind: 'company',
+            id: company.id,
+            name: company.name,
+            email: company.email,
+            location: company.location,
+            phone: company.phone,
+            domain: company.domain,
+            industry: company.industry,
+            sizeBand: company.sizeBand,
+            linkedinUrl: company.linkedinUrl,
+            xUrl: company.xUrl
+          }}
           people={data.linkedPeople}
+          hasCompanyTemplates={data.hasCompanyTemplates}
           sender={{ name: data.user.username ?? '', email: data.user.email }}
           onSent={() => invalidate('heli:company')}
         />

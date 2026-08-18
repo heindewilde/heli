@@ -28,6 +28,7 @@ export const POST: RequestHandler = async ({ request, locals }) => {
   let body: {
     templateId?: string;
     personId?: string;
+    companyId?: string;
     subject?: string | null;
     body?: string | null;
     remindInDays?: number | null;
@@ -41,14 +42,25 @@ export const POST: RequestHandler = async ({ request, locals }) => {
   if (typeof body.templateId !== 'string' || !body.templateId) {
     return apiError('invalid_request', '`templateId` is required.', 400);
   }
-  if (typeof body.personId !== 'string' || !body.personId) {
-    return apiError('invalid_request', '`personId` is required.', 400);
+  const personId = typeof body.personId === 'string' && body.personId ? body.personId : null;
+  const companyId = typeof body.companyId === 'string' && body.companyId ? body.companyId : null;
+  if (!personId === !companyId) {
+    return apiError('invalid_request', 'Exactly one of `personId` or `companyId` is required.', 400);
   }
 
   const template = await getTemplate(s, body.templateId);
   if (!template) return apiError('not_found', 'No such template.', 404);
   if (!isOutreachPlatform(template.platform)) {
     return apiError('invalid_request', 'That template has an unknown platform.', 400);
+  }
+  // The recipient has to agree with who the template addresses — see the note
+  // on the session-authenticated sibling of this handler.
+  if ((template.target === 'company') !== !!companyId) {
+    return apiError(
+      'invalid_request',
+      `That template addresses a ${template.target}.`,
+      400
+    );
   }
 
   const spec = PLATFORMS[template.platform];
@@ -63,7 +75,8 @@ export const POST: RequestHandler = async ({ request, locals }) => {
         type: spec.interactionType,
         title,
         body: body.body ?? null,
-        personIds: [body.personId as string],
+        personIds: personId ? [personId] : undefined,
+        companyId: companyId ?? undefined,
         outreachTemplateId: template.id
       });
     } catch (err) {
@@ -77,8 +90,8 @@ export const POST: RequestHandler = async ({ request, locals }) => {
     if (days && Number.isFinite(days) && days > 0) {
       try {
         const reminder = await createReminder(s, {
-          kind: 'person',
-          refId: body.personId as string,
+          kind: personId ? 'person' : 'company',
+          refId: (personId ?? companyId)!,
           remindAt: Date.now() + Math.floor(days) * DAY_MS
         });
         reminderId = reminder.id;

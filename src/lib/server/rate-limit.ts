@@ -9,6 +9,10 @@ export const LIMITS: Record<string, Limit> = {
   register: { name: 'register', max: 5, windowMs: 60 * 60 * 1000 },
   login: { name: 'login', max: 10, windowMs: 15 * 60 * 1000 },
   save: { name: 'save', max: 30, windowMs: 5 * 60 * 1000 },
+  // Keyed by user. A single paste can stage up to MAX_URL_IMPORT_ROWS links,
+  // each of which costs one or two outbound fetches once committed — so this
+  // bounds the *paste*, and the enrichment queue's own cap bounds the drain.
+  urlImport: { name: 'url_import', max: 10, windowMs: 60 * 60 * 1000 },
   // Broad cap on authenticated API calls per user: 300 req/min.
   // Prevents bulk enumeration or resource exhaustion from a compromised session.
   api: { name: 'api', max: 300, windowMs: 60 * 1000 },

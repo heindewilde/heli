@@ -10,6 +10,7 @@ import { getTagsForEntity } from '$lib/server/tags';
 import { listCollectionsForEntity } from '$lib/server/collections';
 import { listPipelinesForEntity } from '$lib/server/pipelines';
 import { listTasksForEntity } from '$lib/server/tasks';
+import { countTemplates } from '$lib/server/outreach';
 
 export const load: PageServerLoad = async ({ locals, params, url, depends }) => {
   if (!locals.user) throw redirect(303, '/auth');
@@ -54,7 +55,13 @@ export const load: PageServerLoad = async ({ locals, params, url, depends }) => 
     .orderBy(desc(people.updatedAt))
     .limit(50);
 
-  const [company, linkedPeople] = await Promise.all([companyPromise, linkedPeoplePromise]);
+  // A COUNT, not a list: the header only needs to know whether the "Write to
+  // {company}" option exists at all — the dialog fetches the templates itself.
+  const [company, linkedPeople, companyTemplateCount] = await Promise.all([
+    companyPromise,
+    linkedPeoplePromise,
+    countTemplates(s, { target: 'company', archived: 'active' })
+  ]);
   if (!company) throw error(404, 'not_found');
 
   const FRESH_GRACE_MS = 30_000;
@@ -64,6 +71,7 @@ export const load: PageServerLoad = async ({ locals, params, url, depends }) => 
   return {
     company,
     linkedPeople,
+    hasCompanyTemplates: companyTemplateCount > 0,
     justSaved,
     dedup,
     // Streamed — awaited in the template.

@@ -879,6 +879,128 @@ send API anyway. Don't "finish" it by adding sending.
   reorder — it is board configuration the whole workspace sees. Writing a
   template stays open to members.
 
+- **A template declares who it addresses: `outreach_templates.target`.** Added
+  as `NOT NULL DEFAULT 'person'`, so SQLite backfilled every template written
+  before it — "existing templates keep working" is a database fact rather than
+  a coercion each read has to remember. The column decides three things: which
+  variables `buildVariables` emits, which audience `resolveAudience` resolves,
+  and which of `personId`/`companyId` `/api/outreach/sent` will accept.
+  - **`OUTREACH_TARGETS` lives in `platforms.ts`, not `schema.ts`.** `render.ts`
+    needs the type and is on the mobile shared list, where the only import that
+    resolves is a relative one to another shared module. Importing drizzle
+    there fails `check-shared.ts`.
+  - **`Recipient` is a union whose person arm has `kind` *optional* and whose
+    company arm has it *required*.** That asymmetry is what lets every existing
+    call site keep passing a bare object and still narrow correctly. Don't
+    "tidy" it by requiring `kind` on both.
+  - **A company has no `first_name`, `last_name`, `full_name` or `role`, and
+    `buildVariables` omits them deliberately.** Resolving `{{first_name}}` to
+    the company's name would produce "Hi Acme Corp," with no warning; leaving it
+    unresolved raises the warning strip, which is the correct outcome.
+  - **`PERSON_VARIABLES` / `COMPANY_VARIABLES` stay *derived* from
+    `buildVariables`**, so the editor's helper list cannot drift from what
+    actually renders.
+  - **`/api/outreach/sent` takes exactly one of `personId`/`companyId`, and it
+    must match `template.target`.** `interactions.outreach_template_id` is the
+    only provenance an outreach message leaves; a mismatch would make it lie.
+    `createInteraction` already took `companyId`, and `REMINDER_KINDS` already
+    carried `'company'` — only the endpoint was in the way.
+  - **`OutreachDialog` serves both kinds; there is no `CompanyOutreachDialog`.**
+    `MessageComposer` must keep exactly one consumer (see the code-splitting
+    section). Widening the dialog's props is the only safe shape.
+  - **`CompanyOutreachButton`'s lazy `import('./OutreachDialog.svelte')` is safe
+    only because `/people/[id]` imports the same component statically**, which
+    keeps it in a static chunk. Delete that static import, or add a third
+    dynamic-only call site, and the dialog gets a chunk of its own that
+    transitively reaches `squire-rte`.
+  - **Stage templates return `target` but are never filtered by it in SQL.** A
+    pipeline holds people *and* companies, so a stage may legitimately offer
+    both; `PipelineItemCard` filters to its own item's kind.
+
+## Bulk selection and bulk actions
+
+`/people` and `/companies` support multi-select. Column 1 is the checkbox and
+the priority flag moved to a 24px column at the far right; both list pages
+define `GRID` once and the header and rows share it.
+
+- **One endpoint per kind — `POST /api/{people,companies}/bulk`** — carrying a
+  discriminated action, rather than array variants on five existing endpoints.
+  Every action is one to three statements using `inArray`, against remote
+  libSQL where the round trips are the cost. `MAX_BULK_IDS = 200`.
+- **Ids outside the workspace resolve to nothing rather than raising.** A
+  selection goes stale between the tick and the click, and the response's
+  `count` tells the truth. Every statement filters `workspace_id` first.
+- **`requireRole` for the delete action lives in `src/lib/server/bulk.ts`, not
+  in the route file.** `check-tenancy.ts` Rule C short-circuits on a
+  `requireRole` anywhere in a handler *before* consulting `MEMBER_ALLOWED`, so
+  putting it in the route would make the allowlist entry dead code and hide the
+  decision. It is also what makes the gate testable, since the suite calls
+  helpers rather than handlers.
+- **The response is `{ count }` and deliberately carries no rows.** Returning
+  200 rows in list shape means a second joined query costing more than the
+  write, and the client already holds what it sent.
+- **What happens after depends on whether the cache owns it**: priority and
+  status use `cache.patchMany`; tags end in `invalidateAll()` because
+  `data.itemTags`, `data.allTags` and the counts are server-load-owned; delete
+  invalidates for the total pill.
+- **`selection.prune`, not `clear`, on hydrate.** An action ending in
+  `invalidateAll()` brings the same rows back, and clearing would make a second
+  action impossible; a filter change shrinks the selection on its own.
+- **The `Escape` command is guarded by `layerDepth() === 0`.** The command
+  registry is a second window listener that does not know about `layerStack`,
+  so without the guard one Escape would close the popover *and* throw away the
+  selection under it. Never add a component-level Escape handler instead.
+- **`ActionBar` lives in `src/lib/ui/`** so `check-overlays.ts` permits its
+  z-index token. It is a toolbar, not a layer — it takes no focus and is not on
+  `layerStack`.
+
+## Bulk URL import
+
+Paste anything containing links on `/people` or `/companies`, review at
+`/import/urls`, commit. Members may do it; `LIMITS.urlImport` bounds it rather
+than a role gate, the same trade `/api/save` makes for the bookmarklet.
+
+- **`extractUrls` is deliberately lenient and deliberately not built on
+  `parseCsv`.** Running the pattern over the whole blob extracts a CSV's URL
+  column without guessing which column it is, and a second anchored pass
+  promotes a bare host that occupies a whole field. The anchor is load-bearing:
+  without it, "i.e." inside prose becomes a record.
+- **`urlImport.ts` is a second staging map, not a widening of
+  `contactImport.ts`.** One slot would mean a pasted list silently destroys a
+  half-triaged 3,400-row CSV, and `MappedPerson` would become a union carrying
+  a `kind` that is permanently `'person'` for both contact sources.
+- **`MAX_URL_IMPORT_ROWS` is 500 — a *network* budget, not a memory one.** Each
+  row costs one to two outbound fetches; that is why it is far below
+  `MAX_IMPORT_ROWS`.
+- **The commit chunk-inserts rather than calling `savePerson` per row** (500
+  rows would be ~1,000 sequential round trips), so it must not re-derive the
+  row shape: `derivePersonRow` / `deriveCompanyRow` are exported from the save
+  modules and are the one definition. `url`, `domain` and `handle` decide
+  whether a later capture deduplicates, so a drift there is a duplicate record.
+  `tests/url-import.test.ts` pins that the two paths agree.
+- **LinkedIn rows are created but never enqueued.** `servesAuthwall` means a
+  fetch finds only sign-up chrome, so they keep `source='parsing'` until the
+  boot janitor clears it. The review screen says so, because otherwise it looks
+  broken.
+
+## The enrichment queue
+
+`src/lib/server/enrichQueue.ts` paces every background enrichment in the app.
+`savePerson`/`saveCompany` call it instead of a bare `void enrichPerson(...)`,
+so the extension, the bookmarklet, `/api/v1/people` and the bulk import are all
+bounded by one change with no call-site branching.
+
+- **Two lanes, urgent first.** Without them a 500-row drain sits in front of
+  every ordinary save and a sidebar paste spins for minutes. Only the bulk
+  commit passes `'bulk'`.
+- **`ENRICH_CONCURRENCY` (default 4) is tunable** for the same reason
+  `SQLITE_CACHE_MB` is — a 1 GB VPS is a supported target.
+- **Deliberately not persisted.** A job lost to a restart leaves its row on
+  `source='parsing'`, which the boot janitor already sweeps — a failure mode
+  that is handled rather than a new one. A job table plus a retry policy for
+  something whose worst outcome is a missing favicon is the opposite of the
+  lightweightness rule.
+
 ## Planning: projects, allocations, availability, time
 
 Four things sharing one spine: a project says what the work is, an allocation

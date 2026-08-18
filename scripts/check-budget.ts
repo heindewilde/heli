@@ -40,11 +40,16 @@ const BASELINE = {
   // The custom Select trimmed the shell slightly (one shared listbox replacing
   // per-call-site chevron/shell markup) and added ~2.7 KB to the heaviest
   // route, which is where its keyboard and typeahead logic lands.
-  shellJsGzip: 75_776,
+  // +0.7 KB when list-row multi-select landed: `Checkbox`, `ActionBar` and the
+  // selection store are shared by /people and /companies, which is enough for
+  // rollup to hoist them into the shell rather than duplicate them per route.
+  shellJsGzip: 76_456,
   // +0.5 KB for the print stylesheet, which is what makes "Export PDF" a
   // browser feature rather than a dependency.
-  shellCssGzip: 11_162,
-  largestRouteGzip: 49_766,
+  shellCssGzip: 11_418,
+  // +0.9 KB: the bulk action bar's five pickers and the paste dialog land on
+  // the two list routes, which is where the heaviest one already was.
+  largestRouteGzip: 50_662,
   prodPackages: 23,
   prodBytes: 12_214_272
 };

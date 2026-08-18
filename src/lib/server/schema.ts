@@ -321,6 +321,14 @@ export const companies = sqliteTable(
     industry: text('industry'),
     sizeBand: text('size_band'),
     location: text('location'),
+    /**
+     * A general address — `hello@`, `info@`, whoever answers. Outreach can
+     * address a company directly, so it needs somewhere for a message to land.
+     * Deliberately not in `companies_fts`, which indexes neither this nor
+     * `people.email`.
+     */
+    email: text('email'),
+    phone: text('phone'),
     notes: text('notes'),
     linkedinUrl: text('linkedin_url'),
     xUrl: text('x_url'),
@@ -1040,6 +1048,15 @@ export const outreachTemplates = sqliteTable(
       .references(() => users.id, { onDelete: 'cascade' }),
     name: text('name').notNull(),
     platform: text('platform').notNull(),
+    /**
+     * Who the template addresses: a person, or a company.
+     *
+     * `NOT NULL DEFAULT 'person'` — SQLite fills existing rows on ALTER, so
+     * every template written before company outreach existed is a person
+     * template as a database fact rather than as a null-coercion each read has
+     * to remember.
+     */
+    target: text('target').notNull().default('person'),
     /** Email and InMail only; null for every other platform. */
     subject: text('subject'),
     body: text('body').notNull(),

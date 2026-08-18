@@ -308,6 +308,28 @@ async function ensureMember(
   return !!r;
 }
 
+/** The bulk sibling of `ensureMember`: one query instead of one per id. */
+async function filterMembers(
+  d: ReturnType<typeof db>,
+  workspaceId: string,
+  kind: MemberKind,
+  refIds: string[]
+): Promise<string[]> {
+  if (refIds.length === 0) return [];
+  if (kind === 'person') {
+    const rows = await d
+      .select({ id: people.id })
+      .from(people)
+      .where(and(eq(people.workspaceId, workspaceId), inArray(people.id, refIds)));
+    return rows.map((r) => r.id);
+  }
+  const rows = await d
+    .select({ id: companies.id })
+    .from(companies)
+    .where(and(eq(companies.workspaceId, workspaceId), inArray(companies.id, refIds)));
+  return rows.map((r) => r.id);
+}
+
 export async function addToCollection(
   s: Scope,
   collectionId: string,
@@ -348,6 +370,62 @@ export async function removeFromCollection(
     .update(collections)
     .set({ updatedAt: Date.now() })
     .where(eq(collections.id, collectionId));
+}
+
+/**
+ * Add many members in one go.
+ *
+ * Not a loop over `addToCollection`: that resolves the collection *and* checks
+ * each member's tenancy with its own round trip, so two hundred ticked rows
+ * would be six hundred against remote libSQL. Here the collection is checked
+ * once, the members are filtered with one `inArray` per kind, and the rows go
+ * in as a single insert.
+ *
+ * Returns the ids that were actually resolvable in this workspace, so the
+ * caller can propagate exactly those to a synced pipeline and report an honest
+ * count. Ids from another workspace are dropped silently rather than raising —
+ * a stale selection is not an error worth failing the whole action over.
+ */
+export async function addManyToCollection(
+  s: Scope,
+  collectionId: string,
+  kind: MemberKind,
+  refIds: string[]
+): Promise<string[]> {
+  const d = db(s.region);
+  if (!(await ensureCollectionOwned(d, s.workspaceId, collectionId))) throw new Error('not_found');
+  const valid = await filterMembers(d, s.workspaceId, kind, refIds);
+  if (valid.length === 0) return [];
+  const now = Date.now();
+  await d
+    .insert(collectionItems)
+    .values(valid.map((refId) => ({ collectionId, kind, refId, addedAt: now })))
+    .onConflictDoNothing();
+  await d.update(collections).set({ updatedAt: now }).where(eq(collections.id, collectionId));
+  return valid;
+}
+
+export async function removeManyFromCollection(
+  s: Scope,
+  collectionId: string,
+  kind: MemberKind,
+  refIds: string[]
+): Promise<string[]> {
+  const d = db(s.region);
+  if (!(await ensureCollectionOwned(d, s.workspaceId, collectionId))) throw new Error('not_found');
+  if (refIds.length === 0) return [];
+  const now = Date.now();
+  await d
+    .delete(collectionItems)
+    .where(
+      and(
+        eq(collectionItems.collectionId, collectionId),
+        eq(collectionItems.kind, kind),
+        inArray(collectionItems.refId, refIds)
+      )
+    );
+  await d.update(collections).set({ updatedAt: now }).where(eq(collections.id, collectionId));
+  return refIds;
 }
 
 export type CollectionMembershipForEntity = {

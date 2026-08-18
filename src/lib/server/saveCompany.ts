@@ -15,6 +15,7 @@ import {
 import { sanitize, truncateWords } from './sanitize';
 import type { Scope } from './scope';
 import { bumpSearchEpoch } from './search';
+import { enqueueEnrichment } from './enrichQueue';
 
 export type SaveResult = { id: string; kind: 'company'; dedup: boolean };
 
@@ -26,6 +27,26 @@ export type ManualCompanyInput = {
   description?: string | null;
   notes?: string | null;
 };
+
+/**
+ * The identity fields a company row derives from its URL, plus the placeholder
+ * name and the `parsing` marker. The sibling of `derivePersonRow`, and exported
+ * for the same reason: the bulk URL import chunk-inserts rather than calling
+ * `saveCompany` per row, and `url`/`domain` must not drift between the two.
+ */
+export function deriveCompanyRow(u: URL): {
+  url: string;
+  domain: string;
+  name: string;
+  source: string;
+} {
+  return {
+    url: u.toString(),
+    domain: domainOf(u),
+    name: domainOf(u),
+    source: 'parsing'
+  };
+}
 
 export async function saveCompany(
   s: Scope,
@@ -91,7 +112,7 @@ export async function saveCompany(
       createdAt: now,
       updatedAt: now
     });
-    if (!enriched) void enrichCompany(id, s, u);
+    if (!enriched) enqueueEnrichment(() => enrichCompany(id, s, u));
     bumpSearchEpoch(s.workspaceId);
     return { id, kind: 'company', dedup: false };
   }

@@ -777,7 +777,17 @@ const ALTERS: string[] = [
   // CASCADE: deleting a template must not delete the record that you wrote to
   // someone. `execMany(DDL)` runs before applyAlters, so the referenced table
   // exists by the time this lands.
-  `ALTER TABLE interactions ADD COLUMN outreach_template_id TEXT REFERENCES outreach_templates(id) ON DELETE SET NULL`
+  `ALTER TABLE interactions ADD COLUMN outreach_template_id TEXT REFERENCES outreach_templates(id) ON DELETE SET NULL`,
+  // Companies become addressable. Outreach can now target a company directly,
+  // so it needs the two fields a message actually lands in. Deliberately not
+  // added to `companies_fts` — neither this nor `people.email` is searchable,
+  // and making one of them searchable alone reads as a bug.
+  `ALTER TABLE companies ADD COLUMN email TEXT`,
+  `ALTER TABLE companies ADD COLUMN phone TEXT`,
+  // Who a template addresses. SQLite backfills a constant DEFAULT on
+  // ADD COLUMN, so every template written before this migration becomes a
+  // person template in the database rather than by convention.
+  `ALTER TABLE outreach_templates ADD COLUMN target TEXT NOT NULL DEFAULT 'person'`
 ];
 
 // Tables carrying workspace_id, in the order the backfill fills them. Also the

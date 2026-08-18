@@ -69,6 +69,79 @@ async function ensureEntity(s: Scope, scope: TagScope, entityId: string): Promis
   return !!found;
 }
 
+/** The bulk sibling of `ensureEntity`: one query rather than one per id. */
+async function filterEntities(s: Scope, scope: TagScope, ids: string[]): Promise<string[]> {
+  if (ids.length === 0) return [];
+  const d = db(s.region);
+  const meta = ENTITY_TABLE[scope];
+  const rows = await d
+    .select({ id: meta.idCol })
+    .from(meta.table)
+    .where(and(eq(meta.wsCol, s.workspaceId), inArray(meta.idCol, ids)));
+  return rows.map((r) => r.id);
+}
+
+/**
+ * Attach one tag to many entities.
+ *
+ * `attachTag` verifies the entity and re-reads the tag on every call, so
+ * tagging two hundred ticked rows would be six hundred round trips. Here the
+ * tag is verified once, the entities are filtered with one `inArray`, and the
+ * junction rows go in as a single conflict-tolerant insert.
+ *
+ * Returns the ids that were in this workspace, so the caller reports a count
+ * that is true rather than the length of what the browser sent.
+ */
+export async function attachTagMany(
+  s: Scope,
+  scope: TagScope,
+  entityIds: string[],
+  tagId: string
+): Promise<string[]> {
+  const d = db(s.region);
+  const tag = await d
+    .select({ id: tags.id })
+    .from(tags)
+    .where(and(eq(tags.id, tagId), eq(tags.workspaceId, s.workspaceId), eq(tags.scope, scope)))
+    .get();
+  if (!tag) throw new Error('not_found');
+  const valid = await filterEntities(s, scope, entityIds);
+  if (valid.length === 0) return [];
+  if (scope === 'person') {
+    await d
+      .insert(personTags)
+      .values(valid.map((personId) => ({ personId, tagId })))
+      .onConflictDoNothing();
+  } else {
+    await d
+      .insert(companyTags)
+      .values(valid.map((companyId) => ({ companyId, tagId })))
+      .onConflictDoNothing();
+  }
+  return valid;
+}
+
+export async function detachTagMany(
+  s: Scope,
+  scope: TagScope,
+  entityIds: string[],
+  tagId: string
+): Promise<string[]> {
+  const d = db(s.region);
+  const valid = await filterEntities(s, scope, entityIds);
+  if (valid.length === 0) return [];
+  if (scope === 'person') {
+    await d
+      .delete(personTags)
+      .where(and(eq(personTags.tagId, tagId), inArray(personTags.personId, valid)));
+  } else {
+    await d
+      .delete(companyTags)
+      .where(and(eq(companyTags.tagId, tagId), inArray(companyTags.companyId, valid)));
+  }
+  return valid;
+}
+
 export async function ensureTag(
   s: Scope,
   scope: TagScope,

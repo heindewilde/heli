@@ -1,15 +1,23 @@
 <script lang="ts">
   import { APP_NAME } from '$lib/branding';
   import { goto } from '$app/navigation';
+  import { page } from '$app/state';
   import TemplateEditor from '$lib/components/TemplateEditor.svelte';
   import { toast } from '$lib/toasts.svelte';
   import { readErrorCode } from '$lib/api-error';
-  import type { OutreachPlatform } from '$lib/outreach/platforms';
+  import { isOutreachTarget, type OutreachPlatform, type OutreachTarget } from '$lib/outreach/platforms';
 
   let { data } = $props();
 
   let name = $state('');
   let platform = $state<OutreachPlatform>('email');
+  // `?target=company` lets "Write one" from an empty company-outreach state land
+  // in the editor already set up for it.
+  let target = $state<OutreachTarget>(
+    isOutreachTarget(page.url.searchParams.get('target'))
+      ? (page.url.searchParams.get('target') as OutreachTarget)
+      : 'person'
+  );
   let subject = $state('');
   let body = $state('');
   let visibility = $state<'shared' | 'private'>('shared');
@@ -19,12 +27,14 @@
 
   const ERRORS: Record<string, string> = {
     missing_name: 'Give the template a name.',
-    invalid_platform: 'Pick a platform.'
+    invalid_platform: 'Pick a platform.',
+    invalid_target: 'Pick who this template addresses.'
   };
 
   async function save(values: {
     name: string;
     platform: OutreachPlatform;
+    target: OutreachTarget;
     subject: string;
     body: string;
     visibility: 'shared' | 'private';
@@ -69,11 +79,13 @@
   <TemplateEditor
     bind:name
     bind:platform
+    bind:target
     bind:subject
     bind:body
     bind:visibility
     bind:nudgeDays
     sample={data.sample}
+    companySample={data.companySample}
     sender={data.sender}
     {saving}
     {error}

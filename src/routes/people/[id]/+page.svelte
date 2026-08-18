@@ -507,7 +507,7 @@
 {#if data.user}
   <OutreachDialog
     open={outreachOpen}
-    person={outreachTarget}
+    recipient={outreachTarget}
     sender={{ name: data.user.username ?? '', email: data.user.email }}
     templateId={handedOffTemplate}
     onclose={() => (outreachOpen = false)}

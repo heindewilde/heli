@@ -20,6 +20,14 @@
   import { buildUrl as buildUrlBase } from '$lib/url';
   import { formatLastSeen } from '$lib/interactions';
   import { createListCache } from '$lib/client/listCache.svelte';
+  import { createSelection } from '$lib/client/selection.svelte';
+  import ActionBar from '$lib/ui/ActionBar.svelte';
+  import { layerDepth } from '$lib/ui/layerStack';
+  import Checkbox from '$lib/ui/Checkbox.svelte';
+  import BulkActions from '$lib/components/BulkActions.svelte';
+  import UrlImportDialog from '$lib/components/UrlImportDialog.svelte';
+  import { Link2 } from 'lucide-svelte';
+  import { pollWhile } from '$lib/polling';
   import { onIntersect } from '$lib/actions';
   import Avatar from '$lib/ui/Avatar.svelte';
   import EmptyState from '$lib/ui/EmptyState.svelte';
@@ -40,11 +48,31 @@
   // Re-hydrate from SSR whenever the server load returns a fresh items array
   // (filter change, sort change, after invalidateAll). When this happens we
   // also reset the load-more cursor to whatever the new server view exposes.
+  const selection = createSelection();
   $effect(() => {
     cache.hydrate(data.items);
     nextCursor = data.nextCursor;
+    // Prune rather than clear. An action that ends in `invalidateAll()` brings
+    // the same rows back, and dropping the ticks every time you tagged
+    // something would make a second action impossible. A filter change removes
+    // most ids, so the selection shrinks on its own.
+    selection.prune(data.items.map((r) => r.id));
   });
   const rows = $derived(cache.items);
+  const rowIds = $derived(rows.map((r) => r.id));
+  const allTicked = $derived(rows.length > 0 && rows.every((r) => selection.has(r.id)));
+  const someTicked = $derived(selection.size > 0);
+
+  /**
+   * A bulk import leaves its rows on `source = 'parsing'` while the enrichment
+   * queue drains. The spinner already renders per row; this is what makes it
+   * eventually stop. Bounded at 30s by `pollWhile` — a full SSR reload every
+   * 1.5s is not something to run for the length of a 500-row drain.
+   */
+  $effect(() => {
+    if (!rows.some((r) => r.source === 'parsing')) return;
+    return pollWhile(() => cache.items.some((r) => r.source === 'parsing'), invalidateAll);
+  });
 
   // svelte-ignore state_referenced_locally
   let nextCursor = $state<string | null>(data.nextCursor);
@@ -72,9 +100,13 @@
   // The grid template for this table, defined once. The header row and the data
   // rows must agree exactly; they were previously two identical literals kept
   // in sync by hand, which is a misalignment waiting to happen.
-  const GRID = 'grid-template-columns: 24px minmax(0,1.5fr) minmax(0,1.1fr) minmax(0,0.9fr) 150px minmax(0,1fr);';
+  //
+  // Column 1 is the selection checkbox and the priority flag moved to the far
+  // right — both are 24px, so the table's proportions are unchanged.
+  const GRID = 'grid-template-columns: 24px minmax(0,1.5fr) minmax(0,1.1fr) minmax(0,0.9fr) 150px minmax(0,1fr) 24px;';
   const ROW_GRID = `${GRID} min-height: 56px; padding-top: 8px; padding-bottom: 8px;`;
 
+  let showImport = $state(false);
   let showAdd = $state(false);
   let addName = $state('');
   let addBusy = $state(false);
@@ -146,6 +178,99 @@
       rollback();
       toast.danger('Update failed');
     }
+  }
+
+  /**
+   * One request per bulk action, against `/api/people/bulk`.
+   *
+   * What happens afterwards differs by action, and the difference is whether
+   * the list cache owns what changed:
+   *  - priority and status are row columns, so they patch optimistically;
+   *  - tags are not — `data.itemTags`, `data.allTags` and the tag counts all
+   *    come off the server load, which is the same trade `RowTagAdder` makes;
+   *  - a collection change shows nothing on this page at all;
+   *  - a delete has to reload because `data.total` is not cache-owned either.
+   */
+  let bulkBusy = $state(false);
+
+  async function bulk(
+    action: Record<string, unknown>,
+    onOk: (count: number) => void | Promise<void>,
+    rollback?: () => void
+  ) {
+    if (bulkBusy || selection.size === 0) return;
+    bulkBusy = true;
+    try {
+      const res = await fetch('/api/people/bulk', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ ids: selection.ids, action })
+      });
+      if (!res.ok) {
+        rollback?.();
+        toast.danger(res.status === 403 ? 'You do not have permission' : 'Bulk action failed');
+        return;
+      }
+      const { count } = (await res.json()) as { count: number };
+      await onOk(count);
+    } catch {
+      rollback?.();
+      toast.danger('Bulk action failed');
+    } finally {
+      bulkBusy = false;
+    }
+  }
+
+  const plural = (n: number) => (n === 1 ? 'person' : 'people');
+
+  function bulkPriority(next: Priority) {
+    const rollback = cache.patchMany(selection.ids, { priority: next } as Partial<Row>);
+    bulk(
+      { kind: 'patch', fields: { priority: next } },
+      (n) => {
+        toast.success(`Updated ${n} ${plural(n)}`);
+      },
+      rollback
+    );
+  }
+
+  function bulkStatus(next: string | null) {
+    const rollback = cache.patchMany(selection.ids, { statusId: next } as Partial<Row>);
+    bulk(
+      { kind: 'patch', fields: { statusId: next } },
+      (n) => {
+        toast.success(`Updated ${n} ${plural(n)}`);
+      },
+      rollback
+    );
+  }
+
+  function bulkTag(op: 'add' | 'remove', tag: { name?: string; tagId?: string }) {
+    bulk({ kind: 'tag', op, ...tag }, async (n) => {
+      toast.success(op === 'add' ? `Tagged ${n} ${plural(n)}` : `Untagged ${n} ${plural(n)}`);
+      await invalidateAll();
+    });
+  }
+
+  function bulkCollection(collectionId: string) {
+    bulk({ kind: 'collection', op: 'add', collectionId }, (n) => {
+      toast.success(`Added ${n} ${plural(n)} to the collection`);
+    });
+  }
+
+  function bulkDelete() {
+    const ids = [...selection.ids];
+    const rollback = cache.removeMany(ids);
+    bulk(
+      { kind: 'delete' },
+      async (n) => {
+        selection.clear();
+        toast.success(`Deleted ${n} ${plural(n)}`);
+        // The total pill is not cache-owned.
+        await invalidateAll();
+      },
+      rollback
+    );
   }
 
   // Registered as commands rather than a second `bindKeys` listener, so there
@@ -249,6 +374,33 @@
         }
       },
       {
+        id: 'list:select-toggle',
+        title: 'Select this row',
+        section: 'This page',
+        shortcut: 'x',
+        when: hasRows,
+        run: () => {
+          const r = current();
+          if (!r) return;
+          selection.toggle(r.id);
+          selected = Math.min(rows.length - 1, selected + 1);
+          scrollSelectedIntoView();
+        }
+      },
+      {
+        id: 'list:clear-selection',
+        title: 'Clear the selection',
+        section: 'This page',
+        shortcut: 'Escape',
+        hidden: true,
+        // Stand down while any overlay is open. `layerStack` owns Escape for
+        // those, and this dispatcher is a separate window listener that would
+        // otherwise fire too — closing the tag popover *and* throwing away the
+        // selection it was about to act on.
+        when: () => selection.size > 0 && layerDepth() === 0,
+        run: () => selection.clear()
+      },
+      {
         id: 'list:new',
         title: 'New person',
         section: 'Create',
@@ -324,6 +476,15 @@
           class="h-7 w-36 rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-surface)] px-2 text-sm outline-none focus:border-[var(--color-border-strong)]"
         />
       {:else}
+        <button
+          type="button"
+          onclick={() => (showImport = true)}
+          title="Paste a list of links"
+          class="inline-flex items-center gap-1 rounded-[var(--radius-sm)] border border-[var(--color-border)] px-2.5 py-1.5 text-sm text-[var(--color-muted)] transition-colors hover:border-[var(--color-border-strong)] hover:text-[var(--color-text)]"
+        >
+          <Link2 size={14} strokeWidth={2} />
+          Import links
+        </button>
         <button
           type="button"
           onclick={openAdd}
@@ -439,13 +600,52 @@
         class="hidden md:grid items-center gap-3 border-b border-[var(--color-border)] bg-[var(--color-surface-2)] px-3 py-2 text-[var(--color-subtle)]"
         style={GRID}
       >
-        <span aria-hidden="false"><span class="sr-only">Priority</span></span>
+        <Checkbox
+          checked={allTicked}
+          indeterminate={someTicked && !allTicked}
+          aria-label={allTicked ? 'Deselect all loaded rows' : 'Select all loaded rows'}
+          onclick={(e) => {
+            // The DOM state is driven by the selection, not the other way
+            // round, so the native toggle is suppressed and the `checked` prop
+            // re-renders it. `bind:` against a derived value would fight this.
+            e.preventDefault();
+            selection.toggleAll(rowIds);
+          }}
+        />
         <SortHeader label="Name" sortKey="name" current={data.sort} href={sortHref} direction="asc" />
         <SortHeader label="Company" sortKey="company" current={data.sort} href={sortHref} sortable={false} />
         <SortHeader label="Contact" sortKey="contact" current={data.sort} href={sortHref} sortable={false} />
         <SortHeader label="Activity" sortKey="lastInteraction" current={data.sort} href={sortHref} />
         <SortHeader label="Tags" sortKey="tags" current={data.sort} href={sortHref} sortable={false} />
+        <span><span class="sr-only">Priority</span></span>
       </div>
+
+      <!--
+        One definition for both layouts. Hidden until the row is hovered or a
+        selection exists — a permanent column of empty boxes is noise on a dense
+        list, which is why `PriorityFlag` hides too. `opacity-0` rather than
+        `hidden` keeps it hit-testable and focusable.
+      -->
+      {#snippet rowCheckbox(id: string)}
+        <span
+          class={someTicked || selection.has(id)
+            ? ''
+            : 'opacity-0 transition-opacity focus-within:opacity-100 group-hover:opacity-100'}
+        >
+          <Checkbox
+            checked={selection.has(id)}
+            aria-label="Select row"
+            onclick={(e) => {
+              e.preventDefault();
+              const me = e as MouseEvent;
+              // Space fires a click with shiftKey false, so the keyboard toggles
+              // and cannot range-select. That is fine — `x` is the keyboard way.
+              if (me.shiftKey) selection.rangeTo(id, rowIds);
+              else selection.toggle(id);
+            }}
+          />
+        </span>
+      {/snippet}
 
       <ul role="list">
         {#each rows as person, i (person.id)}
@@ -458,7 +658,7 @@
                  all. `tap` starts the load on touchstart, ~80ms before the
                  click lands. -->
             <div data-sveltekit-preload-data="tap" class="md:hidden group relative flex items-center gap-2 border-b border-[var(--color-border)] px-3 py-3 transition-colors last:border-b-0 {sel ? 'bg-[var(--color-highlight-bg)]' : 'hover:bg-[var(--color-row-hover)]'} {person.isArchived ? 'opacity-60' : ''}">
-              <PriorityFlag value={(person.priority as Priority) ?? null} onChange={(p) => setPriority(person.id, p)} />
+              {@render rowCheckbox(person.id)}
               <a href={`/people/${person.id}`} class="flex min-w-0 flex-1 items-center gap-3">
                 <Avatar name={person.name} src={person.avatarUrl} size="md" />
                 <span class="min-w-0 flex-1">
@@ -476,16 +676,14 @@
                 </span>
               </a>
               <StatusCell value={person.statusId} statuses={statuses} scope="person" onChange={(s) => setStatus(person.id, s)} onStatusesChange={(next) => (statuses = next)} />
+              <PriorityFlag value={(person.priority as Priority) ?? null} onChange={(p) => setPriority(person.id, p)} />
             </div>
             <!-- Desktop row (>= md) -->
             <div
               class="group relative hidden md:grid items-center gap-3 border-b border-[var(--color-border)] px-3 transition-colors last:border-b-0 {sel ? 'bg-[var(--color-highlight-bg)]' : 'hover:bg-[var(--color-row-hover)]'} {person.isArchived ? 'opacity-60' : ''}"
               style={ROW_GRID}
             >
-              <PriorityFlag
-                value={(person.priority as Priority) ?? null}
-                onChange={(p) => setPriority(person.id, p)}
-              />
+              {@render rowCheckbox(person.id)}
 
               <a href={`/people/${person.id}`} class="flex min-w-0 items-center gap-3">
                 <Avatar name={person.name} src={person.avatarUrl} size="md" />
@@ -559,6 +757,11 @@
                   revealOnHover
                 />
               </div>
+
+              <PriorityFlag
+                value={(person.priority as Priority) ?? null}
+                onChange={(p) => setPriority(person.id, p)}
+              />
             </div>
           </li>
         {/each}
@@ -588,7 +791,24 @@
   <p class="hidden sm:block text-[11px] text-[var(--color-subtle)]">
     Tip: <kbd class="rounded border border-[var(--color-border)] bg-[var(--color-surface)] px-1">j/k</kbd> navigate ·
     <kbd class="rounded border border-[var(--color-border)] bg-[var(--color-surface)] px-1">↵</kbd> open ·
+    <kbd class="rounded border border-[var(--color-border)] bg-[var(--color-surface)] px-1">x</kbd> select ·
     <kbd class="rounded border border-[var(--color-border)] bg-[var(--color-surface)] px-1">*</kbd> favorite ·
     <kbd class="rounded border border-[var(--color-border)] bg-[var(--color-surface)] px-1">#</kbd> archive
   </p>
 </div>
+
+<UrlImportDialog open={showImport} from="people" onclose={() => (showImport = false)} />
+
+<ActionBar count={selection.size} noun="person" plural="people" onclear={() => selection.clear()}>
+  <BulkActions
+    scope="person"
+    ids={selection.ids}
+    {statuses}
+    tags={data.allTags}
+    onPriority={bulkPriority}
+    onStatus={bulkStatus}
+    onTag={bulkTag}
+    onCollection={bulkCollection}
+    onDelete={bulkDelete}
+  />
+</ActionBar>

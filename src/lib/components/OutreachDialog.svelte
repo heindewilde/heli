@@ -3,7 +3,12 @@
   import MessageComposer from '$lib/components/MessageComposer.svelte';
   import Select from '$lib/ui/Select.svelte';
   import { toast } from '$lib/toasts.svelte';
-  import { PLATFORMS, isRichPlatform, type OutreachPlatform } from '$lib/outreach/platforms';
+  import {
+    PLATFORMS,
+    isRichPlatform,
+    type OutreachPlatform,
+    type OutreachTarget
+  } from '$lib/outreach/platforms';
   import { type LinkTarget } from '$lib/outreach/deepLink';
   import { logSend } from '$lib/outreach/logSend';
   import { renderFor, type Recipient, type Sender } from '$lib/outreach/render';
@@ -19,7 +24,15 @@
 
   type Props = {
     open: boolean;
-    person: Recipient & LinkTarget & { id: string };
+    /**
+     * The addressee, of either kind. One dialog serves both, and that is not a
+     * convenience: `MessageComposer` must keep exactly one consumer — a second
+     * component importing it is what produced the production-only hydration
+     * crash documented in CLAUDE.md. So there is no `CompanyOutreachDialog`.
+     */
+    recipient: Recipient & LinkTarget & { id: string };
+    /** Which templates to offer. Defaults to the recipient's own kind. */
+    target?: OutreachTarget;
     sender: Sender;
     /** Preselect a template — used when opening from a pipeline stage. */
     templateId?: string | null;
@@ -28,7 +41,19 @@
     onSent?: () => void;
   };
 
-  let { open, person, sender, templateId = null, onclose, onSent }: Props = $props();
+  let {
+    open,
+    recipient,
+    target = undefined,
+    sender,
+    templateId = null,
+    onclose,
+    onSent
+  }: Props = $props();
+
+  const kind = $derived<OutreachTarget>(
+    target ?? ('kind' in recipient && recipient.kind === 'company' ? 'company' : 'person')
+  );
 
   let templates = $state<Template[]>([]);
   let loading = $state(true);
@@ -56,7 +81,8 @@
   $effect(() => {
     if (!open) return;
     loading = true;
-    fetch('/api/outreach')
+    // `?target=` is what keeps a company template out of a person's composer.
+    fetch(`/api/outreach?target=${kind}`)
       .then((r) => (r.ok ? r.json() : { items: [] }))
       .then((j: { items: Template[] }) => {
         templates = j.items ?? [];
@@ -80,9 +106,9 @@
     // with. Merge values are escaped for that context; a plain platform must
     // not be, or a LinkedIn message ends up containing `&amp;`.
     const escapeHtml = isRichPlatform(t.platform);
-    const body = renderFor(t.body, person, sender, { escapeHtml });
+    const body = renderFor(t.body, recipient, sender, { escapeHtml });
     // The subject is plain text on every platform that has one.
-    const subject = t.subject ? renderFor(t.subject, person, sender) : null;
+    const subject = t.subject ? renderFor(t.subject, recipient, sender) : null;
     bodyDraft = body.text;
     subjectDraft = subject?.text ?? '';
     unresolved = [...new Set([...(subject?.unresolved ?? []), ...body.unresolved])];
@@ -98,7 +124,7 @@
     try {
       const result = await logSend({
         templateId: selected.id,
-        personId: person.id,
+        ...(kind === 'company' ? { companyId: recipient.id } : { personId: recipient.id }),
         subject: subjectDraft,
         body: bodyDraft,
         remindInDays: remindDays
@@ -122,12 +148,12 @@
 </script>
 
 {#if open}
-  <Dialog {open} {onclose} label="Outreach to {person.name}" panelClass="max-w-2xl">
+  <Dialog {open} {onclose} label="Outreach to {recipient.name}" panelClass="max-w-2xl">
     {#snippet children({ close })}
       <div class="flex flex-col gap-4 p-4">
         <header class="flex items-start justify-between gap-3">
           <div>
-            <h2 class="text-base font-semibold">Outreach to {person.name}</h2>
+            <h2 class="text-base font-semibold">Outreach to {recipient.name}</h2>
             <p class="mt-0.5 text-xs text-[var(--color-muted)]">
               Heli copies the message. You send it.
             </p>
@@ -140,8 +166,8 @@
           <p
             class="rounded-[var(--radius-md)] border border-dashed border-[var(--color-border)] p-6 text-center text-sm text-[var(--color-muted)]"
           >
-            No templates yet.
-            <a href="/outreach/new" class="underline">Write one</a>.
+            {kind === 'company' ? 'No company templates yet.' : 'No templates yet.'}
+            <a href={`/outreach/new?target=${kind}`} class="underline">Write one</a>.
           </p>
         {:else}
           <div class="flex flex-col gap-1">
@@ -167,7 +193,7 @@
         {#if selected}
           <MessageComposer
             platform={selected.platform}
-            {person}
+            person={recipient}
             subject={subjectDraft}
             body={bodyDraft}
             {unresolved}

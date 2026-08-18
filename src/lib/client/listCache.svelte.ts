@@ -25,9 +25,12 @@ export interface ListCache<T extends { id: string }> {
   readonly items: T[];
   hydrate(next: T[]): void;
   patch(id: string, updates: Partial<T>): () => void;
+  /** One array replacement for N rows — see the note on the implementation. */
+  patchMany(ids: string[], updates: Partial<T>): () => void;
   insert(item: T, position?: 'start' | 'end'): () => void;
   appendMany(extra: T[]): void;
   remove(id: string): () => void;
+  removeMany(ids: string[]): () => void;
 }
 
 export function createListCache<T extends { id: string }>(initial: T[]): ListCache<T> {
@@ -47,6 +50,23 @@ export function createListCache<T extends { id: string }>(initial: T[]): ListCac
       items = items.map((x) => (x.id === id ? { ...x, ...updates } : x));
       return () => {
         items = items.map((x) => (x.id === id ? prev : x));
+      };
+    },
+    /**
+     * The bulk sibling of `patch`.
+     *
+     * Not a loop over `patch`: every mutation here reassigns `items`, which
+     * re-runs every `$derived` and re-renders the table. Applying one bulk
+     * action to fifty ticked rows would do that fifty times, and the rollback
+     * would undo it fifty more.
+     */
+    patchMany(ids, updates) {
+      const wanted = new Set(ids);
+      const prev = new Map(items.filter((x) => wanted.has(x.id)).map((x) => [x.id, x]));
+      if (prev.size === 0) return () => {};
+      items = items.map((x) => (prev.has(x.id) ? { ...x, ...updates } : x));
+      return () => {
+        items = items.map((x) => prev.get(x.id) ?? x);
       };
     },
     insert(item, position = 'start') {
@@ -72,6 +92,21 @@ export function createListCache<T extends { id: string }>(initial: T[]): ListCac
         const before = items.slice(0, idx);
         const after = items.slice(idx);
         items = [...before, prev, ...after];
+      };
+    },
+    /**
+     * The bulk sibling of `remove`. Rollback restores the whole snapshot rather
+     * than re-inserting row by row: N removals from scattered indices cannot be
+     * undone by N independent index-based inserts, because each one shifts the
+     * next.
+     */
+    removeMany(ids) {
+      const wanted = new Set(ids);
+      if (!items.some((x) => wanted.has(x.id))) return () => {};
+      const snapshot = items;
+      items = items.filter((x) => !wanted.has(x.id));
+      return () => {
+        items = snapshot;
       };
     }
   };

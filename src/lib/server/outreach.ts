@@ -11,7 +11,14 @@ import {
   type OutreachVisibility
 } from './schema';
 import type { Scope } from './scope';
-import { isOutreachPlatform, isRichPlatform, PLATFORMS, type OutreachPlatform } from '$lib/outreach/platforms';
+import {
+  isOutreachPlatform,
+  isOutreachTarget,
+  isRichPlatform,
+  PLATFORMS,
+  type OutreachPlatform,
+  type OutreachTarget
+} from '$lib/outreach/platforms';
 
 /**
  * Every query that touches outreach templates lives here, and that is
@@ -28,6 +35,7 @@ export type OutreachTemplate = {
   id: string;
   name: string;
   platform: OutreachPlatform;
+  target: OutreachTarget;
   subject: string | null;
   body: string;
   visibility: OutreachVisibility;
@@ -55,6 +63,8 @@ function visibleTo(s: Scope) {
 export type ListFilters = {
   q?: string;
   platform?: OutreachPlatform;
+  /** Narrow to templates that address a person, or a company. */
+  target?: OutreachTarget;
   archived?: 'active' | 'archived' | 'all';
   limit?: number;
 };
@@ -66,6 +76,7 @@ function listConditions(s: Scope, filters: ListFilters) {
     conditions.push(eq(outreachTemplates.isArchived, archived === 'archived' ? 1 : 0));
   }
   if (filters.platform) conditions.push(eq(outreachTemplates.platform, filters.platform));
+  if (filters.target) conditions.push(eq(outreachTemplates.target, filters.target));
   if (filters.q?.trim()) {
     // The library is tens of rows, not thousands — a LIKE beats standing up a
     // sixth FTS index and its triggers for it.
@@ -90,10 +101,15 @@ export async function listTemplates(
 }
 
 /** Just enough of a template to name it in a menu. */
-export type TemplateSummary = { id: string; name: string; platform: string };
+export type TemplateSummary = {
+  id: string;
+  name: string;
+  platform: string;
+  target: OutreachTarget;
+};
 
 /**
- * The same query as `listTemplates` with a three-column projection.
+ * The same query as `listTemplates` with a four-column projection.
  *
  * This exists because the root layout runs it on **every authenticated request
  * in the app** to populate the command palette, and the unprojected version was
@@ -107,16 +123,21 @@ export async function listTemplateSummaries(
   s: Scope,
   filters: ListFilters = {}
 ): Promise<TemplateSummary[]> {
-  return db(s.region)
+  return (await db(s.region)
     .select({
       id: outreachTemplates.id,
       name: outreachTemplates.name,
-      platform: outreachTemplates.platform
+      platform: outreachTemplates.platform,
+      // Four columns rather than three. The palette has to be able to say
+      // whether a template writes to a person or a company, and one short
+      // string per row is a fair price next to the body this projection exists
+      // to leave behind.
+      target: outreachTemplates.target
     })
     .from(outreachTemplates)
     .where(listConditions(s, filters))
     .orderBy(asc(outreachTemplates.name))
-    .limit(Math.min(filters.limit ?? 200, 500));
+    .limit(Math.min(filters.limit ?? 200, 500))) as TemplateSummary[];
 }
 
 /**
@@ -145,6 +166,8 @@ export async function getTemplate(s: Scope, id: string): Promise<OutreachTemplat
 export type TemplateInput = {
   name: string;
   platform: string;
+  /** Defaults to `'person'`, which is what every template was before this existed. */
+  target?: string;
   subject?: string | null;
   body?: string | null;
   visibility?: string;
@@ -195,6 +218,7 @@ export async function createTemplate(s: Scope, input: TemplateInput): Promise<{ 
     userId: s.userId,
     name,
     platform: input.platform,
+    target: isOutreachTarget(input.target) ? input.target : 'person',
     subject,
     body,
     visibility: isVisibility(input.visibility) ? input.visibility : 'shared',
@@ -242,6 +266,10 @@ export async function updateTemplate(
   if (input.visibility !== undefined) {
     if (!isVisibility(input.visibility)) throw new Error('invalid_visibility');
     updates.visibility = input.visibility;
+  }
+  if (input.target !== undefined) {
+    if (!isOutreachTarget(input.target)) throw new Error('invalid_target');
+    updates.target = input.target;
   }
   if (input.nudgeDays !== undefined) updates.nudgeDays = shapeNudge(input.nudgeDays);
   if (input.isArchived !== undefined) updates.isArchived = input.isArchived ? 1 : 0;
@@ -296,7 +324,17 @@ export async function listStageTemplates(s: Scope, stageId: string): Promise<Out
  * renders every stage at once, and the cloud runs against remote libSQL where
  * the metric that matters is the round-trip count.
  */
-export type StageTemplate = { id: string; name: string; platform: OutreachPlatform };
+/**
+ * `target` is returned but never filtered on in SQL. A pipeline holds people
+ * *and* companies, so a stage can legitimately offer both kinds of template —
+ * the card decides which of them apply to the item it is rendering.
+ */
+export type StageTemplate = {
+  id: string;
+  name: string;
+  platform: OutreachPlatform;
+  target: OutreachTarget;
+};
 
 export async function stageTemplateMap(
   s: Scope,
@@ -307,7 +345,8 @@ export async function stageTemplateMap(
       stageId: pipelineStageTemplates.stageId,
       id: outreachTemplates.id,
       name: outreachTemplates.name,
-      platform: outreachTemplates.platform
+      platform: outreachTemplates.platform,
+      target: outreachTemplates.target
     })
     .from(pipelineStageTemplates)
     .innerJoin(pipelineStages, eq(pipelineStages.id, pipelineStageTemplates.stageId))
@@ -321,7 +360,8 @@ export async function stageTemplateMap(
     (out[r.stageId] ??= []).push({
       id: r.id,
       name: r.name,
-      platform: r.platform as OutreachPlatform
+      platform: r.platform as OutreachPlatform,
+      target: r.target as OutreachTarget
     });
   }
   return out;

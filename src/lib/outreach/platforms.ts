@@ -131,3 +131,23 @@ export function isOutreachPlatform(v: unknown): v is OutreachPlatform {
 export function isRichPlatform(platform: OutreachPlatform): boolean {
   return platform === 'email';
 }
+
+/**
+ * Who a template addresses.
+ *
+ * Lives here rather than in `schema.ts` because `render.ts` needs the type and
+ * cannot import drizzle — both modules are on the mobile shared list, where a
+ * relative import of another shared module is the only kind that resolves.
+ *
+ * The platform list is deliberately *not* narrowed by target. `deepLinkFor`
+ * already returns null where there is nothing to open, so a WhatsApp template
+ * addressed to a company without a phone number degrades to copy-and-paste
+ * rather than being forbidden — which is what a user pasting into a shared
+ * inbox actually wants.
+ */
+export const OUTREACH_TARGETS = ['person', 'company'] as const;
+export type OutreachTarget = (typeof OUTREACH_TARGETS)[number];
+
+export function isOutreachTarget(v: unknown): v is OutreachTarget {
+  return typeof v === 'string' && (OUTREACH_TARGETS as readonly string[]).includes(v);
+}

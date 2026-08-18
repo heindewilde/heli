@@ -5,7 +5,17 @@
   import { toast } from '$lib/toasts.svelte';
   import { PLATFORMS, type OutreachPlatform } from '$lib/outreach/platforms';
 
-  type Template = { id: string; name: string; platform: OutreachPlatform };
+  /**
+   * `target` is shown, never filtered on. A stage holds people *and* companies,
+   * so offering both kinds is correct — the card decides which of them apply to
+   * the item it renders.
+   */
+  type Template = {
+    id: string;
+    name: string;
+    platform: OutreachPlatform;
+    target: 'person' | 'company';
+  };
 
   type Props = {
     pipelineId: string;
@@ -133,6 +143,9 @@
                   {#if on}<Check size={10} strokeWidth={3} />{/if}
                 </span>
                 <span class="min-w-0 flex-1 truncate">{t.name}</span>
+                {#if t.target === 'company'}
+                  <span class="shrink-0 text-[10px] text-[var(--color-subtle)]">company</span>
+                {/if}
                 <span class="shrink-0 text-[10px] text-[var(--color-subtle)]"
                   >{PLATFORMS[t.platform].label}</span
                 >

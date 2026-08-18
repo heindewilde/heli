@@ -18,6 +18,7 @@ import { sanitize, truncateWords } from './sanitize';
 import { cacheRemoteImage } from './imageCache';
 import type { Scope } from './scope';
 import { bumpSearchEpoch } from './search';
+import { enqueueEnrichment } from './enrichQueue';
 
 export type SaveResult = { id: string; kind: 'person' | 'company'; dedup: boolean };
 
@@ -56,11 +57,38 @@ function fallbackName(u: URL): string {
 }
 
 /**
+ * The identity triple a person row derives from its URL, plus the placeholder
+ * name and the `parsing` marker that go with "we have a URL and nothing else".
+ *
+ * Exported because the bulk URL import cannot go through `savePerson` — 500
+ * rows at one dedupe-select plus one insert each is a thousand sequential round
+ * trips against remote libSQL — so it chunk-inserts instead. Deriving the same
+ * fields in two places is how `url`, `domain` and `handle` would quietly drift,
+ * and those three are what decide whether a later capture of the same profile
+ * deduplicates or creates a second person. One definition, two callers.
+ */
+export function derivePersonRow(u: URL): {
+  url: string;
+  domain: string;
+  handle: string | null;
+  name: string;
+  source: string;
+} {
+  return {
+    url: u.toString(),
+    domain: domainOf(u),
+    handle: deriveHandle(u),
+    name: fallbackName(u),
+    source: 'parsing'
+  };
+}
+
+/**
  * Hosts that serve a signed-out fetch a sign-up wall rather than the page.
  * `og.ts` keeps `AUTHWALL_PATTERNS` to *detect* one after the fact; this is the
  * cheaper front door — don't make the request at all when we already know.
  */
-function servesAuthwall(u: URL): boolean {
+export function servesAuthwall(u: URL): boolean {
   return /(^|\.)linkedin\.com$/.test(u.hostname.replace(/^www\./, ''));
 }
 
@@ -156,7 +184,7 @@ export async function savePerson(
       updatedAt: now
     });
     if (!enriched) {
-      void enrichPerson(id, s, u);
+      enqueueEnrichment(() => enrichPerson(id, s, u));
     } else if (!servesAuthwall(u)) {
       // Enrichment still runs when the extension supplied data — it adds the
       // favicon, the social links and the postal address that a profile DOM does
@@ -164,7 +192,7 @@ export async function savePerson(
       // `preserve`. Skipped entirely for hosts that serve *the server* an
       // authwall: there, everything it "finds" is sign-up chrome, and writing
       // that into the blank fields is worse than leaving them blank.
-      void enrichPerson(id, s, u, suppliedKeys(enriched));
+      enqueueEnrichment(() => enrichPerson(id, s, u, suppliedKeys(enriched)));
     }
     bumpSearchEpoch(s.workspaceId);
     return { id, kind: 'person', dedup: false };

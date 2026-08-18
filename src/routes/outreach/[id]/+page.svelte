@@ -7,7 +7,7 @@
   import { registerCommands } from '$lib/commands/registry.svelte';
   import { toast } from '$lib/toasts.svelte';
   import { readErrorCode } from '$lib/api-error';
-  import type { OutreachPlatform } from '$lib/outreach/platforms';
+  import type { OutreachPlatform, OutreachTarget } from '$lib/outreach/platforms';
 
   let { data } = $props();
   const template = $derived(data.template);
@@ -16,6 +16,8 @@
   let name = $state(data.template.name);
   // svelte-ignore state_referenced_locally
   let platform = $state<OutreachPlatform>(data.template.platform);
+  // svelte-ignore state_referenced_locally
+  let target = $state<OutreachTarget>(data.template.target);
   // svelte-ignore state_referenced_locally
   let subject = $state(data.template.subject ?? '');
   // svelte-ignore state_referenced_locally
@@ -31,12 +33,14 @@
   const ERRORS: Record<string, string> = {
     missing_name: 'Give the template a name.',
     invalid_platform: 'Pick a platform.',
+    invalid_target: 'Pick who this template addresses.',
     not_found: 'This template no longer exists.'
   };
 
   async function save(values: {
     name: string;
     platform: OutreachPlatform;
+    target: OutreachTarget;
     subject: string;
     body: string;
     visibility: 'shared' | 'private';
@@ -130,7 +134,8 @@
         </a>
       {/each}
       <span class="text-xs text-[var(--color-subtle)]"
-        >— step through everyone, one at a time.</span
+        >— step through {target === 'company' ? 'every company' : 'everyone'}, one at a
+        time.</span
       >
     </section>
   {/if}
@@ -138,11 +143,13 @@
   <TemplateEditor
     bind:name
     bind:platform
+    bind:target
     bind:subject
     bind:body
     bind:visibility
     bind:nudgeDays
     sample={data.sample}
+    companySample={data.companySample}
     sender={data.sender}
     {saving}
     {error}

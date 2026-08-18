@@ -2,7 +2,7 @@ import { and, desc, eq } from 'drizzle-orm';
 import { db } from './db';
 import { people, companies } from './schema';
 import type { Scope } from './scope';
-import type { Recipient } from '$lib/outreach/render';
+import type { CompanyRecipient, Recipient } from '$lib/outreach/render';
 
 /**
  * A real person to preview a template against.
@@ -27,4 +27,27 @@ export async function sampleRecipient(s: Scope): Promise<Recipient | null> {
     .limit(1)
     .get();
   return row ?? null;
+}
+
+/**
+ * The company arm. Loaded alongside `sampleRecipient` wherever the editor
+ * runs, because the target is editable and switching it must not need a round
+ * trip.
+ */
+export async function sampleCompanyRecipient(s: Scope): Promise<CompanyRecipient | null> {
+  const row = await db(s.region)
+    .select({
+      name: companies.name,
+      email: companies.email,
+      location: companies.location,
+      domain: companies.domain,
+      industry: companies.industry,
+      sizeBand: companies.sizeBand
+    })
+    .from(companies)
+    .where(and(eq(companies.workspaceId, s.workspaceId), eq(companies.isArchived, 0)))
+    .orderBy(desc(companies.updatedAt))
+    .limit(1)
+    .get();
+  return row ? { ...row, kind: 'company' } : null;
 }

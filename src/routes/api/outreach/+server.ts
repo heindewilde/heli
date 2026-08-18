@@ -2,7 +2,7 @@ import { error, json, type RequestHandler } from '@sveltejs/kit';
 import { requireScope } from '$lib/server/scope';
 import { jsonWithEtag } from '$lib/server/cache';
 import { createTemplate, listTemplates, type ListFilters } from '$lib/server/outreach';
-import { isOutreachPlatform } from '$lib/outreach/platforms';
+import { isOutreachPlatform, isOutreachTarget } from '$lib/outreach/platforms';
 
 function archivedFilter(v: string | null): ListFilters['archived'] {
   return v === 'archived' || v === 'all' ? v : 'active';
@@ -12,9 +12,13 @@ export const GET: RequestHandler = async ({ request, url, locals }) => {
   if (!locals.user) throw error(401, 'unauthorized');
   const s = requireScope(locals);
   const platform = url.searchParams.get('platform');
+  // `?target=` is what stops a company template appearing in a person's
+  // composer, and vice versa.
+  const target = url.searchParams.get('target');
   const items = await listTemplates(s, {
     q: url.searchParams.get('q') ?? undefined,
     platform: isOutreachPlatform(platform) ? platform : undefined,
+    target: isOutreachTarget(target) ? target : undefined,
     archived: archivedFilter(url.searchParams.get('archived'))
   });
   return jsonWithEtag(request, { items });

@@ -2,23 +2,35 @@
   import RichText from '$lib/ui/RichText.svelte';
   import Select from '$lib/ui/Select.svelte';
   import { htmlToPlain } from '$lib/richText';
+  import SegmentedControl from '$lib/ui/SegmentedControl.svelte';
   import {
     OUTREACH_PLATFORMS,
     PLATFORMS,
     isRichPlatform,
-    type OutreachPlatform
+    type OutreachPlatform,
+    type OutreachTarget
   } from '$lib/outreach/platforms';
-  import { VARIABLE_NAMES, renderFor, type Recipient, type Sender } from '$lib/outreach/render';
+  import {
+    variableNamesFor,
+    renderFor,
+    type CompanyRecipient,
+    type Recipient,
+    type Sender
+  } from '$lib/outreach/render';
 
   type Props = {
     name: string;
     platform: OutreachPlatform;
+    /** Who this template addresses. Switching it swaps the variable list. */
+    target: OutreachTarget;
     subject: string;
     body: string;
     visibility: 'shared' | 'private';
     nudgeDays: number | null;
     /** A real person from the workspace, so the preview shows real data. */
     sample: Recipient | null;
+    /** The same, for the company arm. Both are loaded because target is editable. */
+    companySample: CompanyRecipient | null;
     sender: Sender;
     saving?: boolean;
     submitLabel?: string;
@@ -26,6 +38,7 @@
     onSubmit: (values: {
       name: string;
       platform: OutreachPlatform;
+      target: OutreachTarget;
       subject: string;
       body: string;
       visibility: 'shared' | 'private';
@@ -37,11 +50,13 @@
   let {
     name = $bindable(),
     platform = $bindable(),
+    target = $bindable(),
     subject = $bindable(),
     body = $bindable(),
     visibility = $bindable(),
     nudgeDays = $bindable(),
     sample,
+    companySample,
     sender,
     saving = false,
     submitLabel = 'Save',
@@ -60,13 +75,27 @@
   const article = $derived('aeiou'.includes(spec.interactionType[0]) ? 'an' : 'a');
 
   /**
-   * The preview needs a person. A real one from the workspace beats a made-up
-   * "Jane Doe": it shows immediately whether the records you actually hold
-   * carry the fields the template asks for.
+   * The preview needs a recipient of the right kind. A real one from the
+   * workspace beats a made-up "Jane Doe": it shows immediately whether the
+   * records you actually hold carry the fields the template asks for.
+   *
+   * Both samples are loaded up front rather than fetched on switch, because
+   * the target control has to feel instant — and two rows is not a cost worth
+   * a round trip.
    */
   const previewPerson = $derived<Recipient>(
-    sample ?? { name: 'Ada Lovelace', role: 'Mathematician', companyName: 'Analytical Engines' }
+    target === 'company'
+      ? (companySample ?? {
+          kind: 'company',
+          name: 'Analytical Engines',
+          domain: 'analyticalengines.co',
+          industry: 'Manufacturing',
+          location: 'London'
+        })
+      : (sample ?? { name: 'Ada Lovelace', role: 'Mathematician', companyName: 'Analytical Engines' })
   );
+
+  const variables = $derived(variableNamesFor(target));
 
   const bodyPlain = $derived(rich ? htmlToPlain(body) : body);
   const rendered = $derived(renderFor(bodyPlain, previewPerson, sender));
@@ -113,6 +142,7 @@
     onSubmit({
       name,
       platform,
+      target,
       subject,
       body: rich ? (richRef?.getHtml() ?? body) : body,
       visibility,
@@ -160,6 +190,32 @@
         Logged as {article} {spec.interactionType} interaction.
       </span>
     </label>
+
+    <div class="flex flex-col gap-1">
+      <span class="text-xs font-medium uppercase tracking-wide text-[var(--color-subtle)]"
+        >Addressed to</span
+      >
+      <SegmentedControl
+        label="Addressed to"
+        size="sm"
+        segments={[
+          { value: 'person', label: 'A person' },
+          { value: 'company', label: 'A company' }
+        ]}
+        value={target}
+        onchange={(v) => (target = v as OutreachTarget)}
+      />
+      <span class="text-xs text-[var(--color-subtle)]">
+        {#if target === 'company'}
+          Writes to a company's own address. A company has no first name, so
+          <code class="font-mono">first_name</code> and
+          <code class="font-mono">role</code> are not available.
+        {:else}
+          Writes to a person. Run it against a collection, a pipeline stage, or a
+          selection on the People list.
+        {/if}
+      </span>
+    </div>
 
     {#if spec.hasSubject}
       <label class="flex flex-col gap-1">
@@ -222,7 +278,7 @@
         >Variables</span
       >
       <div class="flex flex-wrap gap-1">
-        {#each VARIABLE_NAMES as v (v)}
+        {#each variables as v (v)}
           <button
             type="button"
             onclick={() => insertVariable(v)}

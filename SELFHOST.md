@@ -48,6 +48,7 @@ Edit `/srv/heli/.env`, then `cd /srv/heli && docker compose up -d`. Knobs:
 | `ENABLE_REGISTRATION`  | Sign-ups close automatically once the first account exists. Set to `1` to reopen them. |
 | `DISABLE_REGISTRATION` | Hard kill switch for sign-ups. Wins over `ENABLE_REGISTRATION`.                    |
 | `SQLITE_CACHE_MB`      | SQLite page cache, MB. Default `16`.                                                |
+| `ENRICH_CONCURRENCY`   | Background link-enrichment fetches at once. Default `4`; drop to `2` on a 1 GB box.  |
 | `SQLITE_MMAP_MB`       | SQLite mmap window, MB. Default `64`.                                               |
 | `SCHEDULER_DISABLED`   | Set to `1` to stop the background calendar poller. See [Calendars](#calendars).    |
 | `EXTENSION_ORIGINS`    | *Extra* origins allowed to call `/api/v1` cross-origin. Only needed for an unpacked build. See [Browser extension](#browser-extension). |

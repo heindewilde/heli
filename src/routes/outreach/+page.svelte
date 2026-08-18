@@ -6,7 +6,7 @@
   import { goto, invalidateAll } from '$app/navigation';
   import { page } from '$app/state';
   import { onMount } from 'svelte';
-  import { Search, Plus, Lock, Archive, Trash2, Bell } from 'lucide-svelte';
+  import { Search, Plus, Lock, Archive, Trash2, Bell, Building2 } from 'lucide-svelte';
   import { registerCommands } from '$lib/commands/registry.svelte';
   import { toast } from '$lib/toasts.svelte';
   import { OUTREACH_PLATFORMS, PLATFORMS, type OutreachPlatform } from '$lib/outreach/platforms';
@@ -174,6 +174,18 @@
 
     <span class="mx-1 h-4 w-px bg-[var(--color-border)]"></span>
 
+    {#each [{ v: null, label: 'Anyone' }, { v: 'person', label: 'People' }, { v: 'company', label: 'Companies' }] as t (t.label)}
+      <a
+        href={buildUrl({ target: t.v })}
+        class="rounded-full border px-2.5 py-1 {data.target === t.v
+          ? 'border-[var(--color-highlight-border)] bg-[var(--color-highlight-bg)] text-[var(--color-text)]'
+          : 'border-[var(--color-border)] text-[var(--color-muted)] hover:bg-[var(--color-surface)]'}"
+        >{t.label}</a
+      >
+    {/each}
+
+    <span class="mx-1 h-4 w-px bg-[var(--color-border)]"></span>
+
     <a
       href={buildUrl({ platform: null })}
       class="rounded-full border px-2.5 py-1 {data.platform === null
@@ -201,6 +213,16 @@
     {:else if data.platform}
       <EmptyState icon={Send} title="Nothing for that platform" description={`No ${PLATFORMS[data.platform as OutreachPlatform].label} templates yet.`}>
         {#snippet actions()}<Button href="/outreach" variant="secondary">All platforms</Button>{/snippet}
+      </EmptyState>
+    {:else if data.target}
+      <EmptyState
+        icon={Send}
+        title={data.target === 'company' ? 'No company templates yet' : 'No person templates yet'}
+        description={data.target === 'company'
+          ? 'A company template writes to a company address — run it against a collection of companies, or a selection on the Companies list.'
+          : 'A person template writes to one person at a time.'}
+      >
+        {#snippet actions()}<Button href={`/outreach/new?target=${data.target}`} variant="primary" size="md">Write one</Button>{/snippet}
       </EmptyState>
     {:else if data.archived !== 'active'}
       <EmptyState icon={Send} title="Nothing here" description={`No ${data.archived} templates.`}>
@@ -230,6 +252,14 @@
                 <span class="truncate text-sm font-medium">{t.name}</span>
                 <span class="text-xs text-[var(--color-subtle)]">{PLATFORMS[t.platform].label}</span
                 >
+                {#if t.target === 'company'}
+                  <span
+                    title="Addresses a company, not a person"
+                    class="inline-flex items-center gap-1 rounded-full border border-[var(--color-border)] px-1.5 py-0.5 text-[10px] text-[var(--color-muted)]"
+                  >
+                    <Building2 size={10} strokeWidth={2} /> Company
+                  </span>
+                {/if}
                 {#if t.visibility === 'private'}
                   <span
                     title="Only you can see this"

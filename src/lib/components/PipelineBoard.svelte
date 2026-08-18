@@ -12,7 +12,7 @@
     pipeline: PipelineDetail;
     onRemoveItem?: (itemId: string) => void;
     /** Outreach templates offered per stage, keyed by stage id. */
-    stageTemplates?: Record<string, { id: string; name: string }[]>;
+    stageTemplates?: Record<string, { id: string; name: string; target: 'person' | 'company' }[]>;
   };
 
   let { pipeline, onRemoveItem, stageTemplates = {} }: Props = $props();

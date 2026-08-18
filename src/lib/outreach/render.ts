@@ -8,16 +8,44 @@
  * The server side exists so tests can pin the behaviour without a DOM.
  */
 
+import type { OutreachTarget } from './platforms';
+
 /** `{{ first_name }}` — whitespace inside the braces is tolerated. */
 const TOKEN = /\{\{\s*([a-z_][a-z0-9_]*)\s*\}\}/gi;
 
-export type Recipient = {
+/**
+ * A person recipient. `kind` is optional here and *required* on the company
+ * arm, and that asymmetry is load-bearing: it is what lets every existing call
+ * site — the dialog, the run screen, the samples, `outreach-recipients.ts` —
+ * keep passing a bare object and still narrow to this arm. Do not "tidy" it by
+ * making `kind` required on both.
+ */
+export type PersonRecipient = {
+  kind?: 'person';
   name: string;
   role?: string | null;
   email?: string | null;
   location?: string | null;
   companyName?: string | null;
 };
+
+/**
+ * A company recipient. `name` is the company's name, and `company_name`
+ * resolves to it too, so a template can address the reader as "the {{ role }}
+ * at {{ company_name }}" or just write to {{ full_name }} — except that
+ * `full_name` deliberately does not exist here. See `buildVariables`.
+ */
+export type CompanyRecipient = {
+  kind: 'company';
+  name: string;
+  email?: string | null;
+  location?: string | null;
+  domain?: string | null;
+  industry?: string | null;
+  sizeBand?: string | null;
+};
+
+export type Recipient = PersonRecipient | CompanyRecipient;
 
 export type Sender = {
   name: string;
@@ -51,26 +79,57 @@ function lastName(name: string): string {
 }
 
 export function buildVariables(to: Recipient, from: Sender): Record<string, string> {
-  return {
-    first_name: firstName(to.name),
-    last_name: lastName(to.name),
-    full_name: to.name.trim(),
-    role: to.role ?? '',
+  const shared = {
     email: to.email ?? '',
     location: to.location ?? '',
-    company_name: to.companyName ?? '',
     // Sender fields are what let one shared template sign itself correctly for
     // whoever is actually sending it.
     my_first_name: firstName(from.name),
     my_name: from.name.trim(),
     my_email: from.email
   };
+
+  if (to.kind === 'company') {
+    return {
+      ...shared,
+      company_name: to.name.trim(),
+      domain: to.domain ?? '',
+      industry: to.industry ?? '',
+      size_band: to.sizeBand ?? ''
+    };
+    // No `first_name`, `last_name`, `full_name` or `role`, and that omission is
+    // the feature: a company has none of them, so `{{ first_name }}` left in a
+    // template that was switched to a company target lands in `unresolved` and
+    // raises the warning strip. Resolving it to the company's name instead
+    // would produce "Hi Acme," and no warning at all.
+  }
+
+  return {
+    ...shared,
+    first_name: firstName(to.name),
+    last_name: lastName(to.name),
+    full_name: to.name.trim(),
+    role: to.role ?? '',
+    company_name: to.companyName ?? ''
+  };
 }
 
-/** Every variable a template may reference, for the editor's helper list. */
-export const VARIABLE_NAMES = Object.keys(
+/**
+ * The editor's helper lists, still *derived* from `buildVariables` rather than
+ * hand-kept — so a variable added above cannot fail to appear in the editor,
+ * and one removed cannot linger there.
+ */
+export const PERSON_VARIABLES = Object.keys(
   buildVariables({ name: '' }, { name: '', email: '' })
 ) as readonly string[];
+
+export const COMPANY_VARIABLES = Object.keys(
+  buildVariables({ kind: 'company', name: '' }, { name: '', email: '' })
+) as readonly string[];
+
+export function variableNamesFor(target: OutreachTarget): readonly string[] {
+  return target === 'company' ? COMPANY_VARIABLES : PERSON_VARIABLES;
+}
 
 export type RenderOptions = {
   /**

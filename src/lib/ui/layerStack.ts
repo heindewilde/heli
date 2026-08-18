@@ -77,7 +77,15 @@ export function pushLayer(layer: Omit<Layer, 'id'>): LayerHandle {
   };
 }
 
-/** Exposed for tests and for debugging a stuck overlay. */
+/**
+ * Open overlays, top of the stack last.
+ *
+ * Exposed for tests, for debugging a stuck overlay, and — the reason it is no
+ * longer only a debug seam — so a global Escape *command* can stand down while
+ * a layer is open. The command registry is a second window listener and does
+ * not know about this stack, so without the guard one Escape would both close
+ * the popover you opened and clear the selection underneath it.
+ */
 export function layerDepth(): number {
   return stack.length;
 }

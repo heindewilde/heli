@@ -2,7 +2,7 @@ import type { RequestHandler } from './$types';
 import { requireApiScope } from '$lib/server/scope';
 import { apiError, apiOk } from '$lib/server/api-v1';
 import { createTemplate, listTemplates } from '$lib/server/outreach';
-import { isOutreachPlatform } from '$lib/outreach/platforms';
+import { isOutreachPlatform, isOutreachTarget } from '$lib/outreach/platforms';
 import { idempotencyKeyFrom, withIdempotency } from '$lib/server/idempotency';
 
 /**
@@ -30,10 +30,12 @@ export const GET: RequestHandler = async ({ url, locals }) => {
   const s = requireApiScope(locals, 'read');
   const archived = url.searchParams.get('archived') ?? 'active';
   const platform = url.searchParams.get('platform');
+  const target = url.searchParams.get('target');
   return apiOk(
     await listTemplates(s, {
       q: url.searchParams.get('q') ?? undefined,
       platform: (platform && isOutreachPlatform(platform) ? platform : undefined) as never,
+      target: (target && isOutreachTarget(target) ? target : undefined) as never,
       archived: ((ARCHIVED as readonly string[]).includes(archived) ? archived : 'active') as never,
       limit: Math.min(Number(url.searchParams.get('limit')) || 100, 200)
     })

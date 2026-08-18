@@ -1,5 +1,12 @@
 import { describe, expect, test } from 'vitest';
-import { buildVariables, renderFor, renderTemplate, VARIABLE_NAMES } from '../src/lib/outreach/render';
+import {
+  buildVariables,
+  renderFor,
+  renderTemplate,
+  variableNamesFor,
+  COMPANY_VARIABLES,
+  PERSON_VARIABLES
+} from '../src/lib/outreach/render';
 import { OUTREACH_PLATFORMS, PLATFORMS } from '../src/lib/outreach/platforms';
 import { INTERACTION_TYPES } from '../src/lib/interactionTypes';
 
@@ -143,8 +150,8 @@ describe('buildVariables', () => {
     expect(v.last_name).toBe('Lovelace');
   });
 
-  test('VARIABLE_NAMES is the full documented set', () => {
-    expect([...VARIABLE_NAMES].sort()).toEqual(
+  test('PERSON_VARIABLES is the full documented set', () => {
+    expect([...PERSON_VARIABLES].sort()).toEqual(
       [
         'company_name',
         'email',
@@ -158,6 +165,82 @@ describe('buildVariables', () => {
         'role'
       ].sort()
     );
+  });
+});
+
+/**
+ * The company arm. These pin two things that are easy to get wrong: that the
+ * helper lists stay *derived* from `buildVariables` rather than hand-kept, and
+ * that a person-only token in a company template is reported rather than
+ * quietly resolved to something plausible.
+ */
+describe('buildVariables — company target', () => {
+  const me = { name: 'Grace Hopper', email: 'grace@navy.mil' };
+  const acme = {
+    kind: 'company' as const,
+    name: 'Acme Corp',
+    email: 'hello@acme.com',
+    location: 'Rotterdam',
+    domain: 'acme.com',
+    industry: 'Manufacturing',
+    sizeBand: '51-200'
+  };
+
+  test('company fields resolve', () => {
+    const v = buildVariables(acme, me);
+    expect(v.company_name).toBe('Acme Corp');
+    expect(v.domain).toBe('acme.com');
+    expect(v.industry).toBe('Manufacturing');
+    expect(v.size_band).toBe('51-200');
+    expect(v.email).toBe('hello@acme.com');
+    expect(v.location).toBe('Rotterdam');
+  });
+
+  test('sender fields resolve on both arms', () => {
+    expect(buildVariables(acme, me).my_first_name).toBe('Grace');
+  });
+
+  test('COMPANY_VARIABLES is the full documented set', () => {
+    expect([...COMPANY_VARIABLES].sort()).toEqual(
+      [
+        'company_name',
+        'domain',
+        'email',
+        'industry',
+        'location',
+        'my_email',
+        'my_first_name',
+        'my_name',
+        'size_band'
+      ].sort()
+    );
+  });
+
+  /**
+   * The omission is the point: resolving `{{ first_name }}` to the company's
+   * name would produce "Hi Acme Corp," with no warning at all.
+   */
+  test('person-only tokens are unresolved in a company template', () => {
+    const r = renderFor('Hi {{ first_name }}, about {{ role }}…', acme, me);
+    expect(r.unresolved).toEqual(['first_name', 'role']);
+    expect(r.text).toContain('{{ first_name }}');
+  });
+
+  test('company-only tokens are unresolved in a person template', () => {
+    const r = renderFor('Saw {{ domain }} and {{ industry }}', { name: 'Ada Lovelace' }, me);
+    expect(r.unresolved).toEqual(['domain', 'industry']);
+  });
+
+  test('variableNamesFor picks the right list', () => {
+    expect(variableNamesFor('person')).toBe(PERSON_VARIABLES);
+    expect(variableNamesFor('company')).toBe(COMPANY_VARIABLES);
+  });
+
+  test('escapeHtml still applies on the company arm', () => {
+    const r = renderFor('{{ company_name }}', { ...acme, name: 'Procter & Gamble' }, me, {
+      escapeHtml: true
+    });
+    expect(r.text).toBe('Procter &amp; Gamble');
   });
 });
 

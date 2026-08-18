@@ -13,6 +13,13 @@
   const template = $derived(data.template);
   const spec = $derived(PLATFORMS[template.platform]);
   const rich = $derived(isRichPlatform(template.platform));
+  /**
+   * A company member carries the same `email`/`phone`/`linkedinUrl`/`xUrl`
+   * field names a person does, so `deepLinkFor` and the composer below need no
+   * branch. The only places the kind shows are the header link and the
+   * mark-as-sent payload.
+   */
+  const toCompany = $derived(template.target === 'company');
 
   let index = $state(0);
   /** Ids already logged, so a back-step shows what happened rather than hiding it. */
@@ -20,8 +27,8 @@
   let copied = $state(false);
   let sending = $state(false);
 
-  const person = $derived(data.people[index] ?? null);
-  const done = $derived(index >= data.people.length);
+  const person = $derived(data.members[index] ?? null);
+  const done = $derived(index >= data.members.length);
 
   /**
    * Every message is rendered up front, on load, not when you reach it.
@@ -31,7 +38,7 @@
    * clipboard write on exactly the platform people compose email on.
    */
   const rendered = $derived(
-    data.people.map((p) => {
+    data.members.map((p) => {
       // An email body stays HTML end to end, with merge values escaped for
       // that context; every other platform is plain and must not be escaped.
       const body = renderFor(template.body, p, data.sender, { escapeHtml: rich });
@@ -61,6 +68,20 @@
     edits[person.id] = { ...current, [field]: value };
   }
 
+  /** The line under the name: role and employer, or industry and location. */
+  const subtitle = $derived(
+    person == null
+      ? ''
+      : 'kind' in person && person.kind === 'company'
+        ? [person.industry, person.location].filter(Boolean).join(' · ')
+        : [
+            (person as { role?: string | null }).role,
+            (person as { companyName?: string | null }).companyName
+          ]
+            .filter(Boolean)
+            .join(' · ')
+  );
+
   /** Plain flavour: the clipboard's text/plain, the mailto body, the counter. */
   const bodyPlain = $derived(rich ? htmlToPlain(current.body) : current.body);
 
@@ -72,7 +93,7 @@
 
   function next() {
     copied = false;
-    index = Math.min(index + 1, data.people.length);
+    index = Math.min(index + 1, data.members.length);
   }
 
   function prev() {
@@ -100,7 +121,9 @@
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({
           templateId: template.id,
-          personId: person.id,
+          // Exactly one of these; the endpoint rejects both and neither, and
+          // rejects the one that disagrees with the template's target.
+          ...(toCompany ? { companyId: person.id } : { personId: person.id }),
           subject: current.subject,
           body: current.body,
           remindInDays: template.nudgeDays
@@ -136,17 +159,22 @@
     <div class="min-w-0 flex-1">
       <h1 class="truncate text-lg font-semibold tracking-tight">{template.name}</h1>
       <p class="text-xs text-[var(--color-muted)]">
-        {data.sourceName} · {sentIds.length} of {data.people.length} logged
+        {data.sourceName} · {sentIds.length} of {data.members.length} logged
       </p>
     </div>
   </header>
 
-  {#if data.people.length === 0}
+  {#if data.members.length === 0}
     <p
       class="rounded-[var(--radius-md)] border border-dashed border-[var(--color-border)] p-10 text-center text-sm text-[var(--color-muted)]"
     >
-      No people in {data.sourceName}. Templates address a person, so companies in a collection are
-      skipped.
+      {#if toCompany}
+        No companies in {data.sourceName}. This template addresses a company, so people there are
+        skipped.
+      {:else}
+        No people in {data.sourceName}. This template addresses a person, so companies there are
+        skipped.
+      {/if}
     </p>
   {:else if done}
     <div
@@ -154,7 +182,7 @@
     >
       <p class="text-sm font-medium">Finished {data.sourceName}.</p>
       <p class="mt-1 text-sm text-[var(--color-muted)]">
-        {sentIds.length} of {data.people.length} logged.
+        {sentIds.length} of {data.members.length} logged.
       </p>
       <a
         href="/outreach"
@@ -164,7 +192,7 @@
     </div>
   {:else if person}
     <div class="flex items-center justify-between text-xs text-[var(--color-muted)]">
-      <span>{index + 1} of {data.people.length}</span>
+      <span>{index + 1} of {data.members.length}</span>
       {#if sentIds.includes(person.id)}
         <span class="inline-flex items-center gap-1 text-[var(--color-success)]">
           <Check size={12} strokeWidth={2} /> Already logged
@@ -176,13 +204,12 @@
       class="flex flex-col gap-3 rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)] p-4"
     >
       <div>
-        <a href={`/people/${person.id}`} class="text-base font-semibold hover:underline"
-          >{person.name}</a
+        <a
+          href={toCompany ? `/companies/${person.id}` : `/people/${person.id}`}
+          class="text-base font-semibold hover:underline">{person.name}</a
         >
-        {#if person.role || person.companyName}
-          <p class="text-xs text-[var(--color-muted)]">
-            {[person.role, person.companyName].filter(Boolean).join(' · ')}
-          </p>
+        {#if subtitle}
+          <p class="text-xs text-[var(--color-muted)]">{subtitle}</p>
         {/if}
       </div>
 

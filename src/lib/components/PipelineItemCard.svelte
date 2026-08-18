@@ -16,7 +16,7 @@
      * Templates this card's stage offers. Rendered as direct actions — the
      * whole point of attaching them to a stage.
      */
-    templates?: { id: string; name: string }[];
+    templates?: { id: string; name: string; target: 'person' | 'company' }[];
   };
 
   let {
@@ -31,13 +31,19 @@
   }: Props = $props();
 
   /**
-   * Templates address a person, so a company card has nothing to offer.
-   * The link opens the person's page with the composer already on that
+   * A stage can hold people and companies, and can offer templates for both,
+   * so a card shows only the ones addressed to its own kind. This used to be
+   * `item.kind === 'person' ? … : []` — a company card had nothing to offer
+   * because no template could address a company.
+   *
+   * The link still opens the record's own page with the composer on that
    * template: the dialog needs an email, a LinkedIn URL and a company name,
-   * none of which the board query carries — and the person's page is where you
+   * none of which the board query carries — and the record's page is where you
    * want to be before writing to them anyway.
    */
-  const cardTemplates = $derived(item.kind === 'person' ? templates.slice(0, 3) : []);
+  const cardTemplates = $derived(
+    templates.filter((t) => t.target === item.kind).slice(0, 3)
+  );
 
   const href = $derived(
     item.kind === 'person' ? `/people/${item.refId}` : `/companies/${item.refId}`

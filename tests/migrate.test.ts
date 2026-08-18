@@ -92,6 +92,25 @@ test('migrate stays idempotent: schema is unchanged after a re-run', async () =>
   expect(after.rows.map((r) => String(r.name))).toEqual(names);
 });
 
+/**
+ * The three columns company outreach turns on. `target` is the one worth
+ * asserting: a `NOT NULL DEFAULT` on `ADD COLUMN` is what makes every template
+ * written before it a person template as a database fact, rather than as a
+ * coercion each read has to remember.
+ */
+test('the outreach columns exist, and target defaults to person', async () => {
+  const companyCols = await ctx.client.execute(`PRAGMA table_info(companies)`);
+  const names = companyCols.rows.map((r) => String(r.name));
+  expect(names).toContain('email');
+  expect(names).toContain('phone');
+
+  const templateCols = await ctx.client.execute(`PRAGMA table_info(outreach_templates)`);
+  const target = templateCols.rows.find((r) => String(r.name) === 'target');
+  expect(target).toBeTruthy();
+  expect(Number(target!.notnull)).toBe(1);
+  expect(String(target!.dflt_value)).toContain('person');
+});
+
 test('foreign keys are enforced (the :memory: trap)', async () => {
   const fk = await ctx.client.execute('PRAGMA foreign_keys');
   expect(Number(fk.rows[0]?.foreign_keys)).toBe(1);

@@ -11,7 +11,9 @@
  */
 export type LogSendInput = {
   templateId: string;
-  personId: string;
+  /** Exactly one of these. The endpoint rejects both and neither. */
+  personId?: string;
+  companyId?: string;
   subject: string;
   body: string;
   remindInDays: number | null;
