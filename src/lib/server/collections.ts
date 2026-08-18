@@ -1,4 +1,5 @@
 import { and, asc, desc, eq, inArray, sql } from 'drizzle-orm';
+import { alias } from 'drizzle-orm/sqlite-core';
 import { createId } from '@paralleldrive/cuid2';
 import { db } from './db';
 import {
@@ -10,6 +11,7 @@ import {
   type MemberKind
 } from './schema';
 import { ftsQuery } from './search';
+import { getTagsForEntities, type EntityTag } from './tags';
 import { sanitize, sanitizePlainText } from './sanitize';
 import type { Scope } from './scope';
 
@@ -105,14 +107,53 @@ export type CollectionMember = {
   domain?: string | null;
 };
 
+/**
+ * A member plus the decoration the collection detail page's cards render.
+ *
+ * Deliberately a separate type from `CollectionMember`, because that one is the
+ * response body of `GET /api/v1/collections/[id]` and `POST /[id]/items` —
+ * anything added to it ships to every API consumer forever. The company columns
+ * and the tags are page furniture, not part of the collection resource.
+ */
+export type CollectionMemberDetail = CollectionMember & {
+  // Person fields, from the LEFT JOIN onto the person's company. Only what the
+  // page actually renders: the card's subtitle is `role · companyName`, and the
+  // id is what a link would need. The company's logo and domain are deliberately
+  // not carried — nothing draws them, and this array is one row per member.
+  companyId?: string | null;
+  companyName?: string | null;
+  tags: EntityTag[];
+};
+
 export type CollectionDetail = Collection & {
   members: CollectionMember[];
 };
 
-export async function getCollection(
+export type CollectionDetailRich = Collection & {
+  members: CollectionMemberDetail[];
+};
+
+/**
+ * The one implementation behind `getCollection` and `getCollectionDetail`.
+ *
+ * Three waves, and it stays three in both modes: the collection row, then the
+ * membership rows, then a single `Promise.all` that hydrates people, companies
+ * *and* both tag maps. The tags need ids that only exist after wave two, so
+ * fetching them from the page load instead would make it four sequential round
+ * trips — which against remote libSQL is the whole cost of this page.
+ *
+ * The company LEFT JOIN runs in both modes; one join on an indexed FK is free
+ * and it keeps a single query builder here rather than two that must be kept in
+ * step. What `detail` gates is only whether those columns and the tags are
+ * *projected onto the member object*, so the v1 body is byte-identical to what
+ * it was before the join existed. `tests/collections-detail.test.ts` pins that
+ * key set, because it crosses the wire as `unknown` and no type checker sees it.
+ */
+async function loadCollection(
   s: Scope,
-  id: string
-): Promise<CollectionDetail | null> {
+  id: string,
+  opts: { detail: boolean }
+): Promise<{ collection: Collection; members: CollectionMemberDetail[] } | null> {
   const d = db(s.region);
   const collection = await d
     .select()
@@ -134,18 +175,28 @@ export async function getCollection(
   const personIds = items.filter((i) => i.kind === 'person').map((i) => i.refId);
   const companyIds = items.filter((i) => i.kind === 'company').map((i) => i.refId);
 
-  const [peopleRows, companyRows] = await Promise.all([
+  // `companies` is already the table of the sibling select below, so the join
+  // needs an alias — same shape as `LEFT JOIN companies co` in people-rows.ts.
+  const co = alias(companies, 'co');
+
+  const [peopleRows, companyRows, personTagMap, companyTagMap] = await Promise.all([
     personIds.length > 0
       ? d
           .select({
             id: people.id,
             name: people.name,
             role: people.role,
-            avatarUrl: people.avatarUrl
+            avatarUrl: people.avatarUrl,
+            companyId: people.companyId,
+            companyName: co.name
           })
           .from(people)
+          // LEFT, never inner: an inner join drops every person with no company
+          // and silently empties the page. The workspace predicate lives on the
+          // join condition so the join is tenant-scoped on its own terms.
+          .leftJoin(co, and(eq(co.id, people.companyId), eq(co.workspaceId, s.workspaceId)))
           .where(and(eq(people.workspaceId, s.workspaceId), inArray(people.id, personIds)))
-      : Promise.resolve([] as { id: string; name: string; role: string | null; avatarUrl: string | null }[]),
+      : Promise.resolve([] as PersonHydration[]),
     companyIds.length > 0
       ? d
           .select({
@@ -157,13 +208,21 @@ export async function getCollection(
           })
           .from(companies)
           .where(and(eq(companies.workspaceId, s.workspaceId), inArray(companies.id, companyIds)))
-      : Promise.resolve([] as { id: string; name: string; logoUrl: string | null; faviconUrl: string | null; domain: string | null }[])
+      : Promise.resolve([] as CompanyHydration[]),
+    // `getTagsForEntities` short-circuits on an empty array, so an all-people
+    // collection never issues the company-tag query.
+    opts.detail
+      ? getTagsForEntities(s, 'person', personIds)
+      : Promise.resolve(new Map<string, EntityTag[]>()),
+    opts.detail
+      ? getTagsForEntities(s, 'company', companyIds)
+      : Promise.resolve(new Map<string, EntityTag[]>())
   ]);
 
   const peopleMap = new Map(peopleRows.map((p) => [p.id, p]));
   const companyMap = new Map(companyRows.map((c) => [c.id, c]));
 
-  const members: CollectionMember[] = [];
+  const members: CollectionMemberDetail[] = [];
   for (const item of items) {
     if (item.kind === 'person') {
       const p = peopleMap.get(item.refId);
@@ -174,8 +233,15 @@ export async function getCollection(
         name: p.name,
         addedAt: item.addedAt,
         role: p.role,
-        avatarUrl: p.avatarUrl
-      });
+        avatarUrl: p.avatarUrl,
+        ...(opts.detail
+          ? {
+              companyId: p.companyId,
+              companyName: p.companyName,
+              tags: personTagMap.get(p.id) ?? []
+            }
+          : {})
+      } as CollectionMemberDetail);
     } else if (item.kind === 'company') {
       const c = companyMap.get(item.refId);
       if (!c) continue;
@@ -186,12 +252,45 @@ export async function getCollection(
         addedAt: item.addedAt,
         logoUrl: c.logoUrl,
         faviconUrl: c.faviconUrl,
-        domain: c.domain
-      });
+        domain: c.domain,
+        ...(opts.detail ? { tags: companyTagMap.get(c.id) ?? [] } : {})
+      } as CollectionMemberDetail);
     }
   }
 
-  return { ...collection, members };
+  return { collection, members };
+}
+
+type PersonHydration = {
+  id: string;
+  name: string;
+  role: string | null;
+  avatarUrl: string | null;
+  companyId: string | null;
+  companyName: string | null;
+};
+
+type CompanyHydration = {
+  id: string;
+  name: string;
+  logoUrl: string | null;
+  faviconUrl: string | null;
+  domain: string | null;
+};
+
+/** Membership only — this is the public `/api/v1` body. */
+export async function getCollection(s: Scope, id: string): Promise<CollectionDetail | null> {
+  const loaded = await loadCollection(s, id, { detail: false });
+  return loaded && { ...loaded.collection, members: loaded.members };
+}
+
+/** Membership plus each member's company and tags. For the detail page only. */
+export async function getCollectionDetail(
+  s: Scope,
+  id: string
+): Promise<CollectionDetailRich | null> {
+  const loaded = await loadCollection(s, id, { detail: true });
+  return loaded && { ...loaded.collection, members: loaded.members };
 }
 
 export type ManualCollectionInput = {

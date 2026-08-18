@@ -917,6 +917,67 @@ send API anyway. Don't "finish" it by adding sending.
     pipeline holds people *and* companies, so a stage may legitimately offer
     both; `PipelineItemCard` filters to its own item's kind.
 
+## Collections
+
+A collection is an ad-hoc grouping of people *and* companies. Its detail page is
+an overview: a kind filter, a list/card density toggle, client-side search and
+sort.
+
+- **`getCollection` and `getCollectionDetail` share one implementation and must
+  not be merged.** `CollectionDetail` is the response body of
+  `GET /api/v1/collections/[id]` and `POST /[id]/items`, so anything added to
+  `CollectionMember` ships to every API consumer forever. The page needs each
+  person's company name and each member's tags; those live on
+  `CollectionMemberDetail`, which the API never returns.
+  `tests/collections-detail.test.ts` asserts the exact key set of both, because
+  the body crosses the wire as `unknown` and no type checker can see the leak.
+- **The tags ride in wave three, not in the page load.** `loadCollection` is
+  three round trips — collection, items, then people ‖ companies ‖ person tags ‖
+  company tags. Calling `getTagsForEntities` from `+page.server.ts` instead
+  would make it four, because the tag queries need ids that only exist after
+  wave two.
+- **The company join is LEFT and its `workspace_id` predicate lives on the join
+  condition.** An inner join silently drops every person with no company, which
+  empties the page; the predicate is what makes the join tenant-safe on its own
+  terms rather than by inheritance.
+- **Never read `kind` in `collections/[id]/+page.server.ts`.** SvelteKit tracks
+  search-param dependencies per key, so a load that touches only `just` is not
+  re-run when `?kind=` changes — which is the whole reason the filter is
+  instant. Reading `kind` there costs a server round trip per segment click and
+  breaks nothing visible, so only `e2e/collection-detail.spec.ts` catches it: it
+  types into the search box and asserts the text survives a segment click.
+- **The list/cards preference is `localStorage`, read in `onMount` — never at
+  init.** The server cannot know the stored value, so a first client render that
+  picks a different branch than the SSR'd HTML is a hydration mismatch (the same
+  hazard that keeps `Select.svelte` from detecting the pointer type at mount).
+  SSR always renders `list`. `src/lib/client/viewPref.ts` says so in its
+  docblock; it is under `$lib/client` and `check-overlays.ts` rule D will fail
+  the build if a server file imports it.
+- **Cards in the grid are uniform by reserving boxes, not by pinning a height.**
+  A grid where a five-tag person is taller than an untagged company reads as two
+  components rather than one collection. So `CollectionMemberCard` keeps the
+  subtitle line's box when a member has no role or domain, keeps the tag row's
+  box only when `reserveTags` says *something* in this collection is tagged, and
+  caps the tags at three plus a `+N`. A hard `h-[…]` is the obvious alternative
+  and leaves dead space under every card in the common untagged case.
+- **Adding is one `Add` button over a `Popover`, not two open pickers.** The
+  pickers used to sit inline above the members: a full row of empty comboboxes
+  that made the page read as a form with a list under it. The panel follows the
+  kind filter, so `?kind=people` offers no company picker.
+- **The page is one column.** The old `<aside>` held a paragraph explaining what
+  a collection is — chrome that cost the members a third of the width on every
+  visit. The pipeline-sync card is a full-width banner under the header now,
+  matching `pipelines/[id]`.
+- **Its tag chips are inert `Badge` spans, not the `<a href="?tag=">` the list
+  pages use.** The card root is already an anchor; a nested one is invalid HTML
+  and would steal the click.
+- **`{#each}` over members needs a compound key** — `` `${m.kind}:${m.id}` ``.
+  People and companies share one list and their ids come from two tables.
+- **`collection_items` has no position column.** The only ordering signal is
+  `addedAt`, which the query returns DESC; bulk-added members share one
+  millisecond, so their relative order is rowid. Drag-to-reorder would need a
+  migration.
+
 ## Bulk selection and bulk actions
 
 `/people` and `/companies` support multi-select. Column 1 is the checkbox and

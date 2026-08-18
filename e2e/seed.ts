@@ -13,7 +13,7 @@ import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-export type Seeded = { dbPath: string; sessionId: string };
+export type Seeded = { dbPath: string; sessionId: string; collectionId: string };
 
 export async function seed(): Promise<Seeded> {
   const dir = mkdtempSync(join(tmpdir(), 'heli-e2e-'));
@@ -30,6 +30,8 @@ export async function seed(): Promise<Seeded> {
   const { savePerson } = await import('../src/lib/server/savePerson');
   const { saveCompany } = await import('../src/lib/server/saveCompany');
   const { createTemplate } = await import('../src/lib/server/outreach');
+  const { createCollection, addToCollection } = await import('../src/lib/server/collections');
+  const { ensureTag, attachTag } = await import('../src/lib/server/tags');
 
   const { user, sessionId } = await register({
     email: 'e2e@example.com',
@@ -40,6 +42,9 @@ export async function seed(): Promise<Seeded> {
 
   // Six people, so a shift-range has somewhere to go and the counts in the
   // assertions are not ambiguous.
+  const personIds: Record<string, string> = {};
+  const companyIds: Record<string, string> = {};
+
   for (const [name, role] of [
     ['Ada Lovelace', 'Mathematician'],
     ['Barbara Liskov', 'Professor'],
@@ -48,10 +53,16 @@ export async function seed(): Promise<Seeded> {
     ['Grace Hopper', 'Rear Admiral'],
     ['Edsger Dijkstra', 'Professor']
   ] as const) {
-    await savePerson(s, null, { name, role, email: `${name.split(' ')[0].toLowerCase()}@example.com` });
+    personIds[name] = (
+      await savePerson(s, null, {
+        name,
+        role,
+        email: `${name.split(' ')[0].toLowerCase()}@example.com`
+      })
+    ).id;
   }
   for (const name of ['Acme Corp', 'Beta Industries', 'Gamma Labs']) {
-    await saveCompany(s, null, { name });
+    companyIds[name] = (await saveCompany(s, null, { name })).id;
   }
 
   await createTemplate(s, {
@@ -68,7 +79,25 @@ export async function seed(): Promise<Seeded> {
     body: '<p>Saw {{domain}}.</p>'
   });
 
-  return { dbPath, sessionId };
+  /**
+   * A collection holding both kinds, with a tag on one of each — enough for the
+   * detail page's kind filter, its search (which matches tag names too) and the
+   * card view's chips.
+   */
+  const { id: collectionId } = await createCollection(s, { name: 'Q3 targets' });
+  for (const [kind, refId] of [
+    ['person', personIds['Ada Lovelace']],
+    ['person', personIds['Grace Hopper']],
+    ['company', companyIds['Acme Corp']]
+  ] as const) {
+    await addToCollection(s, collectionId, kind, refId);
+  }
+  const pioneer = await ensureTag(s, 'person', 'Pioneer');
+  const supplier = await ensureTag(s, 'company', 'Supplier');
+  await attachTag(s, 'person', personIds['Ada Lovelace'], pioneer.id);
+  await attachTag(s, 'company', companyIds['Acme Corp'], supplier.id);
+
+  return { dbPath, sessionId, collectionId };
 }
 
 // Run directly (`tsx e2e/seed.ts`) to emit the config the server and specs need.

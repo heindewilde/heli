@@ -10,9 +10,10 @@
     value: string | null;
     placeholder?: string;
     onSave: (next: string) => Promise<void> | void;
+    class?: string;
   };
 
-  let { value, placeholder = 'Add notes…', onSave }: Props = $props();
+  let { value, placeholder = 'Add notes…', onSave, class: className = '' }: Props = $props();
 
   let editing = $state(false);
   let saving = $state(false);
@@ -37,7 +38,7 @@
   }
 </script>
 
-<div class="flex flex-col gap-2">
+<div class="flex flex-col gap-2 {className}">
   {#if editing}
     <RichText
       bind:this={editorRef}

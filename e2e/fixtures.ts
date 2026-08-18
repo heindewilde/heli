@@ -5,7 +5,11 @@ const state = () =>
   JSON.parse(readFileSync(new URL('./.state.json', import.meta.url), 'utf8')) as {
     dbPath: string;
     sessionId: string;
+    collectionId: string;
   };
+
+/** The seeded collection's id, so a spec can address its detail page. */
+export const seededCollectionId = () => state().collectionId;
 
 /**
  * Every spec runs signed in, and every spec fails on a console error.
