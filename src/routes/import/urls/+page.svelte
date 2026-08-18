@@ -286,14 +286,15 @@
                 ? 'opacity-60'
                 : ''}"
             >
+              <!-- `onchange`, and never `preventDefault`: cancelling a
+                   checkbox click makes the browser restore `input.checked`
+                   after every handler has run, undoing the render. Same shape
+                   as the contact-import triage screen. -->
               <Checkbox
                 checked={selected.has(r.i)}
                 disabled={!!r.existingId}
                 aria-label={`Include ${r.suggestedName}`}
-                onclick={(e) => {
-                  e.preventDefault();
-                  if (!r.existingId) toggle(r.i);
-                }}
+                onchange={() => toggle(r.i)}
               />
               <span class="min-w-0">
                 <span class="block truncate text-sm">{r.suggestedName}</span>

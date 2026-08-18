@@ -597,21 +597,24 @@
          popover for inline editing without table-cell layout quirks. -->
     <div class="overflow-hidden rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)] shadow-[var(--shadow-xs)]">
       <div
-        class="hidden md:grid items-center gap-3 border-b border-[var(--color-border)] bg-[var(--color-surface-2)] px-3 py-2 text-[var(--color-subtle)]"
+        class="group/head hidden md:grid items-center gap-3 border-b border-[var(--color-border)] bg-[var(--color-surface-2)] px-3 py-2 text-[var(--color-subtle)]"
         style={GRID}
       >
-        <Checkbox
-          checked={allTicked}
-          indeterminate={someTicked && !allTicked}
-          aria-label={allTicked ? 'Deselect all loaded rows' : 'Select all loaded rows'}
-          onclick={(e) => {
-            // The DOM state is driven by the selection, not the other way
-            // round, so the native toggle is suppressed and the `checked` prop
-            // re-renders it. `bind:` against a derived value would fight this.
-            e.preventDefault();
-            selection.toggleAll(rowIds);
-          }}
-        />
+        <!-- Revealed on hover like the row checkboxes, so an untouched table
+             carries no column of empty boxes. Stays visible while a selection
+             exists, because that is when you need to see what it reports. -->
+        <span
+          class={someTicked
+            ? ''
+            : 'opacity-0 transition-opacity focus-within:opacity-100 group-hover/head:opacity-100'}
+        >
+          <Checkbox
+            checked={allTicked}
+            indeterminate={someTicked && !allTicked}
+            aria-label={allTicked ? 'Deselect all loaded rows' : 'Select all loaded rows'}
+            onclick={() => selection.toggleAll(rowIds)}
+          />
+        </span>
         <SortHeader label="Name" sortKey="name" current={data.sort} href={sortHref} direction="asc" />
         <SortHeader label="Company" sortKey="company" current={data.sort} href={sortHref} sortable={false} />
         <SortHeader label="Contact" sortKey="contact" current={data.sort} href={sortHref} sortable={false} />
@@ -636,11 +639,19 @@
             checked={selection.has(id)}
             aria-label="Select row"
             onclick={(e) => {
-              e.preventDefault();
-              const me = e as MouseEvent;
-              // Space fires a click with shiftKey false, so the keyboard toggles
-              // and cannot range-select. That is fine — `x` is the keyboard way.
-              if (me.shiftKey) selection.rangeTo(id, rowIds);
+              // No `preventDefault`. Cancelling a checkbox click makes the
+              // browser run its *canceled activation steps*, which restore
+              // `input.checked` to its old value — and it does that after every
+              // handler has run, so it lands on top of the update Svelte just
+              // made. The row stayed visually unticked while the count said
+              // otherwise. `settings/import` had the right shape all along:
+              // pass `checked`, listen, never cancel.
+              //
+              // The click fires before the DOM value flips back or forward, so
+              // reading `shiftKey` here is safe. Space fires a click with
+              // `shiftKey` false, so the keyboard toggles and cannot
+              // range-select — `x` is the keyboard way.
+              if ((e as MouseEvent).shiftKey) selection.rangeTo(id, rowIds);
               else selection.toggle(id);
             }}
           />
