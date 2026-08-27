@@ -13,7 +13,7 @@
    * whether its list cache can absorb the change or whether the mutation
    * crossed something the cache does not own.
    */
-  import { Tag, FolderPlus, Flag, Circle, Trash2, Send } from 'lucide-svelte';
+  import { Tag, FolderPlus, Flag, Circle, Trash2, Send, Download, Loader2 } from 'lucide-svelte';
   import Popover from '$lib/ui/Popover.svelte';
   import Combobox from '$lib/ui/Combobox.svelte';
   import MenuItem from '$lib/ui/MenuItem.svelte';
@@ -23,6 +23,7 @@
   import { PRIORITIES, toneColor, type Priority } from '$lib/priority';
   import { TONE_STYLES, type StatusRow } from '$lib/statuses';
   import { toast } from '$lib/toasts.svelte';
+  import { downloadPost } from '$lib/client/download';
 
   type Scope = 'person' | 'company';
   type TagOption = { id: string; name: string; slug: string; count?: number };
@@ -58,6 +59,29 @@
   }: Props = $props();
 
   const noun = $derived(scope === 'person' ? 'people' : 'companies');
+
+  /**
+   * The one action here that runs itself rather than calling back to the page.
+   *
+   * The callback convention above exists because only the page knows whether
+   * its list cache can absorb a mutation — and an export mutates nothing, so
+   * there is no result to absorb and no reason to make both pages write the
+   * same twenty lines. It POSTs because a selection can be hundreds of ids,
+   * which is more than a URL will carry.
+   */
+  let exporting = $state(false);
+
+  async function runExport() {
+    if (exporting || ids.length === 0) return;
+    exporting = true;
+    const ok = await downloadPost(
+      '/api/export',
+      { kind: noun, ids },
+      `heli-${noun}-${new Date().toISOString().slice(0, 10)}.csv`
+    );
+    if (!ok) toast.danger('Export failed');
+    exporting = false;
+  }
 
   /**
    * Templates are fetched when the popover opens, not passed in.
@@ -323,6 +347,15 @@
     </div>
   {/snippet}
 </Popover>
+
+<button type="button" onclick={runExport} disabled={exporting} class={btn}>
+  {#if exporting}
+    <Loader2 size={13} strokeWidth={2} class="animate-spin" />
+  {:else}
+    <Download size={13} strokeWidth={2} />
+  {/if}
+  Export
+</button>
 
 {#if canDelete}
   <button type="button" onclick={() => (confirmOpen = true)} class="{btn} hover:text-[var(--color-danger)]">

@@ -206,7 +206,9 @@ Plus built-in filters for **priority**, **due-soon**, **archive**, and **recentl
 
 ### 📤 Export your data
 
-- **CSV export** at `/api/export` — your whole library in a portable format, any time.
+- **CSV export** at `/api/export` — your whole library in a portable format, any
+  time. Also from the Export button on People, Companies and any collection:
+  those export what the view is filtered to, or just the rows you have ticked.
 - **Plus the raw SQLite file** as the ultimate escape hatch. Open it in [DB Browser for SQLite](https://sqlitebrowser.org/), query it from any SQLite client, or migrate it to a different tool. No lock-in by design.
 
 ### ⌨️ Keyboard-first

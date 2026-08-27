@@ -16,12 +16,20 @@
 
   type Props = {
     open: boolean;
-    /** Where Cancel and the review screen return to. */
+    /** Where Cancel and the review screen return to, absent a collection. */
     from: 'people' | 'companies';
+    /**
+     * When the paste was started from a collection page, every record the
+     * commit touches — created *and* already-existing — joins this collection.
+     * Sent as a query param so the server stores it on the staging record; the
+     * review screen then reads the destination from there rather than from
+     * anything the browser hands back.
+     */
+    collection?: { id: string; name: string } | null;
     onclose: () => void;
   };
 
-  let { open, from, onclose }: Props = $props();
+  let { open, from, collection = null, onclose }: Props = $props();
 
   let text = $state('');
   let busy = $state(false);
@@ -31,6 +39,7 @@
     no_urls: 'No links found in that.',
     too_many_rows: 'That is more than 500 links — split it into a few pastes.',
     file_too_large: 'That file is too big.',
+    unknown_collection: 'That collection no longer exists.',
     rate_limited: 'Too many pastes in the last hour. Try again shortly.'
   };
 
@@ -38,7 +47,10 @@
     if (busy || !text.trim()) return;
     busy = true;
     try {
-      const res = await fetch('/api/import/urls', {
+      const endpoint = collection
+        ? `/api/import/urls?collection=${encodeURIComponent(collection.id)}`
+        : '/api/import/urls';
+      const res = await fetch(endpoint, {
         method: 'POST',
         headers: { 'content-type': 'text/plain' },
         body: text
@@ -48,7 +60,9 @@
         return;
       }
       onclose();
-      goto(`/import/urls?from=${from}`);
+      // With a collection the review screen derives its own back-link from the
+      // staging record, so `from` would only be a second source of truth.
+      goto(collection ? '/import/urls' : `/import/urls?from=${from}`);
     } catch {
       toast.danger('Could not read that');
     } finally {
@@ -72,6 +86,13 @@
         Heli finds the links and works out which are people and which are companies. You review
         before anything is saved.
       </p>
+      {#if collection}
+        <p class="mt-1 text-sm text-[var(--color-muted)]">
+          Everything you keep is added to <strong class="text-[var(--color-text)]">{collection.name}</strong>,
+          including links you already have saved — those are added to the collection without
+          being duplicated.
+        </p>
+      {/if}
 
       <textarea
         use:autofocus

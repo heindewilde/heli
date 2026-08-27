@@ -479,9 +479,15 @@ tables is *created-by attribution only and must never be used as a filter*.
 - **Members can do CRM work; owners/admins do workspace-wide damage.** Creating,
   editing and deleting records is open. `requireRole` guards the wide-blast-
   radius calls: `POST /api/import`, `DELETE /api/statuses`,
-  `DELETE /api/tags/[id]`, pipeline delete, and stage delete/reorder. The
-  `/api/export` guard is friction, not containment — `/api/people` and
-  `/api/search` return much the same data.
+  `DELETE /api/tags/[id]`, pipeline delete, and stage delete/reorder.
+  **`/api/export` is no longer among them.** Its guard was documented as
+  friction rather than containment — `/api/people` and `/api/search` return much
+  the same data — and once export grew buttons on `/people`, `/companies` and
+  every collection, the guard stopped reading as friction and started rendering
+  as a 403 error page on a control the page had just offered. Removing it also
+  un-broke the CSV link the `/time` report had always shown to members.
+  Note `export/+server.ts` is in `MEMBER_ALLOWED` because it has a `POST` —
+  which is a *read* that uses POST only to carry an id list too long for a URL.
 - **`npm run check` now enforces three tenancy rules**, all in
   `scripts/check-tenancy.ts`: no stray `user_id` filters (`ALLOW_FILES` to opt
   out); raw SQL touching a `TENANT_TABLES` table must mention `workspace_id`
@@ -973,10 +979,125 @@ sort.
   and would steal the click.
 - **`{#each}` over members needs a compound key** — `` `${m.kind}:${m.id}` ``.
   People and companies share one list and their ids come from two tables.
+- **The Add control is a component (`CollectionAddButton`), not a snippet.** It
+  is rendered twice — toolbar and empty state — and as a snippet both renders
+  closed over one `$state`, so on an empty collection clicking either opened
+  *both* panels at once. That is the "one popover per instance" rule; N popovers
+  need N components. Only an empty collection shows it, so the e2e that guards
+  it creates one rather than using the seeded collection.
+- **Its picker is one `variant="panel"` Combobox, not two `variant="field"`
+  ones.** A field combobox renders results as `absolute top-full`, which inside
+  a Popover panel draws the list *within* the panel: clipped, scrolled in its
+  own box, and overlapping the second picker. `panel` makes the list *be* the
+  panel. It searches `/api/people` and `/api/companies` in parallel rather than
+  `/api/search`, which would spend its per-kind budget on interactions,
+  projects and pipelines — none of which can be a collection member.
+  - **Create is offered only when the kind filter has settled it.** With both
+    kinds in one list, "Create 'Acme'" would have to guess which table to write
+    to, and guessing wrong is worse than sending you to the filter first.
+- **URL import can target a collection.** The destination rides on the *staging
+  record* (`PendingUrlImport.collection`), validated at stage time, not on the
+  commit body — the commit deliberately accepts nothing from the client but
+  indices into a list the server parsed itself.
+  - **A URL that already resolves to a record is not skipped, it is filed.** It
+    is not re-created, but it does join the collection, because filing it is why
+    the link was pasted. That is what makes `dupSelectable` on the review screen
+    flip eight `!r.existingId` predicates at once — and why `hideDuplicates`
+    defaults to *off* there.
+  - **The per-row kind override never applies to an existing row.** The stager
+    set `kind` from whichever table already holds the URL, so it is
+    authoritative; an override would hand a person id to the company member
+    filter and silently resolve to nothing.
+  - `addManyAndSync` in `collections.ts` does the filing: chunked at 100
+    (`addManyToCollection` had only ever been driven by `bulk.ts`, capped at
+    200), pipeline sync resolved **once** for the batch, and every failure
+    swallowed — the records are already written, and a missing board card is not
+    worth losing an import to. It lives there rather than in the handler so the
+    suite can reach it.
 - **`collection_items` has no position column.** The only ordering signal is
   `addedAt`, which the query returns DESC; bulk-added members share one
   millisecond, so their relative order is rowid. Drag-to-reorder would need a
   migration.
+
+## Export
+
+One endpoint, `/api/export`, dispatching on `?kind=`. No role gate (see the
+tenancy section). Row shapes live in `src/lib/server/export.ts`, not in the
+route, so the suite can assert on them — with them inlined in `+server.ts` there
+was nothing to call, which is why the endpoint shipped untested.
+
+- **The header column lists are the file format.** `PEOPLE_HEADER`,
+  `COMPANIES_HEADER` and `COLLECTION_HEADER` are constants pinned by
+  `tests/export.test.ts` because somebody's spreadsheet depends on the order and
+  nothing else in the app would notice it moving.
+- **`kind=people|companies` honour the list page's filters**, parsed by the same
+  `src/lib/server/list-filters.ts` the loaders use, so a filtered export and the
+  list it came from cannot disagree.
+  - **`archived` is the one place the export's default differs from the page's,
+    and `parseExportFilters` is where that lives.** A list page defaults to
+    hiding archived rows, because that is what is on screen. A bare
+    `/api/export?kind=people` has meant *the whole library* since it was
+    written, and is what a bookmark or a cron backup points at — letting the
+    page's default leak onto it made those quietly return fewer rows with no
+    error. So an absent param means everything, and **the pages always send an
+    explicit `archived=0|1`**. Both halves are pinned by `tests/export.test.ts`;
+    if you build an export URL anywhere new, send the flag.
+  - Honouring `?q=` needs a JOIN onto the FTS table, which the drizzle query
+    builder cannot express, so those queries are raw SQL — and raw SQL returns
+    snake_case keys where `d.select().from(people)` returns camelCase. The
+    projections alias every column for exactly that reason.
+- **`POST /api/export` is a read.** It takes `{ kind, ids }` because a tick-box
+  selection can outgrow a URL, and it is in `MEMBER_ALLOWED` with that reason.
+  `MAX_EXPORT_IDS` (5000) is a bind-count and response-size budget, not a
+  permission — unrelated to `MAX_BULK_IDS` (200), which bounds *writes*.
+- **`kind=collection&id=…&members=all|people|companies`** is one merged CSV with
+  a leading `kind` column and the union of both column sets, blanks where a
+  column does not apply. The member filter is `members=`, not `kind=`, because
+  `kind` is already the dispatch param.
+- **The role decision is covered only by an e2e test**, `e2e/export.spec.ts`,
+  because the gate lived in the route and the Vitest suite calls helpers rather
+  than handlers. It drives a *member* session — `memberSessionId()` in
+  `e2e/fixtures.ts`.
+  - **That fixture repoints `sessions.active_workspace_id` at the host
+    workspace.** `register()` gives every new account a workspace of their own
+    where they are the owner, so without the repoint a "can a member do X" test
+    signs in to the wrong workspace as an owner and passes for the wrong reason.
+    It did exactly that on the first attempt.
+- **Every `<a>` pointing at `/api/export` needs `data-sveltekit-reload`.**
+  `/api/export` has no `+page`, so the client router does not recognise it and
+  turns the click into a thrown "Not found: /api/export" with no download — in
+  the built app only, which is why the Settings export links had been broken
+  that way since they were written. `e2e/export.spec.ts` reads the downloaded
+  bytes, so it catches this; nothing else does.
+- **Selection export goes through `src/lib/client/download.ts`.** Object URL,
+  not `data:` — it works outside a secure context, which is the plain-HTTP LAN
+  self-host `client/clipboard.ts` also exists for. **Revoke on a later task**,
+  never straight after `a.click()`: Firefox and Safari cancel the in-flight
+  download, which fails as a file that never appears rather than as an error.
+- **The Export button says what it will export.** "Export filtered" vs "Export
+  all" on the list pages (a filtered count is not available client-side — the
+  count query only covers the unarchived workspace); "Export 12 people" vs
+  "Export all 30" on a collection. A bare "Export" under an active filter is how
+  someone hands over half a list without noticing.
+
+### Batching against a synced pipeline
+
+`addItemToPipeline` costs **seven** round trips per item — ownership, member,
+existence, stage lookup, the item, its event, the pipeline's timestamp. Fine for
+the board interactions it was written for; ruinous for a batch. A 500-link paste
+into a collection that mirrors a pipeline was ~3,500 sequential round trips
+against remote libSQL, *after* the inserts had run — long enough to pass a proxy
+timeout, so the browser reported a failed import for records that existed.
+
+`addManyToPipeline` does the constant work once and chunks the rest: under twenty
+round trips for the same 500. Insert **items before their events** — a batch is
+one transaction executed in order and `pipeline_item_events.item_id` references a
+row that must already exist. Use it for anything that adds more than a handful.
+
+Related: `addManyAndSync` catches **per chunk**, not around the loop. Wrapping the
+loop meant one transient failure abandoned every remaining chunk *and* skipped
+the board propagation for everything that had already landed — worse than the
+partial result the swallow was meant to tolerate.
 
 ## Bulk selection and bulk actions
 

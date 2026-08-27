@@ -13,6 +13,8 @@ import {
 import { ftsQuery } from './search';
 import { getTagsForEntities, type EntityTag } from './tags';
 import { sanitize, sanitizePlainText } from './sanitize';
+import { getCollectionSync } from './sync';
+import { addManyToPipeline } from './pipelines';
 import type { Scope } from './scope';
 
 export type CollectionListRow = {
@@ -370,6 +372,80 @@ export async function deleteCollection(
   await d
     .delete(collections)
     .where(and(eq(collections.id, id), eq(collections.workspaceId, s.workspaceId)));
+}
+
+/**
+ * Add many members of both kinds and propagate to a synced pipeline.
+ *
+ * Extracted from the URL-import commit so the suite can reach it: the tests are
+ * server-side and call helpers, never handlers, so logic that lives inside a
+ * `+server.ts` is logic nothing can assert on.
+ *
+ * Chunked even though `addManyToCollection` is one multi-row insert per call:
+ * it has only ever been driven by `bulk.ts`, which is capped at MAX_BULK_IDS
+ * (200), and a 500-row paste would be a ~2,000-bind insert plus a 500-id
+ * `inArray` inside its member filter.
+ *
+ * The pipeline sync is resolved **once** for the batch rather than per item,
+ * matching `bulk.ts`. Failures here are swallowed: the records are already
+ * written, and a missing board card is not worth losing an import to.
+ */
+export async function addManyAndSync(
+  s: Scope,
+  collectionId: string,
+  byKind: { person: string[]; company: string[] },
+  chunk = 100
+): Promise<number> {
+  const synced: { kind: MemberKind; refId: string }[] = [];
+  let added = 0;
+  for (const kind of ['person', 'company'] as const) {
+    const list = byKind[kind];
+    for (let i = 0; i < list.length; i += chunk) {
+      try {
+        const got = await addManyToCollection(s, collectionId, kind, list.slice(i, i + chunk));
+        added += got.length;
+        for (const refId of got) synced.push({ kind, refId });
+      } catch {
+        // Per chunk, not around the loop. A wrapping try turns one transient
+        // failure into "the remaining chunks are never attempted and nothing
+        // that already landed reaches the board" — which is worse than the
+        // partial result it was meant to tolerate. A collection that does not
+        // belong to this workspace simply fails every chunk and adds nothing.
+      }
+    }
+  }
+
+  const sync = await getCollectionSync(s, collectionId).catch(() => null);
+  if (sync && synced.length > 0) {
+    try {
+      // One batched call, not one per item: `addItemToPipeline` is seven round
+      // trips each, which a 500-row import turns into a proxy timeout on a
+      // request whose rows have already been written.
+      await addManyToPipeline(s, sync.pipelineId, synced, chunk);
+    } catch {
+      // The board was deleted or has no stages. The members are filed either
+      // way, and a missing card is not worth failing an import over.
+    }
+  }
+  return added;
+}
+
+/**
+ * Name and id only. The URL-import stager needs to prove the collection is in
+ * this workspace and to show its name on the review screen; loading the whole
+ * membership list to learn two columns would be a needless round trip on a
+ * path that is already doing chunked existence lookups.
+ */
+export async function getCollectionSummary(
+  s: Scope,
+  id: string
+): Promise<{ id: string; name: string } | null> {
+  const row = await db(s.region)
+    .select({ id: collections.id, name: collections.name })
+    .from(collections)
+    .where(and(eq(collections.id, id), eq(collections.workspaceId, s.workspaceId)))
+    .get();
+  return row ?? null;
 }
 
 async function ensureCollectionOwned(

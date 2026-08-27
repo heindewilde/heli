@@ -5,11 +5,19 @@ const state = () =>
   JSON.parse(readFileSync(new URL('./.state.json', import.meta.url), 'utf8')) as {
     dbPath: string;
     sessionId: string;
+    memberSessionId: string;
     collectionId: string;
   };
 
 /** The seeded collection's id, so a spec can address its detail page. */
 export const seededCollectionId = () => state().collectionId;
+
+/**
+ * A session for a colleague holding the plain `member` role in the same
+ * workspace. Every other fixture signs in as the owner, so this is the only way
+ * to assert what a member may and may not do.
+ */
+export const memberSessionId = () => state().memberSessionId;
 
 /**
  * Every spec runs signed in, and every spec fails on a console error.

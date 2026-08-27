@@ -620,6 +620,131 @@ export async function addItemToPipeline(
   return { id, alreadyExisted: false };
 }
 
+/**
+ * Add many items to a pipeline in a handful of round trips.
+ *
+ * `addItemToPipeline` costs **seven** round trips per item — ownership, member,
+ * existence, stage lookup, the item, its event, and the pipeline's timestamp.
+ * That is fine for the one-at-a-time board interactions it was written for, and
+ * ruinous for a batch: the URL-import commit can hand over 500 members of a
+ * collection that mirrors a pipeline, which is ~3,500 sequential round trips
+ * against remote libSQL, *after* the inserts have already run. Long enough to
+ * pass a proxy timeout, so the browser reports a failed import for records that
+ * were in fact created.
+ *
+ * Here the constant work happens once and the per-item work is chunked, so the
+ * same 500 items cost well under twenty. Same shape as `addManyToCollection`.
+ *
+ * Returns the number of items actually inserted; ids that are already on the
+ * board, or that are not members of this workspace, are skipped rather than
+ * raising — the caller is mirroring a collection, not asserting a state.
+ */
+export async function addManyToPipeline(
+  s: Scope,
+  pipelineId: string,
+  items: { kind: MemberKind; refId: string }[],
+  chunk = 100
+): Promise<number> {
+  const d = db(s.region);
+  if (items.length === 0) return 0;
+  if (!(await ensurePipelineOwned(d, s.workspaceId, pipelineId))) throw new Error('not_found');
+
+  // Resolved once: every item lands in the same default stage.
+  const stage =
+    (await d
+      .select({ id: pipelineStages.id })
+      .from(pipelineStages)
+      .where(and(eq(pipelineStages.pipelineId, pipelineId), eq(pipelineStages.kind, 'open')))
+      .orderBy(asc(pipelineStages.position))
+      .limit(1)
+      .get()) ??
+    (await d
+      .select({ id: pipelineStages.id })
+      .from(pipelineStages)
+      .where(eq(pipelineStages.pipelineId, pipelineId))
+      .orderBy(asc(pipelineStages.position))
+      .limit(1)
+      .get());
+  if (!stage) throw new Error('no_stages');
+
+  const wanted = new Map<string, { kind: MemberKind; refId: string }>();
+  for (const it of items) {
+    if (isMemberKind(it.kind) && it.refId) wanted.set(`${it.kind}:${it.refId}`, it);
+  }
+
+  // Already on the board, and actually in this workspace — both resolved with
+  // chunked IN clauses rather than a query per item.
+  const onBoard = new Set<string>();
+  const isMember = new Set<string>();
+  for (const kind of ['person', 'company'] as const) {
+    const refIds = [...wanted.values()].filter((i) => i.kind === kind).map((i) => i.refId);
+    for (let i = 0; i < refIds.length; i += chunk) {
+      const batch = refIds.slice(i, i + chunk);
+      const [existing, members] = await Promise.all([
+        d
+          .select({ refId: pipelineItems.refId })
+          .from(pipelineItems)
+          .where(
+            and(
+              eq(pipelineItems.pipelineId, pipelineId),
+              eq(pipelineItems.kind, kind),
+              inArray(pipelineItems.refId, batch)
+            )
+          ),
+        kind === 'person'
+          ? d
+              .select({ id: people.id })
+              .from(people)
+              .where(and(eq(people.workspaceId, s.workspaceId), inArray(people.id, batch)))
+          : d
+              .select({ id: companies.id })
+              .from(companies)
+              .where(and(eq(companies.workspaceId, s.workspaceId), inArray(companies.id, batch)))
+      ]);
+      for (const r of existing) onBoard.add(`${kind}:${r.refId}`);
+      for (const r of members) isMember.add(`${kind}:${r.id}`);
+    }
+  }
+
+  const now = Date.now();
+  const itemRows: (typeof pipelineItems.$inferInsert)[] = [];
+  const eventRows: (typeof pipelineItemEvents.$inferInsert)[] = [];
+  for (const [key, it] of wanted) {
+    if (onBoard.has(key) || !isMember.has(key)) continue;
+    const id = createId();
+    itemRows.push({
+      id,
+      pipelineId,
+      kind: it.kind,
+      refId: it.refId,
+      stageId: stage.id,
+      enteredStageAt: now,
+      createdAt: now,
+      updatedAt: now
+    });
+    eventRows.push({
+      id: createId(),
+      itemId: id,
+      fromStageId: null,
+      toStageId: stage.id,
+      at: now,
+      byUserId: s.userId
+    });
+  }
+  if (itemRows.length === 0) return 0;
+
+  // Items before their events: a batch is one transaction executed in order, and
+  // `pipeline_item_events.item_id` references a row that has to exist first.
+  for (let i = 0; i < itemRows.length; i += chunk) {
+    await d.insert(pipelineItems).values(itemRows.slice(i, i + chunk));
+  }
+  for (let i = 0; i < eventRows.length; i += chunk) {
+    await d.insert(pipelineItemEvents).values(eventRows.slice(i, i + chunk));
+  }
+  await d.update(pipelines).set({ updatedAt: now }).where(eq(pipelines.id, pipelineId));
+  return itemRows.length;
+}
+
 export async function moveItemToStage(
   s: Scope,
   pipelineId: string,

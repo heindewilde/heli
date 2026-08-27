@@ -4,142 +4,77 @@ import { and, eq, sql } from 'drizzle-orm';
 import type { PageServerLoad } from './$types';
 import { db } from '$lib/server/db';
 import { people } from '$lib/server/schema';
-import { ftsQuery } from '$lib/server/search';
-import {
-  entityIdsForTag,
-  findTagBySlug,
-  getTagsForEntities,
-  listTagsWithCounts
-} from '$lib/server/tags';
+import { getTagsForEntities, listTagsWithCounts } from '$lib/server/tags';
 import { listStatuses } from '$lib/server/statuses';
-import { sqlOr } from '$lib/server/sql-helpers';
 import {
   PERSON_ROW_COLS,
   personLastInteractionJoin,
   type PersonRow
 } from '$lib/server/people-rows';
+import {
+  PERSON_LIST,
+  isDefaultListView,
+  listClauses,
+  listOrderClause,
+  parseListFilters,
+  resolveTagFilter,
+  tagFilterIds
+} from '$lib/server/list-filters';
 import { encodeCursor } from '$lib/server/cursor';
 
 const PAGE_SIZE = 50;
 
-// Allowed sort keys. Anything else falls back to 'recent'.
-const SORTS = new Set(['recent', 'updated', 'name', 'lastInteraction', 'priority', 'status']);
-
-function parsePriorityFilter(raw: string | null): Set<number | null> | null {
-  // Accepts comma-separated subset of "1,2,3,none". Empty/missing = no filter.
-  if (!raw) return null;
-  const set = new Set<number | null>();
-  for (const v of raw.split(',')) {
-    const t = v.trim();
-    if (t === 'none') set.add(null);
-    else if (t === '1' || t === '2' || t === '3') set.add(Number.parseInt(t, 10));
-  }
-  return set.size > 0 ? set : null;
-}
-
-function parseStatusFilter(raw: string | null): Set<string> | null {
-  // Comma-separated status ids, with the sentinel "none" for "no status set".
-  if (!raw) return null;
-  const set = new Set(raw.split(',').map((s) => s.trim()).filter(Boolean));
-  return set.size > 0 ? set : null;
-}
-
 export const load: PageServerLoad = async ({ locals, url }) => {
   if (!locals.user) throw redirect(303, '/auth');
   const s = requireScope(locals);
-  const q = url.searchParams.get('q')?.trim() ?? '';
-  const archived = url.searchParams.get('archived') === '1';
-  const favorite = url.searchParams.get('favorite') === '1';
-  const sortParam = url.searchParams.get('sort') ?? 'recent';
-  const sort = SORTS.has(sortParam) ? sortParam : 'recent';
-  const tagSlug = url.searchParams.get('tag');
-  const priorityFilter = parsePriorityFilter(url.searchParams.get('priority'));
-  const statusFilter = parseStatusFilter(url.searchParams.get('status'));
+
+  // Parsing and every WHERE fragment live in $lib/server/list-filters, shared
+  // with the companies loader and with /api/export so a filtered export and
+  // this list cannot disagree. What stays here is what the export does *not*
+  // want: cursor pagination, and the empty-tag early return below.
+  const flt = parseListFilters(url.searchParams);
+  const tagRes = await resolveTagFilter(s, PERSON_LIST, flt);
+  const tagIds = tagFilterIds(tagRes);
+  const activeTag = tagRes.kind === 'tag' ? tagRes.tag : null;
 
   const d = db(locals.user.region);
-  const fts = ftsQuery(q);
 
-  let activeTag: { id: string; name: string; slug: string } | null = null;
-  let tagFilterIds: string[] | null = null;
-  if (tagSlug) {
-    const t = await findTagBySlug(s, 'person', tagSlug);
-    if (t) {
-      activeTag = { id: t.id, name: t.name, slug: t.slug };
-      tagFilterIds = await entityIdsForTag(s, 'person', t.id);
-      if (tagFilterIds.length === 0) {
-        const [allTags, statuses] = await Promise.all([
-          listTagsWithCounts(s, 'person'),
-          listStatuses('person', s)
-        ]);
-        return {
-          q,
-          archived,
-          favorite,
-          sort,
-          priorityFilter: priorityFilter ? [...priorityFilter] : null,
-          statusFilter: statusFilter ? [...statusFilter] : null,
-          tag: activeTag,
-          allTags,
-          statuses,
-          items: [],
-          itemTags: {} as Record<string, { id: string; name: string; slug: string }[]>,
-          total: 0,
-          nextCursor: null
-        };
-      }
-    }
+  // A tag that exists but has no members means an empty list, not "no filter".
+  // Short-circuited so the main query never runs with an empty IN ().
+  if (tagRes.kind === 'tag' && tagRes.ids.length === 0) {
+    const [allTags, statuses] = await Promise.all([
+      listTagsWithCounts(s, 'person'),
+      listStatuses('person', s)
+    ]);
+    return {
+      q: flt.q,
+      archived: flt.includeArchived,
+      favorite: flt.favorite,
+      sort: flt.sort,
+      priorityFilter: flt.priority ? [...flt.priority] : null,
+      statusFilter: flt.status ? [...flt.status] : null,
+      tag: activeTag,
+      allTags,
+      statuses,
+      items: [],
+      itemTags: {} as Record<string, { id: string; name: string; slug: string }[]>,
+      total: 0,
+      nextCursor: null
+    };
   }
 
-  // Detect "default unfiltered view" — only in this state is cursor pagination
-  // valid for the API's Load More endpoint. Filtered/sorted/searched views
-  // ship the first 50 and don't expose a cursor.
-  const isDefaultView =
-    !fts &&
-    !archived &&
-    !favorite &&
-    !tagFilterIds &&
-    !priorityFilter &&
-    !statusFilter &&
-    sort === 'recent';
-  const tagInClause = tagFilterIds
-    ? sql`AND p.id IN (${sql.join(
-        tagFilterIds.map((id) => sql`${id}`),
-        sql`, `
-      )})`
-    : sql``;
-
-  const priorityClause = priorityFilter
-    ? sqlOr([
-        priorityFilter.has(null) ? sql`p.priority IS NULL` : null,
-        ...[...priorityFilter]
-          .filter((v): v is number => v !== null)
-          .map((n) => sql`p.priority = ${n}`)
-      ])
-    : sql``;
-  const statusClause = statusFilter
-    ? sqlOr([
-        statusFilter.has('none') ? sql`p.status_id IS NULL` : null,
-        ...[...statusFilter].filter((v) => v !== 'none').map((id) => sql`p.status_id = ${id}`)
-      ])
-    : sql``;
+  const isDefaultView = isDefaultListView(flt, tagIds);
+  const cl = listClauses(PERSON_LIST, flt, tagIds);
+  const orderClause = listOrderClause(PERSON_LIST, flt.sort);
 
   const LAST_INTERACTION_JOIN = personLastInteractionJoin(s.workspaceId);
-
-  // ORDER BY clause built per sort key. NULLs handled inline.
-  let orderClause;
-  if (sort === 'name') orderClause = sql`p.name COLLATE NOCASE ASC`;
-  else if (sort === 'updated') orderClause = sql`p.updated_at DESC`;
-  else if (sort === 'lastInteraction') orderClause = sql`(li.last_at IS NULL), li.last_at DESC, p.created_at DESC`;
-  else if (sort === 'priority') orderClause = sql`(p.priority IS NULL), p.priority ASC, p.created_at DESC`;
-  else if (sort === 'status') orderClause = sql`(p.status_id IS NULL), p.status_id ASC, p.created_at DESC`;
-  else orderClause = sql`p.created_at DESC`;
 
   // Peek one extra row to detect whether there's a next page worth of data
   // for the default unfiltered view (used to set `nextCursor` below).
   const fetchLimit = isDefaultView ? PAGE_SIZE + 1 : PAGE_SIZE;
 
   let items: PersonRow[];
-  if (fts) {
+  if (flt.fts) {
     items = await d.all<PersonRow>(sql`
       SELECT ${PERSON_ROW_COLS}
       FROM people p
@@ -147,12 +82,12 @@ export const load: PageServerLoad = async ({ locals, url }) => {
       LEFT JOIN companies co ON co.id = p.company_id
       ${LAST_INTERACTION_JOIN}
       WHERE p.workspace_id = ${s.workspaceId}
-        AND f.people_fts MATCH ${fts}
-        ${archived ? sql`` : sql`AND p.is_archived = 0`}
-        ${favorite ? sql`AND p.is_favorite = 1` : sql``}
-        ${tagInClause}
-        ${priorityClause}
-        ${statusClause}
+        AND f.people_fts MATCH ${flt.fts}
+        ${cl.archived}
+        ${cl.favorite}
+        ${cl.tagIn}
+        ${cl.priority}
+        ${cl.status}
       ORDER BY rank
       LIMIT ${fetchLimit}
     `);
@@ -163,11 +98,11 @@ export const load: PageServerLoad = async ({ locals, url }) => {
       LEFT JOIN companies co ON co.id = p.company_id
       ${LAST_INTERACTION_JOIN}
       WHERE p.workspace_id = ${s.workspaceId}
-        ${archived ? sql`` : sql`AND p.is_archived = 0`}
-        ${favorite ? sql`AND p.is_favorite = 1` : sql``}
-        ${tagInClause}
-        ${priorityClause}
-        ${statusClause}
+        ${cl.archived}
+        ${cl.favorite}
+        ${cl.tagIn}
+        ${cl.priority}
+        ${cl.status}
       ORDER BY ${orderClause}
       LIMIT ${fetchLimit}
     `);
@@ -195,12 +130,12 @@ export const load: PageServerLoad = async ({ locals, url }) => {
   for (const [k, v] of tagMap) itemTags[k] = v;
 
   return {
-    q,
-    archived,
-    favorite,
-    sort,
-    priorityFilter: priorityFilter ? [...priorityFilter] : null,
-    statusFilter: statusFilter ? [...statusFilter] : null,
+    q: flt.q,
+    archived: flt.includeArchived,
+    favorite: flt.favorite,
+    sort: flt.sort,
+    priorityFilter: flt.priority ? [...flt.priority] : null,
+    statusFilter: flt.status ? [...flt.status] : null,
     tag: activeTag,
     allTags,
     statuses,

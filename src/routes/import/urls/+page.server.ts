@@ -31,7 +31,10 @@ export const load: PageServerLoad = async ({ locals, cookies, url }) => {
     rows: pending.rows.map((r, i) => ({ i, ...r })),
     duplicates: pending.duplicateCount,
     invalid: pending.invalidCount,
-    back: backTo(url)
+    collection: pending.collection,
+    // Taken from the staging record when there is one, so a hand-edited
+    // `?from=` cannot send someone to a collection this paste never targeted.
+    back: pending.collection ? `/collections/${pending.collection.id}` : backTo(url)
   };
 };
 

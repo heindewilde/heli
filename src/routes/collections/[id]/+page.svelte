@@ -13,21 +13,21 @@
     Users,
     Building2,
     Layers,
-    Plus,
     Rows3,
     LayoutGrid,
-    ArrowUpDown
+    ArrowUpDown,
+    ClipboardPaste
   } from 'lucide-svelte';
   import CollectionIcon from '$lib/components/CollectionIcon.svelte';
   import CollectionMemberCard from '$lib/components/CollectionMemberCard.svelte';
+  import CollectionAddButton from '$lib/components/CollectionAddButton.svelte';
+  import ExportButton from '$lib/components/ExportButton.svelte';
   import CompanyLogo from '$lib/components/CompanyLogo.svelte';
-  import PersonPicker from '$lib/components/PersonPicker.svelte';
-  import CompanyPicker from '$lib/components/CompanyPicker.svelte';
   import NotesEditor from '$lib/components/NotesEditor.svelte';
+  import UrlImportDialog from '$lib/components/UrlImportDialog.svelte';
   import Avatar from '$lib/ui/Avatar.svelte';
   import Button from '$lib/ui/Button.svelte';
   import EmptyState from '$lib/ui/EmptyState.svelte';
-  import Popover from '$lib/ui/Popover.svelte';
   import SegmentedControl from '$lib/ui/SegmentedControl.svelte';
   import Select from '$lib/ui/Select.svelte';
   import { readViewPref, writeViewPref } from '$lib/client/viewPref';
@@ -50,18 +50,6 @@
   let nameDraft = $state(collection.name);
   let nameInput = $state<HTMLInputElement | undefined>(undefined);
   let deleting = $state(false);
-
-  type Person = { id: string; name: string; avatarUrl: string | null; role: string | null };
-  type Company = {
-    id: string;
-    name: string;
-    logoUrl: string | null;
-    faviconUrl: string | null;
-    domain: string | null;
-  };
-
-  let pickerPerson = $state<Person[]>([]);
-  let pickerCompany = $state<Company | null>(null);
 
   async function patch(body: Record<string, unknown>): Promise<boolean> {
     const res = await fetch(`/api/collections/${collection.id}`, {
@@ -133,15 +121,6 @@
     await invalidateAll();
   }
 
-  async function onAddPerson(p: Person) {
-    pickerPerson = [];
-    await add('person', p.id);
-  }
-  async function onPickCompany(c: Company | null) {
-    pickerCompany = null;
-    if (c) await add('company', c.id);
-  }
-
   /* ── which kind, from the URL ───────────────────────────────────────────── */
 
   type Kind = 'all' | 'people' | 'companies';
@@ -168,6 +147,13 @@
   }
 
   const members = $derived(collection.members);
+
+  /**
+   * Compound keys — people and companies have separate id spaces, which is also
+   * why the `{#each}` below keys on `kind:id`. Handed to the Add picker so a
+   * member already in the collection never shows up as a suggestion.
+   */
+  const memberKeys = $derived(new Set(members.map((m) => `${m.kind}:${m.id}`)));
   const peopleCount = $derived(members.filter((m) => m.kind === 'person').length);
   const companyCount = $derived(members.length - peopleCount);
 
@@ -188,6 +174,54 @@
       href: buildUrl({ kind: 'companies' })
     }
   ]);
+
+  /* ── export ─────────────────────────────────────────────────────────────── */
+
+  /**
+   * Built here from `page.url.searchParams`, never handed down from the loader.
+   * `+page.server.ts` reads only `?just` on purpose: adding a `kind` dependency
+   * there would make every segment click a server round trip and break nothing
+   * visible, which is why `e2e/collection-detail.spec.ts` pins it.
+   *
+   * `members=`, not `kind=` — `kind` is already the export's own dispatch param.
+   * The client-side search box is deliberately not carried: it has no server
+   * representation, and an export that honoured state the URL does not hold
+   * would be honouring something nobody can link to.
+   */
+  const exportHref = $derived(
+    `/api/export?kind=collection&id=${collection.id}` + (kind === 'all' ? '' : `&members=${kind}`)
+  );
+
+  /**
+   * What the Export panel says it will hand over. The trigger is just "Export";
+   * the panel is what names the scope, so switching the segment to People and
+   * hitting Export cannot quietly produce half a collection.
+   *
+   * Counts come from the unfiltered member list, matching the segment control.
+   */
+  const exportCount = $derived(
+    kind === 'people' ? peopleCount : kind === 'companies' ? companyCount : members.length
+  );
+  const exportNoun = $derived<[string, string]>(
+    kind === 'people'
+      ? ['person', 'people']
+      : kind === 'companies'
+        ? ['company', 'companies']
+        : ['member', 'members']
+  );
+  // Only the mixed case needs a breakdown; under a kind filter the count line
+  // already says "9 people", and repeating it as prose adds nothing.
+  const exportDetail = $derived(
+    kind === 'all'
+      ? [
+          `${peopleCount} ${peopleCount === 1 ? 'person' : 'people'} · ${companyCount} ${
+            companyCount === 1 ? 'company' : 'companies'
+          }`
+        ]
+      : []
+  );
+
+  let showImport = $state(false);
 
   /* ── search and sort, over what is already loaded ───────────────────────── */
 
@@ -245,8 +279,6 @@
     writeViewPref(viewKey, next);
   }
 
-  let adding = $state(false);
-
   /**
    * Reserve the card's tag row only when something in this collection is
    * tagged. Uniform cards is the requirement; a blank strip under every card in
@@ -254,52 +286,6 @@
    */
   const anyTags = $derived(members.some((m) => m.tags.length > 0));
 </script>
-
-{#snippet addButton()}
-  <!--
-    Adding is a secondary action, so it is one button rather than two
-    always-open comboboxes. Those took a full row above the members, were empty
-    most of the time, and made the page read as a form with a list underneath it
-    rather than a collection you can add to.
-
-    The panel follows the kind filter: on ?kind=people there is no company
-    picker, because adding a company from the Companies-filtered view and
-    watching it vanish is a confusion worth designing out.
-  -->
-  <Popover bind:open={adding} label="Add to collection" panelRole="dialog" autoFocus={false}>
-    {#snippet trigger(attrs)}
-      <Button {...attrs} variant="primary">
-        <Plus size={14} strokeWidth={2} />
-        Add
-      </Button>
-    {/snippet}
-    {#snippet content()}
-      <div class="flex w-72 flex-col gap-3 p-3">
-        {#if kind !== 'companies'}
-          <div class="flex flex-col gap-1.5">
-            <span class="text-xs font-medium text-[var(--color-muted)]">Person</span>
-            <PersonPicker
-              selected={pickerPerson}
-              onAdd={onAddPerson}
-              onRemove={() => (pickerPerson = [])}
-              placeholder="Search people…"
-            />
-          </div>
-        {/if}
-        {#if kind !== 'people'}
-          <div class="flex flex-col gap-1.5">
-            <span class="text-xs font-medium text-[var(--color-muted)]">Company</span>
-            <CompanyPicker
-              selected={pickerCompany}
-              onPick={onPickCompany}
-              placeholder="Search companies…"
-            />
-          </div>
-        {/if}
-      </div>
-    {/snippet}
-  </Popover>
-{/snippet}
 
 {#snippet memberRow(m: CollectionMemberDetail)}
   <div class="group flex items-center gap-3 px-3 py-2.5 transition-colors hover:bg-[var(--color-row-hover)]">
@@ -387,6 +373,12 @@
       </p>
     </div>
     <div class="flex items-center gap-1">
+      <button
+        type="button"
+        title="Import — paste a list of links"
+        onclick={() => (showImport = true)}
+        class="rounded-[var(--radius-sm)] p-2 text-[var(--color-subtle)] hover:bg-[var(--color-surface)]"
+      ><ClipboardPaste size={16} strokeWidth={2} /></button>
       <a
         href={`/pipelines/new?fromCollection=${collection.id}`}
         title="Create pipeline from this collection"
@@ -497,7 +489,19 @@
 
         <span class="h-5 w-px bg-[var(--color-border)]" aria-hidden="true"></span>
 
-        {@render addButton()}
+        <ExportButton
+          href={exportHref}
+          count={exportCount}
+          noun={exportNoun}
+          detail={exportDetail}
+          size="sm"
+        />
+
+        <CollectionAddButton
+          {kind}
+          {memberKeys}
+          onAdd={add}
+        />
       </div>
     </div>
 
@@ -547,7 +551,11 @@
           description="Add the people and companies this collection is about."
         >
           {#snippet actions()}
-            {@render addButton()}
+            <CollectionAddButton
+              {kind}
+              {memberKeys}
+              onAdd={add}
+            />
           {/snippet}
         </EmptyState>
       {/if}
@@ -574,3 +582,14 @@
     {/if}
   </section>
 </article>
+
+<!-- Static import, deliberately. This page already pulls in NotesEditor →
+     RichText → a dynamic `squire-rte`; a second dynamic boundary above that
+     chunk is the exact shape of the production-only hydration crash CLAUDE.md
+     documents. -->
+<UrlImportDialog
+  open={showImport}
+  from="people"
+  collection={{ id: collection.id, name: collection.name }}
+  onclose={() => (showImport = false)}
+/>

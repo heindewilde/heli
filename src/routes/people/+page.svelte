@@ -26,7 +26,9 @@
   import Checkbox from '$lib/ui/Checkbox.svelte';
   import BulkActions from '$lib/components/BulkActions.svelte';
   import UrlImportDialog from '$lib/components/UrlImportDialog.svelte';
-  import { Link2 } from 'lucide-svelte';
+  import { ClipboardPaste } from 'lucide-svelte';
+  import ExportButton from '$lib/components/ExportButton.svelte';
+  import AddRecordButton from '$lib/components/AddRecordButton.svelte';
   import { pollWhile } from '$lib/polling';
   import { onIntersect } from '$lib/actions';
   import Avatar from '$lib/ui/Avatar.svelte';
@@ -108,18 +110,20 @@
 
   let showImport = $state(false);
   let showAdd = $state(false);
-  let addName = $state('');
   let addBusy = $state(false);
-  let addInputEl = $state<HTMLInputElement | undefined>(undefined);
 
+  /**
+   * Opens the Add popover. Called from the trigger, from the empty state's call
+   * to action, and from the `n p` keyboard command — three entry points to
+   * one popover instance, which is why `showAdd` lives here and is bound in.
+   */
   function openAdd() {
     showAdd = true;
-    setTimeout(() => addInputEl?.focus(), 0);
   }
 
-  async function submitAdd() {
-    const name = addName.trim();
-    if (!name || addBusy) return;
+  /** Returns whether the record was created, so the field knows to reset. */
+  async function submitAdd(name: string): Promise<boolean> {
+    if (addBusy) return false;
     addBusy = true;
     try {
       const res = await fetch('/api/people', {
@@ -127,18 +131,21 @@
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ name })
       });
-      if (!res.ok) { toast.danger('Could not create'); return; }
+      if (!res.ok) {
+        toast.danger('Could not create');
+        return false;
+      }
       // The POST already returned the finished row in list shape, so insert it
       // rather than calling invalidateAll(). That reload was a whole extra SSR
       // render — eight more database round trips — to display something we
       // are holding.
       const created = (await res.json()) as { id: string; row: Row | null };
-      addName = '';
-      showAdd = false;
       if (created.row) cache.insert(created.row, 'start');
       else await invalidateAll();
+      return true;
     } catch {
       toast.danger('Could not create');
+      return false;
     } finally {
       addBusy = false;
     }
@@ -151,6 +158,46 @@
   function buildUrl(overrides: Record<string, string | boolean | null>): string {
     return buildUrlBase('/people', page.url.searchParams, overrides);
   }
+
+  /**
+   * The download URL, and the same query pointed at the count endpoint.
+   *
+   * Every active filter is already in `page.url.searchParams`, and the endpoint
+   * parses them with the same module the loader does, so the file and the list
+   * cannot disagree. The link inside the Export panel needs
+   * `data-sveltekit-reload`: `/api/export` has no `+page`, so without it the
+   * client router turns the click into a thrown "Not found" and no download —
+   * in the built app only, which is how the Settings links stayed broken.
+   */
+  const exportHref = $derived(buildUrlBase('/api/export', page.url.searchParams, {
+      kind: 'people',
+      // Always explicit: a bare /api/export means the whole library, so the
+      // page has to say which half of that it wants.
+      archived: data.archived ? '1' : '0'
+    }));
+  const exportCountHref = $derived(
+    buildUrlBase('/api/export/count', page.url.searchParams, {
+      kind: 'people',
+      archived: data.archived ? '1' : '0'
+    })
+  );
+
+  /**
+   * What the Export panel says it is about to hand over. The trigger is just
+   * "Export"; naming the scope is the panel's job, because a count plus the
+   * filters that produced it is a preview and an adjective is not.
+   */
+  const exportDetail = $derived.by(() => {
+    const out: string[] = [];
+    if (data.q) out.push(`Matching “${data.q}”`);
+    if (data.tag) out.push(`Tagged “${data.tag.name}”`);
+    if (data.favorite) out.push('Favourites only');
+    if (data.priorityFilter?.length)
+      out.push(`Priority: ${data.priorityFilter.map((p) => p ?? 'none').join(', ')}`);
+    if (data.statusFilter?.length) out.push(`Status: ${data.statusFilter.length} selected`);
+    out.push(data.archived ? 'Archived included' : 'Archived excluded');
+    return out;
+  });
 
   function navTo(overrides: Record<string, string | boolean | null>) {
     goto(buildUrl(overrides), { replaceState: true, keepFocus: true, noScroll: true });
@@ -460,40 +507,24 @@
     <span class="tabular rounded-full border border-[var(--color-border)] bg-[var(--color-surface)] px-2 py-0.5 text-xs text-[var(--color-muted)]">
       {data.total}
     </span>
-    <div class="ml-auto flex items-center gap-1.5">
-      {#if showAdd}
-        <input
-          bind:this={addInputEl}
-          bind:value={addName}
-          type="text"
-          placeholder="Name…"
-          onkeydown={(e) => {
-            if (e.key === 'Enter') { e.preventDefault(); submitAdd(); }
-            if (e.key === 'Escape') { showAdd = false; addName = ''; }
-          }}
-          onblur={() => { if (!addName.trim()) showAdd = false; }}
-          disabled={addBusy}
-          class="h-7 w-36 rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-surface)] px-2 text-sm outline-none focus:border-[var(--color-border-strong)]"
-        />
-      {:else}
-        <button
-          type="button"
-          onclick={() => (showImport = true)}
-          title="Paste a list of links"
-          class="inline-flex items-center gap-1 rounded-[var(--radius-sm)] border border-[var(--color-border)] px-2.5 py-1.5 text-sm text-[var(--color-muted)] transition-colors hover:border-[var(--color-border-strong)] hover:text-[var(--color-text)]"
-        >
-          <Link2 size={14} strokeWidth={2} />
-          Import links
-        </button>
-        <button
-          type="button"
-          onclick={openAdd}
-          class="inline-flex items-center gap-1 rounded-[var(--radius-sm)] bg-[var(--color-accent)] px-3 py-1.5 text-sm font-medium text-[var(--color-accent-fg)] transition-colors hover:bg-[var(--color-accent-hover)]"
-        >
-          <Plus size={14} strokeWidth={2} />
-          Add person
-        </button>
-      {/if}
+    <div class="ml-auto flex items-center gap-2.5">
+      <ExportButton
+        href={exportHref}
+        countHref={exportCountHref}
+        detail={exportDetail}
+        noun={['person', 'people']}
+        size="sm"
+      />
+      <button
+        type="button"
+        onclick={() => (showImport = true)}
+        title="Paste a list of links"
+        class="inline-flex h-7 items-center gap-1 rounded-[var(--radius-sm)] border border-[var(--color-border)] px-2 text-xs text-[var(--color-muted)] transition-colors hover:border-[var(--color-border-strong)] hover:text-[var(--color-text)]"
+      >
+        <ClipboardPaste size={13} strokeWidth={2} />
+        Import
+      </button>
+      <AddRecordButton bind:open={showAdd} noun="person" busy={addBusy} onsubmit={submitAdd} />
     </div>
   </header>
 

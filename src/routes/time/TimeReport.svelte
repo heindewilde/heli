@@ -102,6 +102,7 @@
       />
       <div class="ml-auto flex items-center gap-2">
         <a
+          data-sveltekit-reload
           href={csvHref}
           class="inline-flex items-center gap-1.5 rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-1.5 text-sm hover:border-[var(--color-border-strong)]"
         >

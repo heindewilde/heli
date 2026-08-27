@@ -16,6 +16,7 @@ import {
   getPendingUrlImport,
   deletePendingUrlImport
 } from '$lib/server/urlImport';
+import { addManyAndSync } from '$lib/server/collections';
 
 /**
  * Commit a staged paste.
@@ -67,12 +68,24 @@ export const POST: RequestHandler = async ({ request, locals, cookies }) => {
   const queued: Queued[] = [];
   let skipped = 0;
 
+  // When the paste was started from a collection page, a row that already
+  // resolves to a record is not a no-op: not re-creating it is right, but
+  // leaving it out of the collection is not — filing it is why the link was
+  // pasted. Collected here and merged with the created ids below.
+  const target = pending.collection;
+  const existing: { id: string; kind: 'person' | 'company' }[] = [];
+
   for (const i of wanted) {
     const row = pending.rows[i];
     // Already in the workspace — re-inserting would collide on
     // `uq_{people,companies}_ws_url` and take its whole chunk down with it.
     if (row.existingId) {
       skipped += 1;
+      // `row.kind` and not the client's `kinds` override: the stager set it
+      // from whichever table already holds this URL, so it is authoritative.
+      // An override here would hand a person id to the company member filter
+      // and silently resolve to nothing.
+      if (target) existing.push({ id: row.existingId, kind: row.kind });
       continue;
     }
     const kind = kinds?.[String(i)] ?? row.kind;
@@ -158,10 +171,45 @@ export const POST: RequestHandler = async ({ request, locals, cookies }) => {
 
   if (imported > 0) bumpSearchEpoch(s.workspaceId);
 
+  /**
+   * File everything that landed — newly created *and* already-existing — into
+   * the destination collection, and mirror it onto a synced pipeline. The
+   * chunking and the swallow-and-continue live in `addManyAndSync`, so the
+   * suite can assert on them without going through this handler.
+   */
+  let addedToCollection = 0;
+  if (target) {
+    addedToCollection = await addManyAndSync(
+      s,
+      target.id,
+      {
+        person: [
+          ...personRows.map((r) => r.id as string).filter((id) => !failed.has(id)),
+          ...existing.filter((e) => e.kind === 'person').map((e) => e.id)
+        ],
+        company: [
+          ...companyRows.map((r) => r.id as string).filter((id) => !failed.has(id)),
+          ...existing.filter((e) => e.kind === 'company').map((e) => e.id)
+        ]
+      },
+      CHUNK
+    );
+  }
+
+  // After the collection work, so a failure there leaves the paste recoverable
+  // — the same reasoning that raises `empty_selection` before this line.
   deletePendingUrlImport(locals.user.id);
   cookies.delete(URL_IMPORT_COOKIE, { path: '/' });
 
-  return json({ imported, skipped, errors, enqueued, dropped });
+  return json({
+    imported,
+    skipped,
+    errors,
+    enqueued,
+    dropped,
+    addedToCollection,
+    collectionName: target?.name ?? null
+  });
 };
 
 async function readSelection(

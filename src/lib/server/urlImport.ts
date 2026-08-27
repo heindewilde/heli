@@ -40,11 +40,24 @@ export type MappedUrl = {
   existingId: string | null;
 };
 
+/**
+ * Where a committed import lands, when the paste was started from a collection
+ * page rather than from /people or /companies.
+ *
+ * It rides on the staging record rather than on the commit body on purpose: the
+ * commit already refuses to take anything but indices into a server-owned list,
+ * and a write *target* supplied by the client at commit time would be exactly
+ * the kind of thing that design exists to keep out. Carrying the name too means
+ * the review screen can say where these are going without a second query.
+ */
+export type PendingUrlImportCollection = { id: string; name: string };
+
 type PendingUrlImport = {
   token: string;
   rows: MappedUrl[];
   duplicateCount: number;
   invalidCount: number;
+  collection: PendingUrlImportCollection | null;
   expiresAt: number;
 };
 
@@ -76,7 +89,8 @@ export function storePendingUrlImport(
   userId: string,
   rows: MappedUrl[],
   duplicateCount: number,
-  invalidCount: number
+  invalidCount: number,
+  collection: PendingUrlImportCollection | null = null
 ): string {
   if (rows.length > MAX_URL_IMPORT_ROWS) throw new UrlImportTooLargeError(rows.length);
   const now = Date.now();
@@ -85,14 +99,26 @@ export function storePendingUrlImport(
   // that reclaims a slot nobody comes back to.
   sweepExpired(now);
   const token = createId();
-  pending.set(userId, { token, rows, duplicateCount, invalidCount, expiresAt: now + TTL_MS });
+  pending.set(userId, {
+    token,
+    rows,
+    duplicateCount,
+    invalidCount,
+    collection,
+    expiresAt: now + TTL_MS
+  });
   return token;
 }
 
 export function getPendingUrlImport(
   token: string,
   userId: string
-): { rows: MappedUrl[]; duplicateCount: number; invalidCount: number } | null {
+): {
+  rows: MappedUrl[];
+  duplicateCount: number;
+  invalidCount: number;
+  collection: PendingUrlImportCollection | null;
+} | null {
   // Looked up by the caller's own id, so a colleague holding the token somehow
   // still cannot reach an import they never staged.
   const record = pending.get(userId);
@@ -105,7 +131,8 @@ export function getPendingUrlImport(
   return {
     rows: record.rows,
     duplicateCount: record.duplicateCount,
-    invalidCount: record.invalidCount
+    invalidCount: record.invalidCount,
+    collection: record.collection
   };
 }
 

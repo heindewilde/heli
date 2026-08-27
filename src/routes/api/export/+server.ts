@@ -1,4 +1,4 @@
-import { requireScope, requireRole } from '$lib/server/scope';
+import { requireScope } from '$lib/server/scope';
 import { error, type RequestHandler } from '@sveltejs/kit';
 import { eq, asc, inArray } from 'drizzle-orm';
 import { db } from '$lib/server/db';
@@ -13,10 +13,18 @@ import {
   projectCompanies
 } from '$lib/server/schema';
 import { csvStream, isoDate } from '$lib/server/csv';
+import {
+  collectionExportTable,
+  companiesExportTable,
+  parseCollectionMembers,
+  parseExportBody,
+  peopleExportTable,
+  type CsvTable
+} from '$lib/server/export';
 import { getTagsForEntities } from '$lib/server/tags';
 import { listTimeEntries } from '$lib/server/time';
 
-const KINDS = ['people', 'companies', 'interactions', 'projects', 'time'] as const;
+const KINDS = ['people', 'companies', 'interactions', 'projects', 'time', 'collection'] as const;
 type Kind = (typeof KINDS)[number];
 
 function isKind(v: string | null): v is Kind {
@@ -25,108 +33,34 @@ function isKind(v: string | null): v is Kind {
 
 export const GET: RequestHandler = async ({ url, locals }) => {
   const s = requireScope(locals);
-  // Export now covers the whole workspace, not just your own rows.
-  //
-  // Friction, not containment: a member can read substantially the same data
-  // through /api/people, /api/companies and /api/search. This makes bulk
-  // extraction a deliberate act rather than a one-click one; don't mistake it
-  // for a security boundary.
-  requireRole(s, 'owner', 'admin');
+  // No role gate, deliberately. It used to be owner/admin as "friction, not
+  // containment" — but a member can already read substantially the same data
+  // through /api/people, /api/companies and /api/search, so it only ever bought
+  // friction. Export now has buttons on /people, /companies and every
+  // collection, where a gate does not read as friction: it renders as a 403
+  // error page on a button the page just offered you. (It also un-breaks the
+  // CSV link the /time report has always shown to members.)
   const kind = url.searchParams.get('kind');
   if (!isKind(kind)) throw error(400, 'invalid_kind');
 
   const d = db(s.region);
 
   let stream: ReadableStream<Uint8Array>;
+  let filename = `heli-${kind}-${today()}.csv`;
 
   if (kind === 'people') {
-    const rows = await d
-      .select()
-      .from(people)
-      .where(eq(people.workspaceId, s.workspaceId));
-    const tagMap = await getTagsForEntities(s, 'person', rows.map((r) => r.id));
-    stream = csvStream({
-      header: [
-        'id',
-        'name',
-        'url',
-        'domain',
-        'handle',
-        'role',
-        'company_id',
-        'email',
-        'phone',
-        'location',
-        'avatar_url',
-        'notes',
-        'tags',
-        'is_favorite',
-        'is_archived',
-        'created_at',
-        'updated_at'
-      ],
-      rows,
-      toRow: (p) => [
-        p.id,
-        p.name,
-        p.url ?? '',
-        p.domain ?? '',
-        p.handle ?? '',
-        p.role ?? '',
-        p.companyId ?? '',
-        p.email ?? '',
-        p.phone ?? '',
-        p.location ?? '',
-        p.avatarUrl ?? '',
-        p.notes ?? '',
-        (tagMap.get(p.id) ?? []).map((t) => t.name).join('|'),
-        p.isFavorite ? '1' : '0',
-        p.isArchived ? '1' : '0',
-        isoDate(p.createdAt),
-        isoDate(p.updatedAt)
-      ]
-    });
+    stream = tableToStream(await peopleExportTable(s, { by: 'filters', params: url.searchParams }));
   } else if (kind === 'companies') {
-    const rows = await d
-      .select()
-      .from(companies)
-      .where(eq(companies.workspaceId, s.workspaceId));
-    const tagMap = await getTagsForEntities(s, 'company', rows.map((r) => r.id));
-    stream = csvStream({
-      header: [
-        'id',
-        'name',
-        'url',
-        'domain',
-        'description',
-        'industry',
-        'location',
-        'logo_url',
-        'notes',
-        'tags',
-        'is_favorite',
-        'is_archived',
-        'created_at',
-        'updated_at'
-      ],
-      rows,
-      toRow: (c) => [
-        c.id,
-        c.name,
-        c.url ?? '',
-        c.domain ?? '',
-        c.description ?? '',
-        c.industry ?? '',
-        c.location ?? '',
-        c.logoUrl ?? '',
-        c.notes ?? '',
-        (tagMap.get(c.id) ?? []).map((t) => t.name).join('|'),
-        c.isFavorite ? '1' : '0',
-        c.isArchived ? '1' : '0',
-        isoDate(c.createdAt),
-        isoDate(c.updatedAt)
-      ]
-    });
+    stream = tableToStream(await companiesExportTable(s, { by: 'filters', params: url.searchParams }));
+  } else if (kind === 'collection') {
+    const id = url.searchParams.get('id');
+    if (!id) throw error(400, 'missing_id');
+    // `members`, not `kind`: `kind` is already the export dispatch, and the
+    // collection page's own filter would collide with it.
+    const members = parseCollectionMembers(url.searchParams.get('members'));
+    const { table, name } = await collectionExportTable(s, id, members);
+    stream = tableToStream(table);
+    filename = `heli-collection-${slug(name)}-${today()}.csv`;
   } else if (kind === 'interactions') {
     const rows = await d
       .select()
@@ -327,7 +261,29 @@ export const GET: RequestHandler = async ({ url, locals }) => {
     });
   }
 
-  const filename = `heli-${kind}-${new Date().toISOString().slice(0, 10)}.csv`;
+  return csvResponse(stream, filename);
+};
+
+/**
+ * The selection export. A POST because a tick-box selection can run to hundreds
+ * of rows and an id list that long does not fit in a URL — this is a read, and
+ * `MEMBER_ALLOWED` in check-tenancy.ts records that.
+ */
+export const POST: RequestHandler = async ({ request, locals }) => {
+  const s = requireScope(locals);
+  const { kind, ids } = parseExportBody(await request.json().catch(() => null));
+  const table =
+    kind === 'people'
+      ? await peopleExportTable(s, { by: 'ids', ids })
+      : await companiesExportTable(s, { by: 'ids', ids });
+  return csvResponse(tableToStream(table), `heli-${kind}-${today()}.csv`);
+};
+
+function tableToStream(table: CsvTable): ReadableStream<Uint8Array> {
+  return csvStream({ header: table.header, rows: table.rows, toRow: (r) => r });
+}
+
+function csvResponse(stream: ReadableStream<Uint8Array>, filename: string): Response {
   return new Response(stream, {
     status: 200,
     headers: {
@@ -336,4 +292,15 @@ export const GET: RequestHandler = async ({ url, locals }) => {
       'cache-control': 'no-store'
     }
   });
-};
+}
+
+function today(): string {
+  return new Date().toISOString().slice(0, 10);
+}
+
+/** Keeps a collection's name in the filename without letting it out of ASCII —
+ *  a quoted `filename=` carrying a comma or a quote is a broken header. */
+function slug(name: string): string {
+  const s = name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+  return s.slice(0, 40) || 'untitled';
+}

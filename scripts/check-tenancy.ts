@@ -213,6 +213,10 @@ const MEMBER_ALLOWED = new Map<string, string>([
     'patch/tag/collection are routine CRM work; the delete action calls requireRole in bulk.ts'
   ],
   ['companies/[id]/+server.ts', 'routine CRM work'],
+  [
+    'export/+server.ts',
+    'a read that uses POST only to carry an id list too long for a URL; the GET of the same data is open to members'
+  ],
   ['import/+server.ts', 'DELETE only discards the staging cookie; POST is role-guarded'],
   [
     'import/urls/+server.ts',

@@ -13,7 +13,13 @@ import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-export type Seeded = { dbPath: string; sessionId: string; collectionId: string };
+export type Seeded = {
+  dbPath: string;
+  sessionId: string;
+  /** A second account, joined to the same workspace with the `member` role. */
+  memberSessionId: string;
+  collectionId: string;
+};
 
 export async function seed(): Promise<Seeded> {
   const dir = mkdtempSync(join(tmpdir(), 'heli-e2e-'));
@@ -92,12 +98,46 @@ export async function seed(): Promise<Seeded> {
   ] as const) {
     await addToCollection(s, collectionId, kind, refId);
   }
+  /**
+   * A colleague with the plain `member` role, in the same workspace.
+   *
+   * Export used to be owner/admin only. Dropping that gate is the one change
+   * here that alters who can do what in production, and the gate lived in the
+   * route — which the server-side suite never calls, because it calls helpers.
+   * So a member session is the only way to assert the new rule at all.
+   */
+  const member = await register({
+    email: 'member@example.com',
+    password: 'correct-horse-battery-staple',
+    username: 'member'
+  });
+  const { db } = await import('../src/lib/server/db');
+  const { workspaceMembers, sessions } = await import('../src/lib/server/schema');
+  const { eq } = await import('drizzle-orm');
+  await db(s.region).insert(workspaceMembers).values({
+    workspaceId: s.workspaceId,
+    userId: member.user.id,
+    role: 'member',
+    createdAt: Date.now()
+  });
+  /**
+   * Point the session at *this* workspace, not the one `register` gave them.
+   *
+   * Without this the member signs in to a workspace of their own where they are
+   * the owner, and every "can a member do X" assertion passes for the wrong
+   * reason — which is exactly what happened the first time this was written.
+   */
+  await db(s.region)
+    .update(sessions)
+    .set({ activeWorkspaceId: s.workspaceId })
+    .where(eq(sessions.id, member.sessionId));
+
   const pioneer = await ensureTag(s, 'person', 'Pioneer');
   const supplier = await ensureTag(s, 'company', 'Supplier');
   await attachTag(s, 'person', personIds['Ada Lovelace'], pioneer.id);
   await attachTag(s, 'company', companyIds['Acme Corp'], supplier.id);
 
-  return { dbPath, sessionId, collectionId };
+  return { dbPath, sessionId, memberSessionId: member.sessionId, collectionId };
 }
 
 // Run directly (`tsx e2e/seed.ts`) to emit the config the server and specs need.

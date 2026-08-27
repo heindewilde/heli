@@ -1274,26 +1274,31 @@
     {/if}
   </section>
 
-  {#if teamAdmin}
+  <!-- No `teamAdmin` gate: /api/export dropped its owner/admin check, because a
+       member can already read the same data through /api/people and /api/search,
+       and export now has buttons on the list and collection pages where a 403
+       would land on something the page just offered. -->
   <section id="export" style="scroll-margin-top:1rem" class="flex flex-col gap-3 rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)] p-5">
     <h2 class="flex items-center gap-2 text-sm font-semibold text-[var(--color-text)]"><Download size={14} strokeWidth={2} /> Export</h2>
     <p class="text-sm text-[var(--color-muted)]">
       Stream your data as CSV. Includes tags as a pipe-separated column and (for interactions) a pipe-separated <code>person_ids</code>.
+      These cover the whole workspace, archived records included — to export a narrower
+      slice, use the Export button on the list or collection you want.
     </p>
     <div class="flex flex-wrap gap-2">
-      <a href="/api/export?kind=people" class="inline-flex items-center gap-1 rounded-[var(--radius-sm)] border border-[var(--color-border)] px-3 py-2 text-sm hover:bg-[var(--color-bg)]">
+      <a data-sveltekit-reload href="/api/export?kind=people&amp;archived=1" class="inline-flex items-center gap-1 rounded-[var(--radius-sm)] border border-[var(--color-border)] px-3 py-2 text-sm hover:bg-[var(--color-bg)]">
         <Download size={14} strokeWidth={2} /> People ({data.counts.people})
       </a>
-      <a href="/api/export?kind=companies" class="inline-flex items-center gap-1 rounded-[var(--radius-sm)] border border-[var(--color-border)] px-3 py-2 text-sm hover:bg-[var(--color-bg)]">
+      <a data-sveltekit-reload href="/api/export?kind=companies&amp;archived=1" class="inline-flex items-center gap-1 rounded-[var(--radius-sm)] border border-[var(--color-border)] px-3 py-2 text-sm hover:bg-[var(--color-bg)]">
         <Download size={14} strokeWidth={2} /> Companies ({data.counts.companies})
       </a>
-      <a href="/api/export?kind=interactions" class="inline-flex items-center gap-1 rounded-[var(--radius-sm)] border border-[var(--color-border)] px-3 py-2 text-sm hover:bg-[var(--color-bg)]">
+      <a data-sveltekit-reload href="/api/export?kind=interactions" class="inline-flex items-center gap-1 rounded-[var(--radius-sm)] border border-[var(--color-border)] px-3 py-2 text-sm hover:bg-[var(--color-bg)]">
         <Download size={14} strokeWidth={2} /> Interactions ({data.counts.interactions})
       </a>
-      <a href="/api/export?kind=projects" class="inline-flex items-center gap-1 rounded-[var(--radius-sm)] border border-[var(--color-border)] px-3 py-2 text-sm hover:bg-[var(--color-bg)]">
+      <a data-sveltekit-reload href="/api/export?kind=projects" class="inline-flex items-center gap-1 rounded-[var(--radius-sm)] border border-[var(--color-border)] px-3 py-2 text-sm hover:bg-[var(--color-bg)]">
         <Download size={14} strokeWidth={2} /> Projects
       </a>
-      <a href="/api/export?kind=time" class="inline-flex items-center gap-1 rounded-[var(--radius-sm)] border border-[var(--color-border)] px-3 py-2 text-sm hover:bg-[var(--color-bg)]">
+      <a data-sveltekit-reload href="/api/export?kind=time" class="inline-flex items-center gap-1 rounded-[var(--radius-sm)] border border-[var(--color-border)] px-3 py-2 text-sm hover:bg-[var(--color-bg)]">
         <Download size={14} strokeWidth={2} /> Tracked time
       </a>
     </div>
@@ -1302,7 +1307,6 @@
       when each entry was recorded, so it is what you bill from.
     </p>
   </section>
-  {/if}
 
   <!-- Importing bulk-inserts into the shared people table, so POST /api/import
        is admin-only; don't show members a flow that ends in a 403.

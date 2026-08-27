@@ -35,13 +35,26 @@
 
   let q = $state('');
   let kindFilter = $state<'all' | Kind>('all');
-  let hideDuplicates = $state(true);
+  /**
+   * With a collection as the destination, a row you already have is not a
+   * no-op: it is not re-created, but it *is* filed into the collection, which
+   * is why the link was pasted. That one fact drives every place this screen
+   * treats a duplicate as unselectable — collected here rather than repeated
+   * as `!r.existingId` in eight predicates.
+   */
+  const target = $derived(data.collection);
+  const dupSelectable = $derived(!!data.collection);
+  const isSelectable = (r: Row) => dupSelectable || !r.existingId;
+
+  // Hiding duplicates by default would hide exactly the rows you came to file.
+  // svelte-ignore state_referenced_locally
+  let hideDuplicates = $state(!data.collection);
 
   /** Per-row overrides, keyed by index — exactly what the commit body takes. */
   let kinds = $state<Record<number, Kind>>({});
   const kindOf = (r: Row): Kind => kinds[r.i] ?? (r.kind as Kind);
 
-  let selected = $state(new Set(rows.filter((r) => !r.existingId).map((r) => r.i)));
+  let selected = $state(new Set(rows.filter((r) => isSelectable(r)).map((r) => r.i)));
 
   const filtered = $derived.by(() => {
     const needle = q.trim().toLowerCase();
@@ -61,7 +74,7 @@
   const RENDER_CAP = 200;
   const visible = $derived(filtered.slice(0, RENDER_CAP));
 
-  const selectableCount = $derived(rows.filter((r) => !r.existingId).length);
+  const selectableCount = $derived(rows.filter((r) => isSelectable(r)).length);
 
   // A Set in `$state` is not deep-proxied, so every mutation reassigns.
   function toggle(i: number) {
@@ -73,7 +86,7 @@
 
   function selectMatching() {
     const next = new Set(selected);
-    for (const r of filtered) if (!r.existingId) next.add(r.i);
+    for (const r of filtered) if (isSelectable(r)) next.add(r.i);
     selected = next;
   }
 
@@ -105,6 +118,9 @@
     errors: number;
     enqueued: number;
     dropped: number;
+    /** Non-null only when the paste targeted a collection. */
+    addedToCollection: number;
+    collectionName: string | null;
   } | null>(null);
 
   const ERRORS: Record<string, string> = {
@@ -181,13 +197,24 @@
     </div>
   </header>
 
-  {#if state_ === 'done' && result}
+  {#if target}
+  <p class="mb-3 text-sm text-[var(--color-muted)]">
+    Importing into <strong class="text-[var(--color-text)]">{target.name}</strong>. Links you
+    already have are added to the collection without being duplicated.
+  </p>
+{/if}
+
+{#if state_ === 'done' && result}
     <div
       class="flex flex-col gap-2 rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)] p-5"
     >
       <p class="text-sm font-medium">
         Added {result.imported}
         {result.imported === 1 ? 'record' : 'records'}.
+        {#if result.collectionName}
+          {result.addedToCollection}
+          {result.addedToCollection === 1 ? 'is' : 'are'} now in {result.collectionName}.
+        {/if}
       </p>
       <p class="text-sm text-[var(--color-muted)]">
         {#if result.enqueued > 0}
@@ -195,7 +222,9 @@
           few minutes.
         {/if}
         {#if result.skipped > 0}
-          {result.skipped} were already in your workspace.
+          {result.skipped} were already in your workspace{result.collectionName
+            ? ', so they were added to the collection rather than duplicated'
+            : ''}.
         {/if}
         {#if result.errors > 0}
           {result.errors} could not be saved.
@@ -236,7 +265,14 @@
           value={kindFilter}
           onchange={(v) => (kindFilter = v as 'all' | Kind)}
         />
-        <Checkbox bind:checked={hideDuplicates} label="Hide ones I already have" />
+        <!-- Only offered when a duplicate is genuinely excluded from the
+             import. With a collection as the destination it is *included* — it
+             joins the collection without being re-created — so hiding it would
+             be a control that either does nothing or quietly drops rows from
+             "select all matching", which acts on the filtered set. -->
+        {#if !dupSelectable}
+          <Checkbox bind:checked={hideDuplicates} label="Hide ones I already have" />
+        {/if}
 
         <span class="ml-auto flex flex-wrap items-center gap-1.5">
           <button type="button" onclick={selectMatching} class="underline text-[var(--color-muted)]"
@@ -287,7 +323,8 @@
           {#each visible as r (r.i)}
             {@const kind = kindOf(r)}
             <li
-              class="{GRID} items-center border-b border-[var(--color-border)] px-3 py-2 last:border-b-0 {r.existingId
+              class="{GRID} items-center border-b border-[var(--color-border)] px-3 py-2 last:border-b-0 {r.existingId &&
+              !dupSelectable
                 ? 'opacity-60'
                 : ''}"
             >
@@ -297,14 +334,16 @@
                    as the contact-import triage screen. -->
               <Checkbox
                 checked={selected.has(r.i)}
-                disabled={!!r.existingId}
+                disabled={!isSelectable(r)}
                 aria-label={`Include ${r.suggestedName}`}
                 onchange={() => toggle(r.i)}
               />
               <span class="min-w-0">
                 <span class="block truncate text-sm">{r.suggestedName}</span>
                 {#if r.existingId}
-                  <span class="block text-[11px] text-[var(--color-subtle)]">Already saved</span>
+                  <span class="block text-[11px] text-[var(--color-subtle)]">
+                    {target ? `Already saved — will be added to ${target.name}` : 'Already saved'}
+                  </span>
                 {:else}
                   <span class="block truncate text-[11px] text-[var(--color-subtle)] sm:hidden"
                     >{r.url}</span
@@ -319,6 +358,10 @@
                   class="block truncate text-xs text-[var(--color-muted)] hover:underline">{r.url}</a
                 >
               </span>
+              <!-- The kind controls stay disabled for an existing row even when
+                   duplicates are selectable: its kind is settled by whichever
+                   table already holds it, so offering to change it would only
+                   send a person id to the company member filter. -->
               <span class="hidden sm:block">
                 <Select
                   size="sm"

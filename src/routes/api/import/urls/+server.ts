@@ -15,6 +15,7 @@ import {
   type MappedUrl
 } from '$lib/server/urlImport';
 import { checkRateLimit, LIMITS } from '$lib/server/rate-limit';
+import { getCollectionSummary } from '$lib/server/collections';
 import { dev } from '$app/environment';
 
 /** 1 MB of pasted text is ~20,000 URLs; the row cap bites long before this. */
@@ -28,7 +29,7 @@ const MATCH_CHUNK = 200;
  * classified and checked against what the workspace already holds; the result
  * lives in memory until the user commits it from `/import/urls`.
  */
-export const POST: RequestHandler = async ({ request, locals, cookies }) => {
+export const POST: RequestHandler = async ({ request, url, locals, cookies }) => {
   if (!locals.user) throw error(401, 'unauthorized');
   const s = requireScope(locals);
 
@@ -36,6 +37,24 @@ export const POST: RequestHandler = async ({ request, locals, cookies }) => {
   // it is bounded rather than role-gated. Throws `RateLimitError`, which
   // `hooks.server.ts` turns into a 429.
   checkRateLimit(LIMITS.urlImport, locals.user.id);
+
+  /**
+   * An optional destination, validated here rather than at commit time. The
+   * commit deliberately accepts nothing from the client but indices into a list
+   * the server parsed itself; a write target arriving with the commit body
+   * would be the one exception, so it rides on the staging record instead.
+   *
+   * A query param rather than a body field: `readBody` already branches three
+   * ways over the paste's content type, and a JSON branch for one id would be a
+   * fourth.
+   */
+  const collectionId = url.searchParams.get('collection');
+  let collection = null;
+  if (collectionId) {
+    collection = await getCollectionSummary(s, collectionId);
+    // Raised before any parsing: a bad id should cost nothing.
+    if (!collection) throw error(400, 'unknown_collection');
+  }
 
   const raw = await readBody(request);
   if (!raw.trim()) throw error(400, 'empty_paste');
@@ -97,7 +116,7 @@ export const POST: RequestHandler = async ({ request, locals, cookies }) => {
 
   let token: string;
   try {
-    token = storePendingUrlImport(locals.user.id, rows, duplicateCount, invalidCount);
+    token = storePendingUrlImport(locals.user.id, rows, duplicateCount, invalidCount, collection);
   } catch (err) {
     if (err instanceof UrlImportTooLargeError) throw error(413, 'too_many_rows');
     throw err;
@@ -114,7 +133,8 @@ export const POST: RequestHandler = async ({ request, locals, cookies }) => {
   return json({
     staged: rows.length,
     duplicates: duplicateCount,
-    invalid: invalidCount
+    invalid: invalidCount,
+    collection
   });
 };
 
