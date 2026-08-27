@@ -373,12 +373,6 @@
       </p>
     </div>
     <div class="flex items-center gap-1">
-      <button
-        type="button"
-        title="Import — paste a list of links"
-        onclick={() => (showImport = true)}
-        class="rounded-[var(--radius-sm)] p-2 text-[var(--color-subtle)] hover:bg-[var(--color-surface)]"
-      ><ClipboardPaste size={16} strokeWidth={2} /></button>
       <a
         href={`/pipelines/new?fromCollection=${collection.id}`}
         title="Create pipeline from this collection"
@@ -496,6 +490,16 @@
           detail={exportDetail}
           size="sm"
         />
+
+        <button
+          type="button"
+          onclick={() => (showImport = true)}
+          title="Paste a list of links"
+          class="inline-flex h-7 items-center gap-1 rounded-[var(--radius-sm)] border border-[var(--color-border)] px-2 text-xs text-[var(--color-muted)] transition-colors hover:border-[var(--color-border-strong)] hover:text-[var(--color-text)]"
+        >
+          <ClipboardPaste size={13} strokeWidth={2} />
+          Import
+        </button>
 
         <CollectionAddButton
           {kind}

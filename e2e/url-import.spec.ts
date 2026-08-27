@@ -105,7 +105,7 @@ test('a collection paste files links you already have, without duplicating them'
   expect(saved.ok()).toBe(true);
 
   await visit(app, `/collections/${id}`);
-  await app.getByRole('button', { name: /^Import — paste/ }).click();
+  await app.getByRole('button', { name: 'Import', exact: true }).click();
   await app
     .getByRole('dialog')
     .getByRole('textbox')
