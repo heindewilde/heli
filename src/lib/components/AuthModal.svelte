@@ -48,7 +48,7 @@
   label={mode === 'login' ? 'Sign in' : 'Create account'}
   chrome={false}
   backdropClass="overlay-wash"
-  panelClass="max-w-none w-auto"
+  panelClass="flex justify-center"
 >
   {#snippet children({ close })}
     <AuthCard data={formData} actionBase="/auth" onSuccess={handleSuccess} headingLevel="h2" bind:mode>
